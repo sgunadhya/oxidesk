@@ -1,0 +1,53 @@
+# Rust
+target/
+debug/
+release/
+**/*.rs.bk
+*.rlib
+*.prof*
+specs/
+*.feature
+.specify/
+.speckit/
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Database files (for development)
+*.db
+*.sqlite
+*.sqlite3
+
+# Test coverage
+tarpaulin-report.html
+coverage/
+
+# Documentation build
+target/doc/
+
+# Cargo lock for libraries (keep for applications)
+# Uncomment if this is a library
+# Cargo.lock

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Contacts - Oxidesk{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2 style="margin: 0;">Contacts</h2>
+        <a href="/contacts/new" class="btn btn-primary">+ Create Contact</a>
+    </div>
+
+    <div id="contacts-list">
+        {% if contacts.is_empty() %}
+        <p style="color: #666; text-align: center; padding: 2rem;">No contacts found</p>
+        {% else %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #ddd;">
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Name</th>
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Email</th>
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Channels</th>
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Created</th>
+                        <th style="text-align: right; padding: 0.75rem; font-weight: 600;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for contact in contacts %}
+                    <tr style="border-bottom: 1px solid #eee;" id="contact-row-{{ contact.id }}">
+                        <td style="padding: 0.75rem;">
+                            {% if contact.full_name.is_empty() %}
+                            <span style="color: #999; font-style: italic;">No name</span>
+                            {% else %}
+                            {{ contact.full_name }}
+                            {% endif %}
+                        </td>
+                        <td style="padding: 0.75rem;">{{ contact.email }}</td>
+                        <td style="padding: 0.75rem;">
+                            <span class="badge badge-secondary">{{ contact.channel_count }} channel(s)</span>
+                        </td>
+                        <td style="padding: 0.75rem; color: #666;">{{ contact.created_at }}</td>
+                        <td style="padding: 0.75rem; text-align: right;">
+                            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                <a href="/contacts/{{ contact.id }}/edit" class="btn btn-secondary" style="padding: 0.5rem 1rem;">Edit</a>
+                                <button
+                                    class="btn btn-danger"
+                                    style="padding: 0.5rem 1rem;"
+                                    hx-delete="/contacts/{{ contact.id }}"
+                                    hx-target="#contact-row-{{ contact.id }}"
+                                    hx-swap="outerHTML swap:0.3s"
+                                    hx-confirm="Are you sure you want to delete contact {{ contact.full_name }} ({{ contact.email }})? This will also delete their user account and all associated channels.">
+                                    Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

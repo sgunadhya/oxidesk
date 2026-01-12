@@ -1,0 +1,292 @@
+mod api;
+mod config;
+mod database;
+mod models;
+mod services;
+mod web;
+
+use crate::{
+    api::middleware::{AppState, ApiError},
+    config::Config,
+    database::Database,
+    models::*,
+    services::*,
+};
+use axum::{
+    extract::State,
+    routing::{get, post, delete, patch},
+    Router,
+};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "oxidesk=debug,tower_http=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    // Install default drivers for sqlx::Any
+    sqlx::any::install_default_drivers();
+
+    tracing::info!("Starting Oxidesk User Management System");
+
+    // Load configuration
+    let config = Config::from_env().map_err(|e| {
+        tracing::error!("Configuration error: {}", e);
+        e
+    })?;
+
+    tracing::info!("Database URL: {}", config.database_url);
+
+    // Connect to database
+    let db = Database::connect(&config.database_url)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to connect to database: {}", e);
+            e
+        })?;
+
+    tracing::info!("Connected to database successfully");
+
+    // Run migrations
+    db.run_migrations().await.map_err(|e| {
+        tracing::error!("Failed to run migrations: {}", e);
+        e
+    })?;
+
+    tracing::info!("Database migrations completed");
+
+    // Initialize system with admin user
+    initialize_admin(&db, &config).await.map_err(|e| {
+        tracing::error!("Failed to initialize admin user: {}", e);
+        e
+    })?;
+
+    // Create application state
+    let state = AppState {
+        db: db.clone(),
+        session_duration_hours: config.session_duration_hours,
+    };
+
+    // Start session cleanup background task
+    let cleanup_db = db.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600)); // Run every hour
+        loop {
+            interval.tick().await;
+            match cleanup_db.cleanup_expired_sessions().await {
+                Ok(count) => {
+                    if count > 0 {
+                        tracing::info!("Cleaned up {} expired sessions", count);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to cleanup expired sessions: {}", e);
+                }
+            }
+        }
+    });
+
+    // Build protected routes (require authentication)
+    let protected = Router::new()
+        .route("/api/auth/logout", post(api::auth::logout))
+        .route("/api/auth/session", get(api::auth::get_session))
+        .route("/api/agents", get(api::agents::list_agents))
+        .route("/api/agents", post(api::agents::create_agent))
+        .route("/api/agents/:id", get(api::agents::get_agent))
+        .route("/api/agents/:id", patch(api::agents::update_agent))
+        .route("/api/agents/:id", delete(api::agents::delete_agent))
+        .route("/api/agents/:id/password", post(api::agents::change_agent_password))
+        .route("/api/contacts", get(api::contacts::list_contacts))
+        .route("/api/contacts", post(api::contacts::create_contact))
+        .route("/api/contacts/:id", get(api::contacts::get_contact))
+        .route("/api/contacts/:id", patch(api::contacts::update_contact))
+        .route("/api/contacts/:id", delete(api::contacts::delete_contact))
+        .route("/api/roles", get(api::roles::list_roles))
+        .route("/api/roles", post(api::roles::create_role))
+        .route("/api/roles/:id", get(api::roles::get_role))
+        .route("/api/roles/:id", patch(api::roles::update_role))
+        .route("/api/roles/:id", delete(api::roles::delete_role))
+        .route("/api/permissions", get(api::roles::list_permissions))
+        .route("/api/users", get(api::users::list_users))
+        .route("/api/users/:id", get(api::users::get_user))
+        .route("/api/users/:id", delete(api::users::delete_user))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            api::middleware::require_auth,
+        ));
+
+    // Build web routes (require auth via cookie)
+    let web_protected = Router::new()
+        .route("/dashboard", get(web::show_dashboard))
+        .route("/logout", post(web::handle_logout))
+        .route("/agents", get(web::show_agents))
+        .route("/agents/:id", delete(web::delete_agent))
+        .route("/contacts", get(web::show_contacts))
+        .route("/contacts/:id", delete(web::delete_contact))
+        .route("/roles", get(web::show_roles))
+        .route("/roles/:id", delete(web::delete_role))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            web_auth_middleware,
+        ));
+
+    // Build public routes
+    let app = Router::new()
+        .route("/", get(root_handler))
+        .route("/health", get(health_handler))
+        .route("/login", get(web::show_login_page))
+        .route("/login", post(web::handle_login))
+        .route("/api/auth/login", post(api::auth::login))
+        .merge(protected)
+        .merge(web_protected)
+        .with_state(state);
+
+    // Start server
+    let addr = config.server_address();
+    tracing::info!("Server listening on http://{}", addr);
+
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+
+async fn root_handler() -> &'static str {
+    "Oxidesk User Management System"
+}
+
+async fn health_handler() -> &'static str {
+    "OK"
+}
+
+use axum::{
+    extract::Request,
+    middleware::Next,
+    response::Response,
+};
+
+/// Web authentication middleware that checks session cookie
+async fn web_auth_middleware(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Result<Response, axum::response::Redirect> {
+    // Get session token from cookie
+    let cookies = request
+        .headers()
+        .get("Cookie")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+
+    let token = cookies
+        .split(';')
+        .find_map(|cookie| {
+            let cookie = cookie.trim();
+            if cookie.starts_with("session_token=") {
+                Some(cookie.trim_start_matches("session_token="))
+            } else {
+                None
+            }
+        });
+
+    let token = match token {
+        Some(t) => t.to_string(),  // Clone to owned string
+        None => return Err(axum::response::Redirect::to("/login")),
+    };
+
+    // Validate session
+    let session = match state.db.get_session_by_token(&token).await {
+        Ok(Some(s)) => s,
+        _ => return Err(axum::response::Redirect::to("/login")),
+    };
+
+    if session.is_expired() {
+        let _ = state.db.delete_session(&token).await;
+        return Err(axum::response::Redirect::to("/login"));
+    }
+
+    // Get user
+    let user = match state.db.get_user_by_id(&session.user_id).await {
+        Ok(Some(u)) => u,
+        _ => return Err(axum::response::Redirect::to("/login")),
+    };
+
+    // Only agents can authenticate
+    if !matches!(user.user_type, UserType::Agent) {
+        return Err(axum::response::Redirect::to("/login"));
+    }
+
+    // Get agent
+    let agent = match state.db.get_agent_by_user_id(&user.id).await {
+        Ok(Some(a)) => a,
+        _ => return Err(axum::response::Redirect::to("/login")),
+    };
+
+    // Get roles
+    let roles = match state.db.get_user_roles(&user.id).await {
+        Ok(r) => r,
+        _ => return Err(axum::response::Redirect::to("/login")),
+    };
+
+    // Store authenticated user in request extensions
+    request.extensions_mut().insert(api::middleware::AuthenticatedUser {
+        user,
+        agent,
+        roles,
+        token,
+    });
+
+    Ok(next.run(request).await)
+}
+
+async fn initialize_admin(db: &Database, config: &Config) -> Result<(), ApiError> {
+    tracing::info!("Checking for admin user initialization");
+
+    // Check if admin already exists
+    if let Some(_) = db
+        .get_user_by_email_and_type(&config.admin_email, &UserType::Agent)
+        .await?
+    {
+        tracing::info!("Admin user already exists: {}", config.admin_email);
+        return Ok(());
+    }
+
+    tracing::info!("Creating admin user: {}", config.admin_email);
+
+    // Validate admin password complexity
+    validate_password_complexity(&config.admin_password)?;
+
+    // Validate and normalize email
+    let email = validate_and_normalize_email(&config.admin_email)?;
+
+    // Hash password
+    let password_hash = hash_password(&config.admin_password)?;
+
+    // Create user
+    let user = User::new(email, UserType::Agent);
+    db.create_user(&user).await?;
+
+    // Create agent
+    let agent = Agent::new(user.id.clone(), "Admin".to_string(), password_hash);
+    db.create_agent(&agent).await?;
+
+    // Get Admin role
+    let admin_role = db
+        .get_role_by_name("Admin")
+        .await?
+        .ok_or_else(|| ApiError::Internal("Admin role not found in seed data".to_string()))?;
+
+    // Assign Admin role
+    let user_role = UserRole::new(user.id.clone(), admin_role.id);
+    db.assign_role_to_user(&user_role).await?;
+
+    tracing::info!("Admin user created successfully: {}", config.admin_email);
+
+    Ok(())
+}

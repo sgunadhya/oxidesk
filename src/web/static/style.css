@@ -1,0 +1,4 @@
+/* Custom styles for OxiDesk */
+[x-cloak] {
+    display: none !important;
+}

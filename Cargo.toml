@@ -1,0 +1,66 @@
+[package]
+name = "oxidesk"
+version = "0.1.0"
+edition = "2021"
+authors = ["Oxidesk Team"]
+description = "Customer support helpdesk system with user management"
+license = "MIT"
+
+[dependencies]
+# Web framework
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace", "limit"] }
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "postgres", "mysql", "uuid", "time", "migrate", "any"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# UUID
+uuid = { version = "1.6", features = ["serde", "v4"] }
+
+# Password hashing
+argon2 = "0.5"
+
+# Email validation
+email_address = "0.2"
+
+# Time handling
+time = { version = "0.3", features = ["serde", "macros", "formatting", "parsing"] }
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Environment variables
+dotenvy = "0.15"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Random number generation (for session tokens)
+rand = "0.8"
+hex = "0.4"
+
+# HTTP types
+http = "1.0"
+
+# Template engine (for HTMX frontend)
+askama = "0.12"
+askama_axum = "0.4"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

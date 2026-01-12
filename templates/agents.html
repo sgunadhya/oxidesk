@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Agents - Oxidesk{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2 style="margin: 0;">Agents</h2>
+        <a href="/agents/new" class="btn btn-primary">+ Create Agent</a>
+    </div>
+
+    <div id="agents-list">
+        {% if agents.is_empty() %}
+        <p style="color: #666; text-align: center; padding: 2rem;">No agents found</p>
+        {% else %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #ddd;">
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Name</th>
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Email</th>
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Roles</th>
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Created</th>
+                        <th style="text-align: right; padding: 0.75rem; font-weight: 600;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for agent in agents %}
+                    <tr style="border-bottom: 1px solid #eee;" id="agent-row-{{ agent.id }}">
+                        <td style="padding: 0.75rem;">{{ agent.first_name }}</td>
+                        <td style="padding: 0.75rem;">{{ agent.email }}</td>
+                        <td style="padding: 0.75rem;">
+                            <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                                {% for role in agent.roles %}
+                                <span class="badge badge-primary">{{ role }}</span>
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td style="padding: 0.75rem; color: #666;">{{ agent.created_at }}</td>
+                        <td style="padding: 0.75rem; text-align: right;">
+                            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                <a href="/agents/{{ agent.id }}/edit" class="btn btn-secondary" style="padding: 0.5rem 1rem;">Edit</a>
+                                <button
+                                    class="btn btn-danger"
+                                    style="padding: 0.5rem 1rem;"
+                                    hx-delete="/agents/{{ agent.id }}"
+                                    hx-target="#agent-row-{{ agent.id }}"
+                                    hx-swap="outerHTML swap:0.3s"
+                                    hx-confirm="Are you sure you want to delete agent {{ agent.first_name }} ({{ agent.email }})? This will also delete their user account.">
+                                    Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

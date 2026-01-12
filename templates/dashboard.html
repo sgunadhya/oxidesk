@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Oxidesk{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Welcome, {{ user_name }}!</h2>
+    <p style="color: #666; margin-top: 0.5rem;">Logged in as {{ user_email }}</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+    <div class="card" style="text-align: center;">
+        <h3 style="color: #3498db; font-size: 2.5rem; margin-bottom: 0.5rem;">{{ stats.total_agents }}</h3>
+        <p style="color: #666;">Total Agents</p>
+        <a href="/agents" class="btn btn-primary" style="margin-top: 1rem;">Manage Agents</a>
+    </div>
+
+    <div class="card" style="text-align: center;">
+        <h3 style="color: #e67e22; font-size: 2.5rem; margin-bottom: 0.5rem;">{{ stats.total_contacts }}</h3>
+        <p style="color: #666;">Total Contacts</p>
+        <a href="/contacts" class="btn btn-primary" style="margin-top: 1rem;">Manage Contacts</a>
+    </div>
+
+    <div class="card" style="text-align: center;">
+        <h3 style="color: #9b59b6; font-size: 2.5rem; margin-bottom: 0.5rem;">{{ stats.total_roles }}</h3>
+        <p style="color: #666;">Total Roles</p>
+        <a href="/roles" class="btn btn-primary" style="margin-top: 1rem;">Manage Roles</a>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h3 style="margin-bottom: 1rem;">Your Roles</h3>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        {% for role in user_roles %}
+        <span class="badge badge-primary">{{ role }}</span>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

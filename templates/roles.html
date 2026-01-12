@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Roles - Oxidesk{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2 style="margin: 0;">Roles</h2>
+        <a href="/roles/new" class="btn btn-primary">+ Create Role</a>
+    </div>
+
+    <div id="roles-list">
+        {% if roles.is_empty() %}
+        <p style="color: #666; text-align: center; padding: 2rem;">No roles found</p>
+        {% else %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #ddd;">
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Name</th>
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Description</th>
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Permissions</th>
+                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Users</th>
+                        <th style="text-align: right; padding: 0.75rem; font-weight: 600;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for role in roles %}
+                    <tr style="border-bottom: 1px solid #eee;" id="role-row-{{ role.id }}">
+                        <td style="padding: 0.75rem;">
+                            <strong>{{ role.name }}</strong>
+                            {% if role.is_system %}
+                            <span class="badge badge-secondary" style="margin-left: 0.5rem; font-size: 0.75rem;">System</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 0.75rem; color: #666;">
+                            {% if role.description.is_empty() %}
+                            <span style="font-style: italic;">No description</span>
+                            {% else %}
+                            {{ role.description }}
+                            {% endif %}
+                        </td>
+                        <td style="padding: 0.75rem;">
+                            <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                                {% for permission in role.permissions %}
+                                <span class="badge badge-primary" style="font-size: 0.75rem;">{{ permission }}</span>
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td style="padding: 0.75rem;">
+                            <span class="badge badge-secondary">{{ role.user_count }} user(s)</span>
+                        </td>
+                        <td style="padding: 0.75rem; text-align: right;">
+                            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                {% if role.is_system %}
+                                <button class="btn btn-secondary" style="padding: 0.5rem 1rem;" disabled title="System roles cannot be modified">
+                                    Edit
+                                </button>
+                                <button class="btn btn-danger" style="padding: 0.5rem 1rem;" disabled title="System roles cannot be deleted">
+                                    Delete
+                                </button>
+                                {% else %}
+                                <a href="/roles/{{ role.id }}/edit" class="btn btn-secondary" style="padding: 0.5rem 1rem;">Edit</a>
+                                {% if role.user_count == 0 %}
+                                <button
+                                    class="btn btn-danger"
+                                    style="padding: 0.5rem 1rem;"
+                                    hx-delete="/roles/{{ role.id }}"
+                                    hx-target="#role-row-{{ role.id }}"
+                                    hx-swap="outerHTML swap:0.3s"
+                                    hx-confirm="Are you sure you want to delete role {{ role.name }}?">
+                                    Delete
+                                </button>
+                                {% else %}
+                                <button class="btn btn-danger" style="padding: 0.5rem 1rem;" disabled title="Cannot delete role with assigned users">
+                                    Delete
+                                </button>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
