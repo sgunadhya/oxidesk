@@ -166,6 +166,55 @@ async fn setup_schema(db: &Database) {
     .execute(pool)
     .await
     .expect("Failed to create contact_channels table");
+
+    // Create inboxes table (minimal for testing)
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS inboxes (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create inboxes table");
+
+    // Create conversations table
+    sqlx::query(
+        "CREATE TABLE conversations (
+            id TEXT PRIMARY KEY NOT NULL,
+            reference_number INTEGER NOT NULL UNIQUE,
+            status TEXT NOT NULL CHECK(status IN ('open', 'snoozed', 'resolved', 'closed')) DEFAULT 'open',
+            inbox_id TEXT NOT NULL,
+            contact_id TEXT NOT NULL,
+            subject TEXT,
+            resolved_at TEXT,
+            snoozed_until TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1,
+            FOREIGN KEY (inbox_id) REFERENCES inboxes(id) ON DELETE RESTRICT,
+            FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE RESTRICT
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create conversations table");
+
+    // Create trigger for auto-incrementing reference_number starting from 100
+    sqlx::query(
+        "CREATE TRIGGER IF NOT EXISTS set_conversation_reference_number
+         AFTER INSERT ON conversations
+         WHEN NEW.reference_number IS NULL
+         BEGIN
+             UPDATE conversations
+             SET reference_number = (SELECT COALESCE(MAX(reference_number), 99) + 1 FROM conversations WHERE id != NEW.id)
+             WHERE id = NEW.id;
+         END"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create conversations reference_number trigger");
 }
 
 async fn seed_test_data(db: &Database) {
@@ -202,6 +251,14 @@ async fn seed_test_data(db: &Database) {
     .execute(pool)
     .await
     .expect("Failed to assign permissions to Admin role");
+
+    // Insert test inbox
+    sqlx::query(
+        "INSERT INTO inboxes (id, name) VALUES ('test-inbox-001', 'Test Inbox')"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to seed test inbox");
 }
 
 pub async fn teardown_test_db(db: Database) {

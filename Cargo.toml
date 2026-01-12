@@ -33,6 +33,7 @@ email_address = "0.2"
 
 # Time handling
 time = { version = "0.3", features = ["serde", "macros", "formatting", "parsing"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 # Logging and tracing
 tracing = "0.1"

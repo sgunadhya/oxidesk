@@ -489,6 +489,391 @@ impl Database {
         Ok(row.try_get("count")?)
     }
 
+    // Conversation operations
+    pub async fn create_conversation(&self, create: &CreateConversation) -> ApiResult<Conversation> {
+        // Handle Option<String> for subject
+        let subject_value: Option<&str> = create.subject.as_deref();
+
+        tracing::debug!(
+            "Creating conversation for inbox_id={}, contact_id={}",
+            create.inbox_id,
+            create.contact_id
+        );
+
+        // Insert the conversation
+        let result = sqlx::query(
+            "INSERT INTO conversations (id, reference_number, status, inbox_id, contact_id, subject, created_at, updated_at)
+             VALUES (lower(hex(randomblob(16))), (SELECT COALESCE(MAX(reference_number), 99) + 1 FROM conversations), 'open', ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(&create.inbox_id)
+        .bind(&create.contact_id)
+        .bind(subject_value)
+        .execute(&self.pool)
+        .await?;
+
+        // Fetch the created conversation using rowid
+        let row = sqlx::query(
+            "SELECT id, reference_number, status, inbox_id, contact_id, subject,
+                    resolved_at, snoozed_until, created_at, updated_at, version
+             FROM conversations
+             WHERE rowid = ?",
+        )
+        .bind(result.last_insert_id())
+        .fetch_one(&self.pool)
+        .await?;
+
+        let status_str: String = row.try_get("status")?;
+        let conversation = Conversation {
+            id: row.try_get("id")?,
+            reference_number: row.try_get("reference_number")?,
+            status: ConversationStatus::from(status_str),
+            inbox_id: row.try_get("inbox_id")?,
+            contact_id: row.try_get("contact_id")?,
+            subject: row.try_get("subject").ok(),
+            resolved_at: row.try_get("resolved_at").ok(),
+            snoozed_until: row.try_get("snoozed_until").ok(),
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+            version: row.try_get("version")?,
+        };
+
+        tracing::info!(
+            "Conversation created: id={}, reference_number={}, status={:?}",
+            conversation.id,
+            conversation.reference_number,
+            conversation.status
+        );
+
+        Ok(conversation)
+    }
+
+    pub async fn get_conversation_by_id(&self, id: &str) -> ApiResult<Option<Conversation>> {
+        let row = sqlx::query(
+            "SELECT id, reference_number, status, inbox_id, contact_id, subject,
+                    resolved_at, snoozed_until, created_at, updated_at, version
+             FROM conversations
+             WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let status_str: String = row.try_get("status")?;
+            let conversation = Conversation {
+                id: row.try_get("id")?,
+                reference_number: row.try_get("reference_number")?,
+                status: ConversationStatus::from(status_str),
+                inbox_id: row.try_get("inbox_id")?,
+                contact_id: row.try_get("contact_id")?,
+                subject: row.try_get("subject").ok(),
+                resolved_at: row.try_get("resolved_at").ok(),
+                snoozed_until: row.try_get("snoozed_until").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+                version: row.try_get("version")?,
+            };
+            Ok(Some(conversation))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn get_conversation_by_reference_number(&self, reference_number: i64) -> ApiResult<Option<Conversation>> {
+        let row = sqlx::query(
+            "SELECT id, reference_number, status, inbox_id, contact_id, subject,
+                    resolved_at, snoozed_until, created_at, updated_at, version
+             FROM conversations
+             WHERE reference_number = ?",
+        )
+        .bind(reference_number)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let status_str: String = row.try_get("status")?;
+            let conversation = Conversation {
+                id: row.try_get("id")?,
+                reference_number: row.try_get("reference_number")?,
+                status: ConversationStatus::from(status_str),
+                inbox_id: row.try_get("inbox_id")?,
+                contact_id: row.try_get("contact_id")?,
+                subject: row.try_get("subject").ok(),
+                resolved_at: row.try_get("resolved_at").ok(),
+                snoozed_until: row.try_get("snoozed_until").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+                version: row.try_get("version")?,
+            };
+            Ok(Some(conversation))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn update_conversation_fields(
+        &self,
+        id: &str,
+        status: ConversationStatus,
+        resolved_at: Option<String>,
+        snoozed_until: Option<String>,
+    ) -> ApiResult<Conversation> {
+        // Optimistic locking not strictly enforced here as previous version isn't passed, 
+        // but can be added if we pass expected_version.
+        // For now, simple update.
+        
+        sqlx::query(
+            "UPDATE conversations 
+             SET status = ?, resolved_at = ?, snoozed_until = ?, version = version + 1
+             WHERE id = ?"
+        )
+        .bind(status.to_string())
+        .bind(resolved_at)
+        .bind(snoozed_until)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        
+        self.get_conversation_by_id(id).await?.ok_or_else(|| {
+              crate::api::middleware::ApiError::NotFound("Conversation not found after update".to_string())
+        })
+    }
+    
+    pub async fn get_conversation_by_reference(&self, ref_num: i64) -> ApiResult<Option<Conversation>> {
+        let row = sqlx::query("SELECT * FROM conversations WHERE reference_number = ?")
+            .bind(ref_num)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+             use sqlx::Row;
+             let conversation = Conversation {
+                id: row.try_get("id")?,
+                inbox_id: row.try_get("inbox_id")?,
+                contact_id: row.try_get("contact_id")?,
+                subject: row.try_get("subject").ok(),
+                status: ConversationStatus::from(row.try_get::<String, _>("status")?),
+                reference_number: row.try_get("reference_number")?,
+                resolved_at: row.try_get("resolved_at").ok(),
+                snoozed_until: row.try_get("snoozed_until").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+                version: row.try_get("version")?,
+            };
+            Ok(Some(conversation))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// List conversations with pagination and optional filters
+    pub async fn list_conversations(
+        &self,
+        limit: i64,
+        offset: i64,
+        status: Option<ConversationStatus>,
+        inbox_id: Option<String>,
+        contact_id: Option<String>,
+    ) -> ApiResult<Vec<Conversation>> {
+        let mut query = String::from(
+            "SELECT id, reference_number, status, inbox_id, contact_id, subject,
+                    resolved_at, snoozed_until, created_at, updated_at, version
+             FROM conversations
+             WHERE 1=1"
+        );
+
+        // Add filters
+        if status.is_some() {
+            query.push_str(" AND status = ?");
+        }
+        if inbox_id.is_some() {
+            query.push_str(" AND inbox_id = ?");
+        }
+        if contact_id.is_some() {
+            query.push_str(" AND contact_id = ?");
+        }
+
+        query.push_str(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
+
+        let mut sql_query = sqlx::query(&query);
+
+        // Bind filter parameters
+        if let Some(s) = status {
+            sql_query = sql_query.bind(s.to_string());
+        }
+        if let Some(inbox) = inbox_id {
+            sql_query = sql_query.bind(inbox);
+        }
+        if let Some(contact) = contact_id {
+            sql_query = sql_query.bind(contact);
+        }
+
+        // Bind pagination parameters
+        sql_query = sql_query.bind(limit).bind(offset);
+
+        let rows = sql_query.fetch_all(&self.pool).await?;
+
+        let mut conversations = Vec::new();
+        for row in rows {
+            use sqlx::Row;
+            let status_str: String = row.try_get("status")?;
+            let conversation = Conversation {
+                id: row.try_get("id")?,
+                reference_number: row.try_get("reference_number")?,
+                status: ConversationStatus::from(status_str),
+                inbox_id: row.try_get("inbox_id")?,
+                contact_id: row.try_get("contact_id")?,
+                subject: row.try_get("subject").ok(),
+                resolved_at: row.try_get("resolved_at").ok(),
+                snoozed_until: row.try_get("snoozed_until").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+                version: row.try_get("version")?,
+            };
+            conversations.push(conversation);
+        }
+
+        Ok(conversations)
+    }
+
+    /// Count total conversations with optional filters
+    pub async fn count_conversations(
+        &self,
+        status: Option<ConversationStatus>,
+        inbox_id: Option<String>,
+        contact_id: Option<String>,
+    ) -> ApiResult<i64> {
+        let mut query = String::from("SELECT COUNT(*) as count FROM conversations WHERE 1=1");
+
+        if status.is_some() {
+            query.push_str(" AND status = ?");
+        }
+        if inbox_id.is_some() {
+            query.push_str(" AND inbox_id = ?");
+        }
+        if contact_id.is_some() {
+            query.push_str(" AND contact_id = ?");
+        }
+
+        let mut sql_query = sqlx::query(&query);
+
+        if let Some(s) = status {
+            sql_query = sql_query.bind(s.to_string());
+        }
+        if let Some(inbox) = inbox_id {
+            sql_query = sql_query.bind(inbox);
+        }
+        if let Some(contact) = contact_id {
+            sql_query = sql_query.bind(contact);
+        }
+
+        let row = sql_query.fetch_one(&self.pool).await?;
+        use sqlx::Row;
+        let count: i64 = row.try_get("count")?;
+
+        Ok(count)
+    }
+
+    // Legacy high-level update (deprecated by conversation_service, but keeping preventing break if used elsewhere? 
+    // Actually, I should remove it or delegate to service, but database calling service is bad.
+    // I will comment out update_conversation_status to avoid confusion/duplication if it's unused.)
+    // Legacy high-level update (deprecated by conversation_service)
+    /*
+    pub async fn update_conversation_status(
+        &self,
+        conversation_id: &str,
+        update_request: UpdateStatusRequest,
+        agent_id: Option<String>,
+        event_bus: Option<&crate::events::EventBus>,
+    ) -> ApiResult<Conversation> {
+        use crate::services::state_machine::{execute_transition, TransitionContext};
+
+        // Get current conversation
+        let current = self
+            .get_conversation_by_id(conversation_id)
+            .await?
+            .ok_or_else(|| {
+                crate::api::middleware::ApiError::NotFound("Conversation not found".to_string())
+            })?;
+
+        // Create transition context
+        let context = TransitionContext {
+            conversation_id: conversation_id.to_string(),
+            from_status: current.status,
+            to_status: update_request.status,
+            agent_id,
+            snooze_duration: update_request.snooze_duration.clone(),
+        };
+
+        // Execute transition (validates and publishes events)
+        let _result = execute_transition(context, event_bus).map_err(|e| {
+            crate::api::middleware::ApiError::BadRequest(format!("Invalid transition: {}", e))
+        })?;
+
+        tracing::info!(
+            "Updating conversation {} status from {:?} to {:?}",
+            conversation_id,
+            current.status,
+            update_request.status
+        );
+
+        // Update status in database
+        let new_status_str = update_request.status.to_string();
+        let now = time::OffsetDateTime::now_utc()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap();
+
+        // Set resolved_at if transitioning to Resolved
+        let resolved_at = if update_request.status == ConversationStatus::Resolved {
+            Some(now.clone())
+        } else if update_request.status == ConversationStatus::Open {
+            // Clear resolved_at when reopening
+            None
+        } else {
+            current.resolved_at
+        };
+
+        // Set snoozed_until if snooze_duration provided
+        let snoozed_until = if update_request.snooze_duration.is_some() {
+            update_request.snooze_duration
+        } else if update_request.status != ConversationStatus::Snoozed {
+            // Clear snoozed_until if not snoozing
+            None
+        } else {
+            current.snoozed_until
+        };
+
+        sqlx::query(
+            "UPDATE conversations
+             SET status = ?, resolved_at = ?, snoozed_until = ?, updated_at = ?, version = version + 1
+             WHERE id = ?",
+        )
+        .bind(&new_status_str)
+        .bind(resolved_at.as_ref())
+        .bind(snoozed_until.as_ref())
+        .bind(&now)
+        .bind(conversation_id)
+        .execute(&self.pool)
+        .await?;
+
+        // Fetch and return updated conversation
+        let updated = self
+            .get_conversation_by_id(conversation_id)
+            .await?
+            .ok_or_else(|| {
+                crate::api::middleware::ApiError::Internal("Conversation disappeared".to_string())
+            })?;
+
+        tracing::info!(
+            "Conversation {} status updated successfully to {:?}",
+            conversation_id,
+            updated.status
+        );
+
+        Ok(updated)
+    }
+    */
+
     // Role operations
     pub async fn list_roles(&self) -> ApiResult<Vec<Role>> {
         let rows = sqlx::query(
@@ -816,4 +1201,5 @@ impl Clone for Database {
             pool: self.pool.clone(),
         }
     }
+
 }

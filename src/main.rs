@@ -1,17 +1,19 @@
-mod api;
-mod config;
-mod database;
-mod models;
-mod services;
-mod web;
+// Modules are imported from the library crate
 
-use crate::{
-    api::middleware::{AppState, ApiError},
+
+use oxidesk::{
+    api::{self, middleware::{AppState, ApiError}}, // Explicitly fixing imports mapping
     config::Config,
     database::Database,
-    models::*,
-    services::*,
+    models::{self, *},
+    services::{self, *},
+    web, 
 };
+// Re-import initialize_admin for main.rs usage if it was public in lib? 
+// initialize_admin was defined in main.rs (line 305). Wait.
+// If initialize_admin function is at the bottom of main.rs, it uses `Database`.
+// `Database` is now `oxidesk::database::Database`.
+
 use axum::{
     extract::State,
     routing::{get, post, delete, patch},
@@ -67,10 +69,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         e
     })?;
 
+    // Initialize event bus for automation rules
+    let event_bus = oxidesk::EventBus::new(100);
+    tracing::info!("Event bus initialized with capacity 100");
+
     // Create application state
     let state = AppState {
         db: db.clone(),
         session_duration_hours: config.session_duration_hours,
+        event_bus: event_bus.clone(),
     };
 
     // Start session cleanup background task
@@ -92,6 +99,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Start automation listener background task
+    let automation_event_bus = event_bus.clone();
+    tokio::spawn(async move {
+        let mut receiver = automation_event_bus.subscribe();
+        tracing::info!("Automation listener started");
+
+        loop {
+            match receiver.recv().await {
+                Ok(event) => {
+                    tracing::debug!("Automation listener received event: {:?}", event);
+
+                    // Process automation rules based on event
+                    // For now, just log the event
+                    match event {
+                        oxidesk::SystemEvent::ConversationStatusChanged {
+                            conversation_id,
+                            old_status,
+                            new_status,
+                            agent_id,
+                            timestamp,
+                        } => {
+                            tracing::info!(
+                                "Automation: Conversation {} status changed from {:?} to {:?} by agent {:?} at {}",
+                                conversation_id,
+                                old_status,
+                                new_status,
+                                agent_id,
+                                timestamp
+                            );
+
+                            // TODO: In future, this would trigger automation rules:
+                            // - Auto-assign to agent
+                            // - Send notifications
+                            // - Update metrics
+                            // - Trigger webhooks
+                            // etc.
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Automation listener error: {}", e);
+                    // Sleep briefly before retrying
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
+    });
+
     // Build protected routes (require authentication)
     let protected = Router::new()
         .route("/api/auth/logout", post(api::auth::logout))
@@ -107,6 +162,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/contacts/:id", get(api::contacts::get_contact))
         .route("/api/contacts/:id", patch(api::contacts::update_contact))
         .route("/api/contacts/:id", delete(api::contacts::delete_contact))
+        .route("/api/conversations", get(api::conversations::list_conversations))
+        .route("/api/conversations", post(api::conversations::create_conversation))
+        .route("/api/conversations/:id", get(api::conversations::get_conversation))
+        .route("/api/conversations/:id/status", patch(api::conversations::update_conversation_status))
+        .route("/api/conversations/ref/:reference_number", get(api::conversations::get_conversation_by_reference))
         .route("/api/roles", get(api::roles::list_roles))
         .route("/api/roles", post(api::roles::create_role))
         .route("/api/roles/:id", get(api::roles::get_role))

@@ -92,7 +92,7 @@ pub struct AgentListResponse {
     pub pagination: PaginationMetadata,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaginationMetadata {
     pub page: i64,
     pub per_page: i64,

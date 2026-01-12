@@ -1,0 +1,191 @@
+use oxidesk::models::conversation::{ConversationStatus, UpdateStatusRequest};
+use oxidesk::EventBus;
+use oxidesk::services::conversation_service;
+
+mod helpers;
+use helpers::*;
+
+#[tokio::test]
+async fn test_agent_can_update_open_to_resolved() {
+    let db = setup_test_db().await;
+    let auth_user = create_test_auth_user(&db).await;
+    let event_bus = EventBus::new(10); // Minimal event bus
+
+    // Create test contact and conversation
+    let contact = create_test_contact(&db, "customer@example.com").await;
+    let inbox_id = "test-inbox-001".to_string();
+    let conversation = create_test_conversation(
+        &db,
+        inbox_id.clone(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
+
+    assert_eq!(conversation.status, ConversationStatus::Open);
+
+    // Update status to Resolved
+    let update_request = UpdateStatusRequest {
+        status: ConversationStatus::Resolved,
+        snooze_duration: None,
+    };
+
+    // Use service
+    let result = conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        update_request,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus)
+    ).await;
+
+    assert!(result.is_ok(), "Failed to update status: {:?}", result.err());
+
+    // Fetch updated conversation
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .expect("Failed to fetch conversation")
+        .expect("Conversation not found");
+
+    assert_eq!(updated.status, ConversationStatus::Resolved);
+}
+
+#[tokio::test]
+async fn test_resolved_at_timestamp_set_on_status_change() {
+    let db = setup_test_db().await;
+    let auth_user = create_test_auth_user(&db).await;
+    let event_bus = EventBus::new(10);
+
+    let contact = create_test_contact(&db, "customer2@example.com").await;
+    let inbox_id = "test-inbox-001".to_string();
+    let conversation = create_test_conversation(
+        &db,
+        inbox_id.clone(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
+
+    assert!(conversation.resolved_at.is_none());
+
+    // Update status to Resolved
+    let update_request = UpdateStatusRequest {
+        status: ConversationStatus::Resolved,
+        snooze_duration: None,
+    };
+
+    conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        update_request,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus)
+    )
+    .await
+    .expect("Failed to update status");
+
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .expect("Failed to fetch conversation")
+        .expect("Conversation not found");
+
+    assert!(updated.resolved_at.is_some(), "resolved_at should be set");
+}
+
+#[tokio::test]
+async fn test_invalid_status_transition_rejected() {
+    let db = setup_test_db().await;
+    let auth_user = create_test_auth_user(&db).await;
+    let event_bus = EventBus::new(10);
+
+    let contact = create_test_contact(&db, "customer3@example.com").await;
+    let inbox_id = "test-inbox-001".to_string();
+    let conversation = create_test_conversation(
+        &db,
+        inbox_id.clone(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
+
+    // Test a valid cycle: Open -> Snoozed -> Open
+    
+    let update_snooze = UpdateStatusRequest {
+        status: ConversationStatus::Snoozed,
+        snooze_duration: Some("1h".to_string()),
+    };
+    
+    conversation_service::update_conversation_status(&db, &conversation.id, update_snooze, Some(auth_user.user.id.clone()), Some(&event_bus)).await.unwrap();
+    
+    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    assert_eq!(updated.status, ConversationStatus::Snoozed);
+    
+    let update_open = UpdateStatusRequest { status: ConversationStatus::Open, snooze_duration: None };
+    conversation_service::update_conversation_status(&db, &conversation.id, update_open, Some(auth_user.user.id.clone()), Some(&event_bus)).await.unwrap();
+    
+    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    assert_eq!(updated.status, ConversationStatus::Open);
+}
+
+#[tokio::test]
+async fn test_automation_rules_evaluated_on_status_change() {
+    let db = setup_test_db().await;
+    let auth_user = create_test_auth_user(&db).await;
+
+    // Create event bus with subscriber
+    let event_bus = EventBus::new(10);
+    let mut receiver = event_bus.subscribe();
+
+    let contact = create_test_contact(&db, "customer5@example.com").await;
+    let inbox_id = "test-inbox-001".to_string();
+    let conversation = create_test_conversation(
+        &db,
+        inbox_id.clone(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
+
+    // Update status to Resolved with event bus
+    let update_request = UpdateStatusRequest {
+        status: ConversationStatus::Resolved,
+        snooze_duration: None,
+    };
+
+    conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        update_request,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus)
+    )
+    .await
+    .expect("Failed to update status");
+
+    // Verify event was published
+    let event = tokio::time::timeout(
+        tokio::time::Duration::from_secs(1),
+        receiver.recv()
+    )
+    .await
+    .expect("Timeout waiting for event")
+    .expect("Failed to receive event");
+
+    // Verify event details
+    match event {
+        oxidesk::SystemEvent::ConversationStatusChanged {
+            conversation_id,
+            old_status,
+            new_status,
+            agent_id: event_agent_id,
+            timestamp: _,
+        } => {
+            assert_eq!(conversation_id, conversation.id);
+            assert_eq!(old_status, ConversationStatus::Open);
+            assert_eq!(new_status, ConversationStatus::Resolved);
+            assert_eq!(event_agent_id, Some(auth_user.user.id));
+        }
+    }
+}

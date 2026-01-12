@@ -13,6 +13,7 @@ use crate::{
 pub struct AppState {
     pub db: Database,
     pub session_duration_hours: i64,
+    pub event_bus: crate::events::EventBus,
 }
 
 /// Extract and validate session token from Authorization header
