@@ -8,7 +8,8 @@ use oxidesk::{
 
 #[tokio::test]
 async fn test_agent_creation_success() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create admin user first
     let admin_email = validate_and_normalize_email("admin@example.com").unwrap();
@@ -49,12 +50,13 @@ async fn test_agent_creation_success() {
     let roles = db.get_user_roles(&new_user.id).await.unwrap();
     assert!(!roles.is_empty());
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_duplicate_agent_email_rejection() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create first agent
     let email = validate_and_normalize_email("duplicate@example.com").unwrap();
@@ -73,7 +75,7 @@ async fn test_duplicate_agent_email_rejection() {
     // Should fail due to per-type email uniqueness constraint
     assert!(result.is_err());
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
@@ -97,7 +99,8 @@ async fn test_password_complexity_violations() {
 
 #[tokio::test]
 async fn test_agent_creation_requires_at_least_one_role() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create an agent but don't assign any roles
     let email = validate_and_normalize_email("norole@example.com").unwrap();
@@ -118,12 +121,13 @@ async fn test_agent_creation_requires_at_least_one_role() {
     let roles = db.get_user_roles(&user.id).await.unwrap();
     assert!(roles.is_empty(), "Agent should have no roles at this point");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_agent_email_can_duplicate_contact_email() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create a contact with an email
     let email = validate_and_normalize_email("shared@example.com").unwrap();
@@ -148,12 +152,13 @@ async fn test_agent_email_can_duplicate_contact_email() {
     assert!(contact.is_some());
     assert!(agent_retrieved.is_some());
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_get_agent_by_id() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create an agent
     let email = validate_and_normalize_email("get@example.com").unwrap();
@@ -186,5 +191,5 @@ async fn test_get_agent_by_id() {
     let retrieved_agent = retrieved_agent.unwrap();
     assert_eq!(retrieved_agent.first_name, "Get Agent");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }

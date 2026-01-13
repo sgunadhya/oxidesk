@@ -14,7 +14,12 @@ pub async fn create_conversation(
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
     Json(request): Json<CreateConversation>,
 ) -> ApiResult<impl IntoResponse> {
-    let conversation = conversation_service::create_conversation(&state.db, &auth_user, request).await?;
+    let conversation = conversation_service::create_conversation(
+        &state.db,
+        &auth_user,
+        request,
+        Some(&state.sla_service),
+    ).await?;
     Ok(Json(conversation))
 }
 

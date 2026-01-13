@@ -8,7 +8,8 @@ use oxidesk::{
 
 #[tokio::test]
 async fn test_contact_creation_success() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create a contact
     let email = validate_and_normalize_email("contact@example.com").unwrap();
@@ -29,12 +30,13 @@ async fn test_contact_creation_success() {
     let contact_details = contact_details.unwrap();
     assert_eq!(contact_details.first_name, Some("John Doe".to_string()));
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_duplicate_contact_email_rejection() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create first contact
     let email = validate_and_normalize_email("duplicate@example.com").unwrap();
@@ -51,12 +53,13 @@ async fn test_duplicate_contact_email_rejection() {
     // Should fail due to per-type email uniqueness constraint
     assert!(result.is_err());
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_contact_email_can_duplicate_agent_email() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create an agent with an email
     let email = validate_and_normalize_email("shared@example.com").unwrap();
@@ -79,12 +82,13 @@ async fn test_contact_email_can_duplicate_agent_email() {
     assert!(agent.is_some());
     assert!(contact_retrieved.is_some());
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_contact_channel_linking() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create a contact
     let email = validate_and_normalize_email("channel@example.com").unwrap();
@@ -107,12 +111,13 @@ async fn test_contact_channel_linking() {
     assert_eq!(channels[0].inbox_id, inbox_id);
     assert_eq!(channels[0].email, channel_email);
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_get_contact_by_id() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create a contact
     let email = validate_and_normalize_email("get@example.com").unwrap();
@@ -138,12 +143,13 @@ async fn test_get_contact_by_id() {
     let retrieved_contact = retrieved_contact.unwrap();
     assert_eq!(retrieved_contact.first_name, Some("Get Contact".to_string()));
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_contact_without_name() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create a contact without a name
     let email = validate_and_normalize_email("noname@example.com").unwrap();
@@ -158,5 +164,5 @@ async fn test_contact_without_name() {
     assert!(retrieved.is_some());
     assert_eq!(retrieved.unwrap().first_name, None);
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }

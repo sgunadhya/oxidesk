@@ -3,18 +3,18 @@
 -- Description: Add new permissions for conversation assignment
 
 -- Insert new permissions
-INSERT INTO permissions (id, name, description, resource, action)
+INSERT INTO permissions (id, name, description, created_at, updated_at)
 VALUES
     ('perm_conversations_update_user_assignee', 'conversations:update_user_assignee',
-     'Assign conversations to users', 'conversations', 'update_user_assignee'),
+     'Assign conversations to users', datetime('now'), datetime('now')),
     ('perm_conversations_update_team_assignee', 'conversations:update_team_assignee',
-     'Assign conversations to teams', 'conversations', 'update_team_assignee'),
+     'Assign conversations to teams', datetime('now'), datetime('now')),
     ('perm_conversations_read_unassigned', 'conversations:read_unassigned',
-     'View unassigned conversations', 'conversations', 'read_unassigned');
+     'View unassigned conversations', datetime('now'), datetime('now'));
 
 -- Grant to Admin role
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT 'role_admin', id FROM permissions
+INSERT INTO role_permissions (role_id, permission_id, created_at)
+SELECT '00000000-0000-0000-0000-000000000001', id, datetime('now') FROM permissions
 WHERE name IN (
     'conversations:update_user_assignee',
     'conversations:update_team_assignee',
@@ -22,8 +22,8 @@ WHERE name IN (
 );
 
 -- Grant to Agent role (they can self-assign and view unassigned)
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT 'role_agent', id FROM permissions
+INSERT INTO role_permissions (role_id, permission_id, created_at)
+SELECT '00000000-0000-0000-0000-000000000002', id, datetime('now') FROM permissions
 WHERE name IN (
     'conversations:update_user_assignee',
     'conversations:read_unassigned'

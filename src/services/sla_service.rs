@@ -4,7 +4,7 @@ use crate::{
     events::{EventBus, SystemEvent},
     models::*,
 };
-use chrono::Utc;
+use chrono::{Datelike, Timelike, Utc};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info};
@@ -194,15 +194,66 @@ impl SlaService {
         policy_id: &str,
         base_timestamp: &str,
     ) -> ApiResult<AppliedSla> {
+        // Validate conversation exists and get it
+        let conversation = self.db
+            .get_conversation_by_id(conversation_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Conversation not found: {}", conversation_id)))?;
+
         // Get the policy
         let policy = self
             .get_policy(policy_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("SLA policy not found: {}", policy_id)))?;
 
-        // Calculate deadlines
-        let first_response_deadline = self.calculate_deadline(base_timestamp, &policy.first_response_time)?;
-        let resolution_deadline = self.calculate_deadline(base_timestamp, &policy.resolution_time)?;
+        // Check for duplicate: conversation must not already have an applied SLA
+        if let Some(_existing) = self.db.get_applied_sla_by_conversation(conversation_id).await? {
+            return Err(ApiError::BadRequest(
+                "Conversation already has an applied SLA".to_string()
+            ));
+        }
+
+        // Check if conversation is assigned to a team with business hours
+        let business_hours = if let Some(team_id) = &conversation.assigned_team_id {
+            if let Some(team) = self.db.get_team_by_id(team_id).await? {
+                if let Some(bh_json) = &team.business_hours {
+                    // Parse business hours JSON
+                    match crate::models::team::BusinessHours::parse(bh_json) {
+                        Ok(bh) => {
+                            info!("Using business hours for team {} (timezone: {})", team_id, bh.timezone);
+                            Some(bh)
+                        }
+                        Err(e) => {
+                            info!("Invalid business hours format for team {}: {}. Using 24/7 calculation.", team_id, e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Calculate deadlines (with or without business hours)
+        let first_response_deadline = if let Some(ref bh) = business_hours {
+            let duration_seconds = crate::parse_duration(&policy.first_response_time)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid first_response_time: {}", e)))?;
+            self.calculate_deadline_with_business_hours(base_timestamp, duration_seconds, bh)?
+        } else {
+            self.calculate_deadline(base_timestamp, &policy.first_response_time)?
+        };
+
+        let resolution_deadline = if let Some(ref bh) = business_hours {
+            let duration_seconds = crate::parse_duration(&policy.resolution_time)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid resolution_time: {}", e)))?;
+            self.calculate_deadline_with_business_hours(base_timestamp, duration_seconds, bh)?
+        } else {
+            self.calculate_deadline(base_timestamp, &policy.resolution_time)?
+        };
 
         // Create applied SLA
         let applied_sla = AppliedSla::new(
@@ -230,10 +281,17 @@ impl SlaService {
         self.db.create_sla_event(&first_response_event).await?;
         self.db.create_sla_event(&resolution_event).await?;
 
-        info!(
-            "Applied SLA policy {} to conversation {} (first_response: {}, resolution: {})",
-            policy_id, conversation_id, first_response_deadline, resolution_deadline
-        );
+        if business_hours.is_some() {
+            info!(
+                "Applied SLA policy {} to conversation {} with business hours (first_response: {}, resolution: {})",
+                policy_id, conversation_id, first_response_deadline, resolution_deadline
+            );
+        } else {
+            info!(
+                "Applied SLA policy {} to conversation {} (24/7) (first_response: {}, resolution: {})",
+                policy_id, conversation_id, first_response_deadline, resolution_deadline
+            );
+        }
 
         Ok(applied_sla)
     }
@@ -481,6 +539,104 @@ impl SlaService {
 
         let deadline = base + chrono::Duration::seconds(seconds);
         Ok(deadline.to_rfc3339())
+    }
+
+    /// Calculate deadline with business hours (skipping non-working hours)
+    pub fn calculate_deadline_with_business_hours(
+        &self,
+        base_time: &str,
+        duration_seconds: i64,
+        business_hours: &crate::models::team::BusinessHours,
+    ) -> ApiResult<String> {
+        use chrono_tz::Tz;
+
+        // Parse base time
+        let mut current = chrono::DateTime::parse_from_rfc3339(base_time)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid base time: {}", e)))?
+            .with_timezone(&chrono::Utc);
+
+        // Parse timezone
+        let tz: Tz = business_hours.timezone.parse()
+            .map_err(|_| ApiError::BadRequest(format!("Invalid timezone: {}", business_hours.timezone)))?;
+
+        // Convert to team timezone
+        current = current.with_timezone(&tz).with_timezone(&chrono::Utc);
+
+        // Add duration while skipping non-working hours
+        let mut remaining_seconds = duration_seconds;
+
+        while remaining_seconds > 0 {
+            // Convert current time to team timezone for business hours check
+            let current_in_tz = current.with_timezone(&tz);
+
+            if self.is_working_hour(&current_in_tz, business_hours, &tz)? {
+                // We're in working hours, advance by 1 minute
+                current = current + chrono::Duration::minutes(1);
+                remaining_seconds -= 60;
+            } else {
+                // We're outside working hours, jump to next working hour
+                current = self.next_working_hour(&current_in_tz, business_hours, &tz)?
+                    .with_timezone(&chrono::Utc);
+            }
+        }
+
+        Ok(current.to_rfc3339())
+    }
+
+    /// Check if a datetime falls within business hours
+    fn is_working_hour(
+        &self,
+        datetime: &chrono::DateTime<impl chrono::TimeZone>,
+        business_hours: &crate::models::team::BusinessHours,
+        _tz: &chrono_tz::Tz,
+    ) -> ApiResult<bool> {
+        use chrono::Datelike;
+
+        let day_name = match datetime.weekday() {
+            chrono::Weekday::Mon => "Monday",
+            chrono::Weekday::Tue => "Tuesday",
+            chrono::Weekday::Wed => "Wednesday",
+            chrono::Weekday::Thu => "Thursday",
+            chrono::Weekday::Fri => "Friday",
+            chrono::Weekday::Sat => "Saturday",
+            chrono::Weekday::Sun => "Sunday",
+        };
+
+        // Find schedule for this day
+        let day_schedule = business_hours.schedule.iter()
+            .find(|s| s.day == day_name);
+
+        if let Some(schedule) = day_schedule {
+            // Parse start and end times (format: "HH:MM")
+            let time_str = format!("{:02}:{:02}", datetime.hour(), datetime.minute());
+
+            // Simple string comparison works for HH:MM format
+            Ok(time_str >= schedule.start && time_str < schedule.end)
+        } else {
+            // No schedule for this day (non-working day)
+            Ok(false)
+        }
+    }
+
+    /// Find the next working hour after the given datetime
+    fn next_working_hour(
+        &self,
+        datetime: &chrono::DateTime<impl chrono::TimeZone>,
+        business_hours: &crate::models::team::BusinessHours,
+        tz: &chrono_tz::Tz,
+    ) -> ApiResult<chrono::DateTime<chrono_tz::Tz>> {
+        let mut current = datetime.with_timezone(tz);
+
+        // Try up to 14 days to find next working hour (2 weeks should cover any schedule)
+        for _ in 0..14 * 24 * 60 {
+            current = current + chrono::Duration::minutes(1);
+
+            if self.is_working_hour(&current, business_hours, tz)? {
+                return Ok(current);
+            }
+        }
+
+        Err(ApiError::Internal("Could not find next working hour within 14 days".to_string()))
     }
 
     /// Publish event to the event bus

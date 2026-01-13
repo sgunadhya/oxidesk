@@ -54,12 +54,15 @@ async fn create_test_user(db: &Database, email: &str, user_type: UserType) -> Us
 // Helper to create test inbox (workaround for missing inbox migration)
 async fn create_test_inbox(db: &Database, inbox_id: &str) {
     // Insert inbox (inboxes table should already exist from test_db setup)
+    let now = time::OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap();
     let result = sqlx::query(
-        "INSERT INTO inboxes (id, name, created_at) VALUES (?, ?, ?)",
+        "INSERT INTO inboxes (id, name, channel_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(inbox_id)
     .bind("Test Inbox")
-    .bind(time::OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap())
+    .bind("email")
+    .bind(&now)
+    .bind(&now)
     .execute(db.pool())
     .await;
 
@@ -179,7 +182,8 @@ async fn test_incoming_message_is_immutable() {
 // T024 & T025: Test conversation timestamp updates (integration test)
 #[tokio::test]
 async fn test_conversation_last_message_updated() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create dummy conversation ID and message
     let conv_id = "test_conv_123";
@@ -301,7 +305,8 @@ async fn test_message_immutable_after_sent() {
 
     // Test that update_message_status sets is_immutable based on status
     // This is tested in the database layer implementation
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Just verify the update_message_status method exists and compiles
     // (Without creating actual records due to FK constraints)
@@ -402,7 +407,8 @@ async fn test_delivery_service_integration() {
     use oxidesk::services::{MessageService, DeliveryService, MockDeliveryProvider};
     use std::sync::Arc;
 
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create delivery service with mock provider
     let provider = Arc::new(MockDeliveryProvider::new());
@@ -423,7 +429,8 @@ async fn test_delivery_service_integration() {
 // T078: Test immutability violation returns error
 #[tokio::test]
 async fn test_immutability_violation() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create user first (for messages.author_id FK to users.id)
     let user_id = uuid::Uuid::new_v4().to_string();
@@ -519,7 +526,8 @@ async fn test_content_at_max_length_accepted() {
 async fn test_e2e_incoming_message_flow() {
     use oxidesk::services::MessageService;
 
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create test contact (simplified - normally would need full user setup)
     let contact_id = "test_contact_123";
@@ -551,7 +559,8 @@ async fn test_e2e_outgoing_message_flow() {
     use oxidesk::services::{MessageService, DeliveryService, MockDeliveryProvider};
     use std::sync::Arc;
 
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup delivery service with mock provider
     let provider = Arc::new(MockDeliveryProvider::new());
@@ -598,7 +607,8 @@ async fn test_e2e_delivery_retry_flow() {
     use oxidesk::services::{DeliveryService, MockDeliveryProvider};
     use std::sync::Arc;
 
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create failing provider
     let failing_provider = Arc::new(MockDeliveryProvider::new_failing());
