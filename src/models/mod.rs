@@ -15,6 +15,9 @@ pub mod rule_evaluation_log;
 pub mod macro_models;
 pub mod notification;
 pub mod webhook;
+pub mod oidc_provider;
+pub mod auth_event;
+pub mod oidc_state;
 
 pub use user::*;
 pub use role::*;
@@ -33,3 +36,6 @@ pub use rule_evaluation_log::*;
 pub use macro_models::*;
 pub use notification::*;
 pub use webhook::*;
+pub use oidc_provider::*;
+pub use auth_event::*;
+pub use oidc_state::*;

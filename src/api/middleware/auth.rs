@@ -21,6 +21,7 @@ pub struct AppState {
     pub availability_service: crate::services::AvailabilityService,
     pub sla_service: crate::services::SlaService,
     pub connection_manager: Arc<dyn ConnectionManager>,
+    pub rate_limiter: crate::services::AuthRateLimiter,
 }
 
 /// Extract and validate session token from Authorization header
@@ -57,6 +58,9 @@ pub async fn require_auth(
         return Err(ApiError::Unauthorized);
     }
 
+    // Update last accessed timestamp for sliding window expiration
+    let _ = state.db.update_session_last_accessed(token).await;
+
     // Get user
     let user = state
         .db
@@ -87,6 +91,7 @@ pub async fn require_auth(
         user,
         agent,
         roles,
+        session: session.clone(),
         token: token_owned,
     });
 
@@ -122,6 +127,7 @@ pub struct AuthenticatedUser {
     pub user: User,
     pub agent: Agent,
     pub roles: Vec<Role>,
+    pub session: Session,
     pub token: String,
 }
 

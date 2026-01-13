@@ -233,15 +233,24 @@ impl Database {
 
     // Session operations
     pub async fn create_session(&self, session: &Session) -> ApiResult<()> {
+        let auth_method_str = match session.auth_method {
+            crate::models::AuthMethod::Password => "password",
+            crate::models::AuthMethod::Oidc => "oidc",
+        };
+
         sqlx::query(
-            "INSERT INTO sessions (id, user_id, token, expires_at, created_at)
-             VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO sessions (id, user_id, token, csrf_token, expires_at, created_at, last_accessed_at, auth_method, provider_name)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&session.id)
         .bind(&session.user_id)
         .bind(&session.token)
+        .bind(&session.csrf_token)
         .bind(&session.expires_at)
         .bind(&session.created_at)
+        .bind(&session.last_accessed_at)
+        .bind(auth_method_str)
+        .bind(&session.provider_name)
         .execute(&self.pool)
         .await?;
 
@@ -250,7 +259,7 @@ impl Database {
 
     pub async fn get_session_by_token(&self, token: &str) -> ApiResult<Option<Session>> {
         let row = sqlx::query(
-            "SELECT id, user_id, token, expires_at, created_at
+            "SELECT id, user_id, token, csrf_token, expires_at, created_at, last_accessed_at, auth_method, provider_name
              FROM sessions
              WHERE token = ?",
         )
@@ -259,12 +268,23 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
+            let auth_method_str: String = row.try_get("auth_method")?;
+            let auth_method = match auth_method_str.as_str() {
+                "password" => crate::models::AuthMethod::Password,
+                "oidc" => crate::models::AuthMethod::Oidc,
+                _ => crate::models::AuthMethod::Password,
+            };
+
             Ok(Some(Session {
                 id: row.try_get("id")?,
                 user_id: row.try_get("user_id")?,
                 token: row.try_get("token")?,
+                csrf_token: row.try_get("csrf_token")?,
                 expires_at: row.try_get("expires_at")?,
                 created_at: row.try_get("created_at")?,
+                last_accessed_at: row.try_get("last_accessed_at")?,
+                auth_method,
+                provider_name: row.try_get("provider_name")?,
             }))
         } else {
             Ok(None)
@@ -4883,6 +4903,409 @@ impl Database {
 
         Ok(row.try_get("count")?)
     }
+
+    // ========================================
+    // OIDC Provider Operations
+    // ========================================
+
+    /// Create a new OIDC provider
+    pub async fn create_oidc_provider(&self, provider: &crate::models::OidcProvider) -> ApiResult<()> {
+        let scopes_json = serde_json::to_string(&provider.scopes)
+            .map_err(|e| ApiError::Internal(format!("Failed to serialize scopes: {}", e)))?;
+
+        sqlx::query(
+            "INSERT INTO oidc_providers (id, name, issuer_url, client_id, client_secret, redirect_uri, scopes, enabled, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&provider.id)
+        .bind(&provider.name)
+        .bind(&provider.issuer_url)
+        .bind(&provider.client_id)
+        .bind(&provider.client_secret)
+        .bind(&provider.redirect_uri)
+        .bind(&scopes_json)
+        .bind(provider.enabled)
+        .bind(&provider.created_at)
+        .bind(&provider.updated_at)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get OIDC provider by name
+    pub async fn get_oidc_provider_by_name(&self, name: &str) -> ApiResult<Option<crate::models::OidcProvider>> {
+        let row = sqlx::query(
+            "SELECT id, name, issuer_url, client_id, client_secret, redirect_uri, scopes, enabled, created_at, updated_at
+             FROM oidc_providers
+             WHERE name = ?",
+        )
+        .bind(name)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let scopes_json: String = row.try_get("scopes")?;
+            let scopes: Vec<String> = serde_json::from_str(&scopes_json)
+                .map_err(|e| ApiError::Internal(format!("Failed to parse scopes: {}", e)))?;
+
+            let enabled_val: i32 = row.try_get("enabled")?;
+            let enabled = enabled_val != 0;
+
+            Ok(Some(crate::models::OidcProvider {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                issuer_url: row.try_get("issuer_url")?,
+                client_id: row.try_get("client_id")?,
+                client_secret: row.try_get("client_secret")?,
+                redirect_uri: row.try_get("redirect_uri")?,
+                scopes,
+                enabled,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// List OIDC providers with optional enabled filter
+    pub async fn list_oidc_providers(&self, enabled_only: bool) -> ApiResult<Vec<crate::models::OidcProvider>> {
+        let query = if enabled_only {
+            sqlx::query(
+                "SELECT id, name, issuer_url, client_id, client_secret, redirect_uri, scopes, enabled, created_at, updated_at
+                 FROM oidc_providers
+                 WHERE enabled = 1
+                 ORDER BY name",
+            )
+        } else {
+            sqlx::query(
+                "SELECT id, name, issuer_url, client_id, client_secret, redirect_uri, scopes, enabled, created_at, updated_at
+                 FROM oidc_providers
+                 ORDER BY name",
+            )
+        };
+
+        let rows = query.fetch_all(&self.pool).await?;
+
+        let mut providers = Vec::new();
+        for row in rows {
+            let scopes_json: String = row.try_get("scopes")?;
+            let scopes: Vec<String> = serde_json::from_str(&scopes_json)
+                .map_err(|e| ApiError::Internal(format!("Failed to parse scopes: {}", e)))?;
+
+            let enabled_val: i32 = row.try_get("enabled")?;
+            let enabled = enabled_val != 0;
+
+            providers.push(crate::models::OidcProvider {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                issuer_url: row.try_get("issuer_url")?,
+                client_id: row.try_get("client_id")?,
+                client_secret: row.try_get("client_secret")?,
+                redirect_uri: row.try_get("redirect_uri")?,
+                scopes,
+                enabled,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            });
+        }
+
+        Ok(providers)
+    }
+
+    /// Update an existing OIDC provider
+    pub async fn update_oidc_provider(&self, provider: &crate::models::OidcProvider) -> ApiResult<()> {
+        let scopes_json = serde_json::to_string(&provider.scopes)
+            .map_err(|e| ApiError::Internal(format!("Failed to serialize scopes: {}", e)))?;
+
+        sqlx::query(
+            "UPDATE oidc_providers
+             SET name = ?, issuer_url = ?, client_id = ?, client_secret = ?, redirect_uri = ?, scopes = ?, enabled = ?, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(&provider.name)
+        .bind(&provider.issuer_url)
+        .bind(&provider.client_id)
+        .bind(&provider.client_secret)
+        .bind(&provider.redirect_uri)
+        .bind(&scopes_json)
+        .bind(provider.enabled)
+        .bind(&provider.updated_at)
+        .bind(&provider.id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Delete an OIDC provider
+    pub async fn delete_oidc_provider(&self, id: &str) -> ApiResult<()> {
+        sqlx::query("DELETE FROM oidc_providers WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Toggle OIDC provider enabled status
+    pub async fn toggle_oidc_provider(&self, id: &str) -> ApiResult<bool> {
+        // First get current status
+        let row = sqlx::query("SELECT enabled FROM oidc_providers WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("OIDC provider {} not found", id)))?;
+
+        let enabled_val: i32 = row.try_get("enabled")?;
+        let current_enabled = enabled_val != 0;
+        let new_enabled = !current_enabled;
+
+        // Update to opposite
+        let now = time::OffsetDateTime::now_utc()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap();
+
+        sqlx::query("UPDATE oidc_providers SET enabled = ?, updated_at = ? WHERE id = ?")
+            .bind(new_enabled)
+            .bind(&now)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(new_enabled)
+    }
+
+    // ========================================
+    // Auth Event Operations
+    // ========================================
+
+    /// Create a new authentication event
+    pub async fn create_auth_event(&self, event: &crate::models::AuthEvent) -> ApiResult<()> {
+        let event_type_str = event.event_type.to_string();
+        let auth_method_str = match event.auth_method {
+            crate::models::AuthMethod::Password => "password",
+            crate::models::AuthMethod::Oidc => "oidc",
+        };
+
+        sqlx::query(
+            "INSERT INTO auth_events (id, event_type, user_id, email, auth_method, provider_name, ip_address, user_agent, error_reason, timestamp)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&event.id)
+        .bind(&event_type_str)
+        .bind(&event.user_id)
+        .bind(&event.email)
+        .bind(auth_method_str)
+        .bind(&event.provider_name)
+        .bind(&event.ip_address)
+        .bind(&event.user_agent)
+        .bind(&event.error_reason)
+        .bind(&event.timestamp)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get auth events for a specific user with pagination
+    pub async fn get_auth_events_by_user(
+        &self,
+        user_id: &str,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<Vec<crate::models::AuthEvent>> {
+        let rows = sqlx::query(
+            "SELECT id, event_type, user_id, email, auth_method, provider_name, ip_address, user_agent, error_reason, timestamp
+             FROM auth_events
+             WHERE user_id = ?
+             ORDER BY timestamp DESC
+             LIMIT ? OFFSET ?",
+        )
+        .bind(user_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut events = Vec::new();
+        for row in rows {
+            let event_type_str: String = row.try_get("event_type")?;
+            let event_type = match event_type_str.as_str() {
+                "login_success" => crate::models::AuthEventType::LoginSuccess,
+                "login_failure" => crate::models::AuthEventType::LoginFailure,
+                "logout" => crate::models::AuthEventType::Logout,
+                "session_expired" => crate::models::AuthEventType::SessionExpired,
+                "rate_limit_exceeded" => crate::models::AuthEventType::RateLimitExceeded,
+                _ => crate::models::AuthEventType::LoginFailure,
+            };
+
+            let auth_method_str: String = row.try_get("auth_method")?;
+            let auth_method = match auth_method_str.as_str() {
+                "password" => crate::models::AuthMethod::Password,
+                "oidc" => crate::models::AuthMethod::Oidc,
+                _ => crate::models::AuthMethod::Password,
+            };
+
+            events.push(crate::models::AuthEvent {
+                id: row.try_get("id")?,
+                event_type,
+                user_id: row.try_get("user_id")?,
+                email: row.try_get("email")?,
+                auth_method,
+                provider_name: row.try_get("provider_name")?,
+                ip_address: row.try_get("ip_address")?,
+                user_agent: row.try_get("user_agent")?,
+                error_reason: row.try_get("error_reason")?,
+                timestamp: row.try_get("timestamp")?,
+            });
+        }
+
+        Ok(events)
+    }
+
+    /// Get recent auth events (admin view) with pagination
+    pub async fn get_recent_auth_events(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<Vec<crate::models::AuthEvent>> {
+        let rows = sqlx::query(
+            "SELECT id, event_type, user_id, email, auth_method, provider_name, ip_address, user_agent, error_reason, timestamp
+             FROM auth_events
+             ORDER BY timestamp DESC
+             LIMIT ? OFFSET ?",
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut events = Vec::new();
+        for row in rows {
+            let event_type_str: String = row.try_get("event_type")?;
+            let event_type = match event_type_str.as_str() {
+                "login_success" => crate::models::AuthEventType::LoginSuccess,
+                "login_failure" => crate::models::AuthEventType::LoginFailure,
+                "logout" => crate::models::AuthEventType::Logout,
+                "session_expired" => crate::models::AuthEventType::SessionExpired,
+                "rate_limit_exceeded" => crate::models::AuthEventType::RateLimitExceeded,
+                _ => crate::models::AuthEventType::LoginFailure,
+            };
+
+            let auth_method_str: String = row.try_get("auth_method")?;
+            let auth_method = match auth_method_str.as_str() {
+                "password" => crate::models::AuthMethod::Password,
+                "oidc" => crate::models::AuthMethod::Oidc,
+                _ => crate::models::AuthMethod::Password,
+            };
+
+            events.push(crate::models::AuthEvent {
+                id: row.try_get("id")?,
+                event_type,
+                user_id: row.try_get("user_id")?,
+                email: row.try_get("email")?,
+                auth_method,
+                provider_name: row.try_get("provider_name")?,
+                ip_address: row.try_get("ip_address")?,
+                user_agent: row.try_get("user_agent")?,
+                error_reason: row.try_get("error_reason")?,
+                timestamp: row.try_get("timestamp")?,
+            });
+        }
+
+        Ok(events)
+    }
+
+    /// Update session last_accessed_at timestamp
+    pub async fn update_session_last_accessed(&self, token: &str) -> ApiResult<()> {
+        let now = time::OffsetDateTime::now_utc()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap();
+
+        sqlx::query("UPDATE sessions SET last_accessed_at = ? WHERE token = ?")
+            .bind(&now)
+            .bind(token)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Store OIDC state for OAuth2 flow
+    pub async fn create_oidc_state(&self, oidc_state: &crate::models::OidcState) -> ApiResult<()> {
+        sqlx::query(
+            "INSERT INTO oidc_states (state, provider_name, nonce, pkce_verifier, created_at, expires_at)
+             VALUES (?, ?, ?, ?, ?, ?)"
+        )
+        .bind(&oidc_state.state)
+        .bind(&oidc_state.provider_name)
+        .bind(&oidc_state.nonce)
+        .bind(&oidc_state.pkce_verifier)
+        .bind(&oidc_state.created_at)
+        .bind(&oidc_state.expires_at)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Retrieve and delete OIDC state (one-time use for security)
+    pub async fn consume_oidc_state(&self, state: &str) -> ApiResult<Option<crate::models::OidcState>> {
+        let oidc_state = self.get_oidc_state(state).await?;
+
+        if oidc_state.is_some() {
+            // Delete the state immediately to prevent replay attacks
+            self.delete_oidc_state(state).await?;
+        }
+
+        Ok(oidc_state)
+    }
+
+    /// Get OIDC state by state parameter
+    async fn get_oidc_state(&self, state: &str) -> ApiResult<Option<crate::models::OidcState>> {
+        let row = sqlx::query(
+            "SELECT state, provider_name, nonce, pkce_verifier, created_at, expires_at
+             FROM oidc_states WHERE state = ?"
+        )
+        .bind(state)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| crate::models::OidcState {
+            state: r.get("state"),
+            provider_name: r.get("provider_name"),
+            nonce: r.get("nonce"),
+            pkce_verifier: r.get("pkce_verifier"),
+            created_at: r.get("created_at"),
+            expires_at: r.get("expires_at"),
+        }))
+    }
+
+    /// Delete OIDC state
+    async fn delete_oidc_state(&self, state: &str) -> ApiResult<()> {
+        sqlx::query("DELETE FROM oidc_states WHERE state = ?")
+            .bind(state)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Clean up expired OIDC states
+    pub async fn cleanup_expired_oidc_states(&self) -> ApiResult<u64> {
+        let now = time::OffsetDateTime::now_utc()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap();
+
+        let result = sqlx::query("DELETE FROM oidc_states WHERE expires_at < ?")
+            .bind(&now)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected())
+    }
 }
 
 impl Clone for Database {
@@ -4891,5 +5314,4 @@ impl Clone for Database {
             pool: self.pool.clone(),
         }
     }
-
 }
