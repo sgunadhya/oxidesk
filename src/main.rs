@@ -158,6 +158,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     // Process automation rules based on event
                     match event {
+                        oxidesk::SystemEvent::ConversationCreated {
+                            conversation_id,
+                            inbox_id,
+                            contact_id,
+                            status,
+                            timestamp,
+                        } => {
+                            tracing::info!(
+                                "Automation: Conversation {} created in inbox {} by contact {} with status {:?} at {}",
+                                conversation_id,
+                                inbox_id,
+                                contact_id,
+                                status,
+                                timestamp
+                            );
+
+                            // Trigger automation rules for conversation creation
+                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                                if let Err(e) = automation_rule_service
+                                    .handle_conversation_event("conversation.created", &conversation, "system")
+                                    .await
+                                {
+                                    tracing::error!("Failed to execute automation rules for conversation creation: {}", e);
+                                }
+                            }
+                        }
                         oxidesk::SystemEvent::ConversationStatusChanged {
                             conversation_id,
                             old_status,
@@ -500,6 +526,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Start webhook worker background task
+    let webhook_db = db.clone();
+    let webhook_event_bus = event_bus.clone();
+    let webhook_worker = oxidesk::WebhookWorker::new(webhook_db, webhook_event_bus);
+    webhook_worker.start();
+    tracing::info!("Webhook worker started");
+
+    // Start webhook delivery processor background task
+    let delivery_db = db.clone();
+    let delivery_service = oxidesk::WebhookDeliveryService::new(delivery_db);
+    delivery_service.start_processor();
+    tracing::info!("Webhook delivery processor started");
+
     // Start availability inactivity checker background task
     let availability_service_inactivity = availability_service.clone();
     tokio::spawn(async move {
@@ -660,6 +699,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/notifications/stream", get(api::notifications::notification_stream))
         .route("/api/notifications/:id/read", put(api::notifications::mark_notification_as_read))
         .route("/api/notifications/read-all", put(api::notifications::mark_all_notifications_as_read))
+        // Webhook routes (admin only)
+        .route("/api/webhooks", post(api::webhooks::create_webhook))
+        .route("/api/webhooks", get(api::webhooks::list_webhooks))
+        .route("/api/webhooks/:id", get(api::webhooks::get_webhook))
+        .route("/api/webhooks/:id", put(api::webhooks::update_webhook))
+        .route("/api/webhooks/:id", delete(api::webhooks::delete_webhook))
+        .route("/api/webhooks/:id/toggle", put(api::webhooks::toggle_webhook_status))
+        .route("/api/webhooks/:id/test", post(api::webhooks::test_webhook))
+        .route("/api/webhooks/:id/deliveries", get(api::webhooks::list_webhook_deliveries))
         // Add activity tracking middleware (before auth middleware)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

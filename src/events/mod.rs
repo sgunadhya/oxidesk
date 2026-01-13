@@ -5,6 +5,13 @@ use uuid::Uuid;
 /// System events that can trigger automation rules
 #[derive(Debug, Clone)]
 pub enum SystemEvent {
+    ConversationCreated {
+        conversation_id: String,
+        inbox_id: String,
+        contact_id: String,
+        status: ConversationStatus,
+        timestamp: String, // ISO 8601
+    },
     ConversationStatusChanged {
         conversation_id: String,
         old_status: ConversationStatus,
