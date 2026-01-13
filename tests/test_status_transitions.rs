@@ -187,5 +187,6 @@ async fn test_automation_rules_evaluated_on_status_change() {
             assert_eq!(new_status, ConversationStatus::Resolved);
             assert_eq!(event_agent_id, Some(auth_user.user.id));
         }
+        _ => panic!("Expected ConversationStatusChanged event"),
     }
 }

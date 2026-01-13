@@ -12,6 +12,24 @@ pub enum SystemEvent {
         agent_id: Option<String>,
         timestamp: String, // ISO 8601
     },
+    MessageReceived {
+        message_id: String,
+        conversation_id: String,
+        contact_id: String,
+        timestamp: String, // ISO 8601
+    },
+    MessageSent {
+        message_id: String,
+        conversation_id: String,
+        agent_id: String,
+        timestamp: String, // ISO 8601
+    },
+    MessageFailed {
+        message_id: String,
+        conversation_id: String,
+        retry_count: i32,
+        timestamp: String, // ISO 8601
+    },
 }
 
 /// Event bus for publishing and subscribing to system events
@@ -83,6 +101,7 @@ mod tests {
             SystemEvent::ConversationStatusChanged { conversation_id, .. } => {
                 assert_eq!(conversation_id, "test-id");
             }
+            _ => panic!("Unexpected event type"),
         }
     }
 }

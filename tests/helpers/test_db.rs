@@ -215,6 +215,65 @@ async fn setup_schema(db: &Database) {
     .execute(pool)
     .await
     .expect("Failed to create conversations reference_number trigger");
+
+    // Create messages table
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS messages (
+            id TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL,
+            type TEXT NOT NULL CHECK (type IN ('incoming', 'outgoing')),
+            status TEXT NOT NULL CHECK (status IN ('received', 'pending', 'sent', 'failed')),
+            content TEXT NOT NULL,
+            author_id TEXT NOT NULL,
+            is_immutable INTEGER NOT NULL DEFAULT 0,
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            sent_at TEXT,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+            FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create messages table");
+
+    // Create indexes for messages
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_type ON messages(type)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC)")
+        .execute(pool)
+        .await
+        .ok();
+
+    // Add message-related fields to conversations table
+    sqlx::query("ALTER TABLE conversations ADD COLUMN last_message_id TEXT")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("ALTER TABLE conversations ADD COLUMN last_message_at TEXT")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("ALTER TABLE conversations ADD COLUMN last_reply_at TEXT")
+        .execute(pool)
+        .await
+        .ok();
 }
 
 async fn seed_test_data(db: &Database) {

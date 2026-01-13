@@ -14,6 +14,7 @@ pub struct AppState {
     pub db: Database,
     pub session_duration_hours: i64,
     pub event_bus: crate::events::EventBus,
+    pub delivery_service: crate::services::DeliveryService,
 }
 
 /// Extract and validate session token from Authorization header

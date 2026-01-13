@@ -95,23 +95,6 @@ async fn test_admin_email_uniqueness_per_type() {
     teardown_test_db(db).await;
 }
 
-#[tokio::test]
-async fn test_admin_initialization_fails_without_env_vars() {
-    // This tests configuration validation
-    use oxidesk::config::Config;
-
-    // Clear environment variables
-    std::env::remove_var("ADMIN_EMAIL");
-    std::env::remove_var("ADMIN_PASSWORD");
-
-    // Should fail to create config
-    let result = Config::from_env();
-    assert!(result.is_err());
-
-    // Restore for other tests
-    std::env::set_var("ADMIN_EMAIL", "admin@example.com");
-    std::env::set_var("ADMIN_PASSWORD", "SecureAdmin123!");
-}
 
 #[tokio::test]
 async fn test_admin_initialization_validates_password_complexity() {

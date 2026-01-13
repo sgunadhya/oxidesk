@@ -73,11 +73,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_bus = oxidesk::EventBus::new(100);
     tracing::info!("Event bus initialized with capacity 100");
 
+    // Initialize delivery service with mock provider
+    let delivery_provider = std::sync::Arc::new(oxidesk::services::MockDeliveryProvider::new());
+    let delivery_service = oxidesk::services::DeliveryService::new(
+        db.clone(),
+        delivery_provider,
+    );
+    tracing::info!("Delivery service initialized with mock provider");
+
     // Create application state
     let state = AppState {
         db: db.clone(),
         session_duration_hours: config.session_duration_hours,
         event_bus: event_bus.clone(),
+        delivery_service: delivery_service.clone(),
     };
 
     // Start session cleanup background task
@@ -135,6 +144,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // - Update metrics
                             // - Trigger webhooks
                             // etc.
+                        }
+                        oxidesk::SystemEvent::MessageReceived {
+                            message_id,
+                            conversation_id,
+                            contact_id,
+                            timestamp,
+                        } => {
+                            tracing::info!(
+                                "Automation: Message {} received in conversation {} from contact {} at {}",
+                                message_id,
+                                conversation_id,
+                                contact_id,
+                                timestamp
+                            );
+                            // TODO: Trigger automation rules for incoming messages
+                        }
+                        oxidesk::SystemEvent::MessageSent {
+                            message_id,
+                            conversation_id,
+                            agent_id,
+                            timestamp,
+                        } => {
+                            tracing::info!(
+                                "Automation: Message {} sent in conversation {} by agent {} at {}",
+                                message_id,
+                                conversation_id,
+                                agent_id,
+                                timestamp
+                            );
+                            // TODO: Trigger automation rules for sent messages
+                        }
+                        oxidesk::SystemEvent::MessageFailed {
+                            message_id,
+                            conversation_id,
+                            retry_count,
+                            timestamp,
+                        } => {
+                            tracing::warn!(
+                                "Automation: Message {} failed in conversation {} (retry {}) at {}",
+                                message_id,
+                                conversation_id,
+                                retry_count,
+                                timestamp
+                            );
+                            // TODO: Trigger automation rules for failed messages
                         }
                     }
                 }
@@ -205,6 +259,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/auth/login", post(api::auth::login))
         .merge(protected)
         .merge(web_protected)
+        .merge(api::messages::routes())
         .with_state(state);
 
     // Start server

@@ -51,3 +51,4 @@ target/doc/
 # Cargo lock for libraries (keep for applications)
 # Uncomment if this is a library
 # Cargo.lock
+*.db-journal
