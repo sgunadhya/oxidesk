@@ -14,6 +14,7 @@ pub mod automation_rule;
 pub mod rule_evaluation_log;
 pub mod macro_models;
 pub mod notification;
+pub mod webhook;
 
 pub use user::*;
 pub use role::*;
@@ -31,3 +32,4 @@ pub use automation_rule::*;
 pub use rule_evaluation_log::*;
 pub use macro_models::*;
 pub use notification::*;
+pub use webhook::*;
