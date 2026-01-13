@@ -30,6 +30,20 @@ pub enum SystemEvent {
         retry_count: i32,
         timestamp: String, // ISO 8601
     },
+    ConversationAssigned {
+        conversation_id: String,
+        assigned_user_id: Option<String>,
+        assigned_team_id: Option<String>,
+        assigned_by: String,
+        timestamp: String, // ISO 8601
+    },
+    ConversationUnassigned {
+        conversation_id: String,
+        previous_assigned_user_id: Option<String>,
+        previous_assigned_team_id: Option<String>,
+        unassigned_by: String,
+        timestamp: String, // ISO 8601
+    },
 }
 
 /// Event bus for publishing and subscribing to system events

@@ -154,6 +154,10 @@ impl Database {
                 user_id: row.try_get("user_id")?,
                 first_name: row.try_get("first_name")?,
                 password_hash: row.try_get("password_hash")?,
+                availability_status: row.try_get::<String, _>("availability_status")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or_default(),
             }))
         } else {
             Ok(None)
@@ -316,6 +320,10 @@ impl Database {
                 user_id: row.try_get("agent_user_id")?,
                 first_name: row.try_get("first_name")?,
                 password_hash: row.try_get("password_hash")?,
+                availability_status: row.try_get::<String, _>("availability_status")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or_default(),
             };
 
             results.push((user, agent));
@@ -532,6 +540,10 @@ impl Database {
             subject: row.try_get("subject").ok(),
             resolved_at: row.try_get("resolved_at").ok(),
             snoozed_until: row.try_get("snoozed_until").ok(),
+            assigned_user_id: row.try_get("assigned_user_id").ok(),
+            assigned_team_id: row.try_get("assigned_team_id").ok(),
+            assigned_at: row.try_get("assigned_at").ok(),
+            assigned_by: row.try_get("assigned_by").ok(),
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
             version: row.try_get("version")?,
@@ -550,7 +562,8 @@ impl Database {
     pub async fn get_conversation_by_id(&self, id: &str) -> ApiResult<Option<Conversation>> {
         let row = sqlx::query(
             "SELECT id, reference_number, status, inbox_id, contact_id, subject,
-                    resolved_at, snoozed_until, created_at, updated_at, version
+                    resolved_at, snoozed_until, assigned_user_id, assigned_team_id,
+                    assigned_at, assigned_by, created_at, updated_at, version
              FROM conversations
              WHERE id = ?",
         )
@@ -569,6 +582,10 @@ impl Database {
                 subject: row.try_get("subject").ok(),
                 resolved_at: row.try_get("resolved_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
+                assigned_user_id: row.try_get("assigned_user_id").ok(),
+                assigned_team_id: row.try_get("assigned_team_id").ok(),
+                assigned_at: row.try_get("assigned_at").ok(),
+                assigned_by: row.try_get("assigned_by").ok(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
@@ -601,6 +618,10 @@ impl Database {
                 subject: row.try_get("subject").ok(),
                 resolved_at: row.try_get("resolved_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
+                assigned_user_id: row.try_get("assigned_user_id").ok(),
+                assigned_team_id: row.try_get("assigned_team_id").ok(),
+                assigned_at: row.try_get("assigned_at").ok(),
+                assigned_by: row.try_get("assigned_by").ok(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
@@ -656,6 +677,10 @@ impl Database {
                 reference_number: row.try_get("reference_number")?,
                 resolved_at: row.try_get("resolved_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
+                assigned_user_id: row.try_get("assigned_user_id").ok(),
+                assigned_team_id: row.try_get("assigned_team_id").ok(),
+                assigned_at: row.try_get("assigned_at").ok(),
+                assigned_by: row.try_get("assigned_by").ok(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
@@ -726,6 +751,10 @@ impl Database {
                 subject: row.try_get("subject").ok(),
                 resolved_at: row.try_get("resolved_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
+                assigned_user_id: row.try_get("assigned_user_id").ok(),
+                assigned_team_id: row.try_get("assigned_team_id").ok(),
+                assigned_at: row.try_get("assigned_at").ok(),
+                assigned_by: row.try_get("assigned_by").ok(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
@@ -1388,6 +1417,669 @@ impl Database {
 
         let count: i64 = row.try_get("count")?;
         Ok(count)
+    }
+
+    // ========== Team Operations (T021-T023) ==========
+
+    pub async fn create_team(&self, team: &Team) -> ApiResult<()> {
+        sqlx::query(
+            "INSERT INTO teams (id, name, description, sla_policy_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&team.id)
+        .bind(&team.name)
+        .bind(&team.description)
+        .bind(&team.sla_policy_id)
+        .bind(&team.created_at)
+        .bind(&team.updated_at)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                ApiError::BadRequest(format!("Team with name '{}' already exists", team.name))
+            } else {
+                ApiError::Internal(e.to_string())
+            }
+        })?;
+
+        tracing::info!("Team created: id={}, name={}", team.id, team.name);
+        Ok(())
+    }
+
+    pub async fn get_team_by_id(&self, id: &str) -> ApiResult<Option<Team>> {
+        let row = sqlx::query(
+            "SELECT id, name, description, sla_policy_id, created_at, updated_at
+             FROM teams WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            Ok(Some(Team {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                description: row.try_get("description").ok(),
+                sla_policy_id: row.try_get("sla_policy_id").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn list_teams(&self) -> ApiResult<Vec<Team>> {
+        let rows = sqlx::query(
+            "SELECT id, name, description, sla_policy_id, created_at, updated_at
+             FROM teams ORDER BY name ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut teams = Vec::new();
+        for row in rows {
+            teams.push(Team {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                description: row.try_get("description").ok(),
+                sla_policy_id: row.try_get("sla_policy_id").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            });
+        }
+
+        Ok(teams)
+    }
+
+    // ========== Team Membership Operations (T024-T028) ==========
+
+    pub async fn add_team_member(
+        &self,
+        team_id: &str,
+        user_id: &str,
+        role: TeamMemberRole,
+    ) -> ApiResult<()> {
+        let membership = TeamMembership::new(team_id.to_string(), user_id.to_string(), role);
+
+        sqlx::query(
+            "INSERT INTO team_memberships (id, team_id, user_id, role, joined_at)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(&membership.id)
+        .bind(&membership.team_id)
+        .bind(&membership.user_id)
+        .bind(membership.role.to_string())
+        .bind(&membership.joined_at)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                ApiError::BadRequest("User is already a member of this team".to_string())
+            } else if e.to_string().contains("FOREIGN KEY") {
+                ApiError::NotFound("Team or user not found".to_string())
+            } else {
+                ApiError::Internal(e.to_string())
+            }
+        })?;
+
+        tracing::info!(
+            "Team member added: team={}, user={}, role={}",
+            team_id,
+            user_id,
+            role
+        );
+        Ok(())
+    }
+
+    pub async fn remove_team_member(&self, team_id: &str, user_id: &str) -> ApiResult<()> {
+        sqlx::query("DELETE FROM team_memberships WHERE team_id = ? AND user_id = ?")
+            .bind(team_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+
+        tracing::info!("Team member removed: team={}, user={}", team_id, user_id);
+        Ok(())
+    }
+
+    pub async fn get_team_members(&self, team_id: &str) -> ApiResult<Vec<User>> {
+        let rows = sqlx::query(
+            "SELECT u.id, u.email, u.user_type, u.created_at, u.updated_at
+             FROM users u
+             INNER JOIN team_memberships tm ON u.id = tm.user_id
+             WHERE tm.team_id = ?
+             ORDER BY u.email ASC",
+        )
+        .bind(team_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut users = Vec::new();
+        for row in rows {
+            let user_type_str: String = row.try_get("user_type")?;
+            users.push(User {
+                id: row.try_get("id")?,
+                email: row.try_get("email")?,
+                user_type: match user_type_str.as_str() {
+                    "agent" => UserType::Agent,
+                    "contact" => UserType::Contact,
+                    _ => UserType::Agent,
+                },
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            });
+        }
+
+        Ok(users)
+    }
+
+    pub async fn is_team_member(&self, team_id: &str, user_id: &str) -> ApiResult<bool> {
+        let row = sqlx::query(
+            "SELECT COUNT(*) as count FROM team_memberships WHERE team_id = ? AND user_id = ?",
+        )
+        .bind(team_id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let count: i64 = row.try_get("count")?;
+        Ok(count > 0)
+    }
+
+    pub async fn get_user_teams(&self, user_id: &str) -> ApiResult<Vec<Team>> {
+        let rows = sqlx::query(
+            "SELECT t.id, t.name, t.description, t.sla_policy_id, t.created_at, t.updated_at
+             FROM teams t
+             INNER JOIN team_memberships tm ON t.id = tm.team_id
+             WHERE tm.user_id = ?
+             ORDER BY t.name ASC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut teams = Vec::new();
+        for row in rows {
+            teams.push(Team {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                description: row.try_get("description").ok(),
+                sla_policy_id: row.try_get("sla_policy_id").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            });
+        }
+
+        Ok(teams)
+    }
+
+    // ========== Conversation Assignment Operations (T029-T032) ==========
+
+    pub async fn assign_conversation_to_user(
+        &self,
+        conversation_id: &str,
+        user_id: &str,
+        assigned_by: &str,
+    ) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query(
+            "UPDATE conversations
+             SET assigned_user_id = ?, assigned_at = ?, assigned_by = ?, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(user_id)
+        .bind(&now)
+        .bind(assigned_by)
+        .bind(&now)
+        .bind(conversation_id)
+        .execute(&self.pool)
+        .await?;
+
+        tracing::info!(
+            "Conversation {} assigned to user {} by {}",
+            conversation_id,
+            user_id,
+            assigned_by
+        );
+        Ok(())
+    }
+
+    pub async fn assign_conversation_to_team(
+        &self,
+        conversation_id: &str,
+        team_id: &str,
+        assigned_by: &str,
+    ) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query(
+            "UPDATE conversations
+             SET assigned_team_id = ?, assigned_at = ?, assigned_by = ?, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(team_id)
+        .bind(&now)
+        .bind(assigned_by)
+        .bind(&now)
+        .bind(conversation_id)
+        .execute(&self.pool)
+        .await?;
+
+        tracing::info!(
+            "Conversation {} assigned to team {} by {}",
+            conversation_id,
+            team_id,
+            assigned_by
+        );
+        Ok(())
+    }
+
+    pub async fn unassign_conversation_user(&self, conversation_id: &str) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query(
+            "UPDATE conversations
+             SET assigned_user_id = NULL, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(&now)
+        .bind(conversation_id)
+        .execute(&self.pool)
+        .await?;
+
+        tracing::info!("Conversation {} user assignment removed", conversation_id);
+        Ok(())
+    }
+
+    pub async fn unassign_conversation_team(&self, conversation_id: &str) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query(
+            "UPDATE conversations
+             SET assigned_team_id = NULL, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(&now)
+        .bind(conversation_id)
+        .execute(&self.pool)
+        .await?;
+
+        tracing::info!("Conversation {} team assignment removed", conversation_id);
+        Ok(())
+    }
+
+    // ========== Conversation Participants (T033-T034) ==========
+
+    pub async fn add_conversation_participant(
+        &self,
+        conversation_id: &str,
+        user_id: &str,
+        added_by: Option<&str>,
+    ) -> ApiResult<()> {
+        let participant = ConversationParticipant::new(
+            conversation_id.to_string(),
+            user_id.to_string(),
+            added_by.map(String::from),
+        );
+
+        sqlx::query(
+            "INSERT INTO conversation_participants (id, conversation_id, user_id, added_at, added_by)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(&participant.id)
+        .bind(&participant.conversation_id)
+        .bind(&participant.user_id)
+        .bind(&participant.added_at)
+        .bind(&participant.added_by)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                // User is already a participant - this is OK, just log it
+                tracing::debug!(
+                    "User {} is already a participant in conversation {}",
+                    user_id,
+                    conversation_id
+                );
+                ApiError::BadRequest("User is already a participant in this conversation".to_string())
+            } else if e.to_string().contains("FOREIGN KEY") {
+                ApiError::NotFound("Conversation or user not found".to_string())
+            } else {
+                ApiError::Internal(e.to_string())
+            }
+        })?;
+
+        tracing::info!(
+            "Participant added: conversation={}, user={}",
+            conversation_id,
+            user_id
+        );
+        Ok(())
+    }
+
+    pub async fn get_conversation_participants(&self, conversation_id: &str) -> ApiResult<Vec<User>> {
+        let rows = sqlx::query(
+            "SELECT u.id, u.email, u.user_type, u.created_at, u.updated_at
+             FROM users u
+             INNER JOIN conversation_participants cp ON u.id = cp.user_id
+             WHERE cp.conversation_id = ?
+             ORDER BY cp.added_at ASC",
+        )
+        .bind(conversation_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut users = Vec::new();
+        for row in rows {
+            let user_type_str: String = row.try_get("user_type")?;
+            users.push(User {
+                id: row.try_get("id")?,
+                email: row.try_get("email")?,
+                user_type: match user_type_str.as_str() {
+                    "agent" => UserType::Agent,
+                    "contact" => UserType::Contact,
+                    _ => UserType::Agent,
+                },
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            });
+        }
+
+        Ok(users)
+    }
+
+    // ========== Assignment History (T035-T036) ==========
+
+    pub async fn record_assignment(&self, history: &AssignmentHistory) -> ApiResult<()> {
+        sqlx::query(
+            "INSERT INTO assignment_history (id, conversation_id, assigned_user_id, assigned_team_id, assigned_by, assigned_at, unassigned_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&history.id)
+        .bind(&history.conversation_id)
+        .bind(&history.assigned_user_id)
+        .bind(&history.assigned_team_id)
+        .bind(&history.assigned_by)
+        .bind(&history.assigned_at)
+        .bind(&history.unassigned_at)
+        .execute(&self.pool)
+        .await?;
+
+        tracing::debug!("Assignment history recorded: {}", history.id);
+        Ok(())
+    }
+
+    pub async fn get_assignment_history(&self, conversation_id: &str) -> ApiResult<Vec<AssignmentHistory>> {
+        let rows = sqlx::query(
+            "SELECT id, conversation_id, assigned_user_id, assigned_team_id, assigned_by, assigned_at, unassigned_at
+             FROM assignment_history
+             WHERE conversation_id = ?
+             ORDER BY assigned_at DESC",
+        )
+        .bind(conversation_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut history = Vec::new();
+        for row in rows {
+            history.push(AssignmentHistory {
+                id: row.try_get("id")?,
+                conversation_id: row.try_get("conversation_id")?,
+                assigned_user_id: row.try_get("assigned_user_id").ok(),
+                assigned_team_id: row.try_get("assigned_team_id").ok(),
+                assigned_by: row.try_get("assigned_by")?,
+                assigned_at: row.try_get("assigned_at")?,
+                unassigned_at: row.try_get("unassigned_at").ok(),
+            });
+        }
+
+        Ok(history)
+    }
+
+    // ========== Agent Availability (T037-T038) ==========
+
+    pub async fn update_agent_availability(
+        &self,
+        user_id: &str,
+        status: AgentAvailability,
+    ) -> ApiResult<()> {
+        sqlx::query("UPDATE agents SET availability_status = ? WHERE user_id = ?")
+            .bind(status.to_string())
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+
+        tracing::info!("Agent {} availability updated to {}", user_id, status);
+        Ok(())
+    }
+
+    pub async fn get_agent_availability(&self, user_id: &str) -> ApiResult<AgentAvailability> {
+        let row = sqlx::query("SELECT availability_status FROM agents WHERE user_id = ?")
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            let status_str: String = row.try_get("availability_status")?;
+            status_str
+                .parse()
+                .map_err(|e| ApiError::Internal(format!("Invalid availability status: {}", e)))
+        } else {
+            Err(ApiError::NotFound(format!("Agent not found for user {}", user_id)))
+        }
+    }
+
+    // ========== Inbox Queries (T039) ==========
+
+    pub async fn get_unassigned_conversations(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<Conversation>, i64)> {
+        // Get total count
+        let count_row = sqlx::query(
+            "SELECT COUNT(*) as count FROM conversations
+             WHERE assigned_user_id IS NULL AND assigned_team_id IS NULL",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        let total: i64 = count_row.try_get("count")?;
+
+        // Get conversations
+        let rows = sqlx::query(
+            "SELECT * FROM conversations
+             WHERE assigned_user_id IS NULL AND assigned_team_id IS NULL
+             ORDER BY created_at DESC
+             LIMIT ? OFFSET ?",
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut conversations = Vec::new();
+        for row in rows {
+            let status_str: String = row.try_get("status")?;
+            conversations.push(Conversation {
+                id: row.try_get("id")?,
+                reference_number: row.try_get("reference_number")?,
+                status: ConversationStatus::from(status_str),
+                inbox_id: row.try_get("inbox_id")?,
+                contact_id: row.try_get("contact_id")?,
+                subject: row.try_get("subject").ok(),
+                resolved_at: row.try_get("resolved_at").ok(),
+                snoozed_until: row.try_get("snoozed_until").ok(),
+                assigned_user_id: row.try_get("assigned_user_id").ok(),
+                assigned_team_id: row.try_get("assigned_team_id").ok(),
+                assigned_at: row.try_get("assigned_at").ok(),
+                assigned_by: row.try_get("assigned_by").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+                version: row.try_get("version")?,
+            });
+        }
+
+        Ok((conversations, total))
+    }
+
+    pub async fn get_team_conversations(
+        &self,
+        team_id: &str,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<Conversation>, i64)> {
+        // Get total count
+        let count_row = sqlx::query(
+            "SELECT COUNT(*) as count FROM conversations WHERE assigned_team_id = ?",
+        )
+        .bind(team_id)
+        .fetch_one(&self.pool)
+        .await?;
+        let total: i64 = count_row.try_get("count")?;
+
+        // Get conversations
+        let rows = sqlx::query(
+            "SELECT * FROM conversations
+             WHERE assigned_team_id = ?
+             ORDER BY created_at DESC
+             LIMIT ? OFFSET ?",
+        )
+        .bind(team_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut conversations = Vec::new();
+        for row in rows {
+            let status_str: String = row.try_get("status")?;
+            conversations.push(Conversation {
+                id: row.try_get("id")?,
+                reference_number: row.try_get("reference_number")?,
+                status: ConversationStatus::from(status_str),
+                inbox_id: row.try_get("inbox_id")?,
+                contact_id: row.try_get("contact_id")?,
+                subject: row.try_get("subject").ok(),
+                resolved_at: row.try_get("resolved_at").ok(),
+                snoozed_until: row.try_get("snoozed_until").ok(),
+                assigned_user_id: row.try_get("assigned_user_id").ok(),
+                assigned_team_id: row.try_get("assigned_team_id").ok(),
+                assigned_at: row.try_get("assigned_at").ok(),
+                assigned_by: row.try_get("assigned_by").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+                version: row.try_get("version")?,
+            });
+        }
+
+        Ok((conversations, total))
+    }
+
+    pub async fn get_user_assigned_conversations(
+        &self,
+        user_id: &str,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<Conversation>, i64)> {
+        // Get total count
+        let count_row = sqlx::query(
+            "SELECT COUNT(*) as count FROM conversations WHERE assigned_user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+        let total: i64 = count_row.try_get("count")?;
+
+        // Get conversations
+        let rows = sqlx::query(
+            "SELECT * FROM conversations
+             WHERE assigned_user_id = ?
+             ORDER BY created_at DESC
+             LIMIT ? OFFSET ?",
+        )
+        .bind(user_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut conversations = Vec::new();
+        for row in rows {
+            let status_str: String = row.try_get("status")?;
+            conversations.push(Conversation {
+                id: row.try_get("id")?,
+                reference_number: row.try_get("reference_number")?,
+                status: ConversationStatus::from(status_str),
+                inbox_id: row.try_get("inbox_id")?,
+                contact_id: row.try_get("contact_id")?,
+                subject: row.try_get("subject").ok(),
+                resolved_at: row.try_get("resolved_at").ok(),
+                snoozed_until: row.try_get("snoozed_until").ok(),
+                assigned_user_id: row.try_get("assigned_user_id").ok(),
+                assigned_team_id: row.try_get("assigned_team_id").ok(),
+                assigned_at: row.try_get("assigned_at").ok(),
+                assigned_by: row.try_get("assigned_by").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+                version: row.try_get("version")?,
+            });
+        }
+
+        Ok((conversations, total))
+    }
+
+    // ========== Batch Unassignment (T040) ==========
+
+    pub async fn unassign_agent_open_conversations(&self, user_id: &str) -> ApiResult<i64> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let result = sqlx::query(
+            "UPDATE conversations
+             SET assigned_user_id = NULL, updated_at = ?
+             WHERE assigned_user_id = ? AND status IN ('open', 'snoozed')",
+        )
+        .bind(&now)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        let count = result.rows_affected() as i64;
+        tracing::info!(
+            "Auto-unassigned {} open conversations for agent {}",
+            count,
+            user_id
+        );
+        Ok(count)
+    }
+
+    // ========== Get User Permissions ==========
+
+    pub async fn get_user_permissions(&self, user_id: &str) -> ApiResult<Vec<Permission>> {
+        let rows = sqlx::query(
+            "SELECT DISTINCT p.id, p.name, p.description, p.created_at, p.updated_at
+             FROM permissions p
+             INNER JOIN role_permissions rp ON p.id = rp.permission_id
+             INNER JOIN user_roles ur ON rp.role_id = ur.role_id
+             WHERE ur.user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut permissions = Vec::new();
+        for row in rows {
+            permissions.push(Permission {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                description: row.try_get("description").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            });
+        }
+
+        Ok(permissions)
     }
 }
 
