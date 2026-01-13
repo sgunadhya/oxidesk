@@ -12,22 +12,26 @@ pub enum UserType {
 #[sqlx(type_name = "TEXT", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum AgentAvailability {
+    Offline,
     Online,
     Away,
+    AwayManual,
     AwayAndReassigning,
 }
 
 impl Default for AgentAvailability {
     fn default() -> Self {
-        AgentAvailability::Online
+        AgentAvailability::Offline
     }
 }
 
 impl std::fmt::Display for AgentAvailability {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            AgentAvailability::Offline => write!(f, "offline"),
             AgentAvailability::Online => write!(f, "online"),
             AgentAvailability::Away => write!(f, "away"),
+            AgentAvailability::AwayManual => write!(f, "away_manual"),
             AgentAvailability::AwayAndReassigning => write!(f, "away_and_reassigning"),
         }
     }
@@ -38,8 +42,10 @@ impl std::str::FromStr for AgentAvailability {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            "offline" => Ok(AgentAvailability::Offline),
             "online" => Ok(AgentAvailability::Online),
             "away" => Ok(AgentAvailability::Away),
+            "away_manual" => Ok(AgentAvailability::AwayManual),
             "away_and_reassigning" => Ok(AgentAvailability::AwayAndReassigning),
             _ => Err(format!("Invalid agent availability: {}", s)),
         }
@@ -63,6 +69,9 @@ pub struct Agent {
     #[serde(skip_serializing)]
     pub password_hash: String,
     pub availability_status: AgentAvailability,
+    pub last_login_at: Option<String>,
+    pub last_activity_at: Option<String>,
+    pub away_since: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -215,6 +224,9 @@ impl Agent {
             first_name,
             password_hash,
             availability_status: AgentAvailability::default(),
+            last_login_at: None,
+            last_activity_at: None,
+            away_since: None,
         }
     }
 }
