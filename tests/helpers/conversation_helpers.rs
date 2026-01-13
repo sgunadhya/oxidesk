@@ -192,6 +192,9 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         first_name: "Test Agent".to_string(),
         password_hash: "hash".to_string(),
         availability_status: oxidesk::models::AgentAvailability::Online,
+        last_login_at: None,
+        last_activity_at: None,
+        away_since: None,
     };
     db.create_agent(&agent).await.expect("Failed to create agent");
 

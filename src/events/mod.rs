@@ -51,6 +51,23 @@ pub enum SystemEvent {
         changed_by: String,
         timestamp: String, // ISO 8601
     },
+    AgentAvailabilityChanged {
+        agent_id: String,
+        old_status: String,
+        new_status: String,
+        timestamp: String, // ISO 8601
+        reason: String,    // "manual", "inactivity_timeout", "max_idle_threshold", "login", "logout"
+    },
+    AgentLoggedIn {
+        agent_id: String,
+        user_id: String,
+        timestamp: String, // ISO 8601
+    },
+    AgentLoggedOut {
+        agent_id: String,
+        user_id: String,
+        timestamp: String, // ISO 8601
+    },
 }
 
 /// Event bus for publishing and subscribing to system events

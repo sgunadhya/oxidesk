@@ -140,7 +140,8 @@ impl Database {
 
     pub async fn get_agent_by_user_id(&self, user_id: &str) -> ApiResult<Option<Agent>> {
         let row = sqlx::query(
-            "SELECT id, user_id, first_name, password_hash
+            "SELECT id, user_id, first_name, password_hash, availability_status,
+                    last_login_at, last_activity_at, away_since
              FROM agents
              WHERE user_id = ?",
         )
@@ -149,15 +150,18 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
+            let status_str: String = row.try_get("availability_status").unwrap_or_else(|_| "offline".to_string());
+            let status = status_str.parse().unwrap_or(AgentAvailability::Offline);
+
             Ok(Some(Agent {
                 id: row.try_get("id")?,
                 user_id: row.try_get("user_id")?,
                 first_name: row.try_get("first_name")?,
                 password_hash: row.try_get("password_hash")?,
-                availability_status: row.try_get::<String, _>("availability_status")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or_default(),
+                availability_status: status,
+                last_login_at: row.try_get("last_login_at").ok(),
+                last_activity_at: row.try_get("last_activity_at").ok(),
+                away_since: row.try_get("away_since").ok(),
             }))
         } else {
             Ok(None)
@@ -293,7 +297,8 @@ impl Database {
     pub async fn list_agents(&self, limit: i64, offset: i64) -> ApiResult<Vec<(User, Agent)>> {
         let rows = sqlx::query(
             "SELECT u.id, u.email, u.user_type, u.created_at, u.updated_at,
-                    a.id as agent_id, a.user_id as agent_user_id, a.first_name, a.password_hash
+                    a.id as agent_id, a.user_id as agent_user_id, a.first_name, a.password_hash,
+                    a.availability_status, a.last_login_at, a.last_activity_at, a.away_since
              FROM users u
              INNER JOIN agents a ON a.user_id = u.id
              WHERE u.user_type = 'agent'
@@ -315,15 +320,18 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
             };
 
+            let status_str: String = row.try_get("availability_status").unwrap_or_else(|_| "offline".to_string());
+            let status = status_str.parse().unwrap_or(AgentAvailability::Offline);
+
             let agent = Agent {
                 id: row.try_get("agent_id")?,
                 user_id: row.try_get("agent_user_id")?,
                 first_name: row.try_get("first_name")?,
                 password_hash: row.try_get("password_hash")?,
-                availability_status: row.try_get::<String, _>("availability_status")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or_default(),
+                availability_status: status,
+                last_login_at: row.try_get("last_login_at").ok(),
+                last_activity_at: row.try_get("last_activity_at").ok(),
+                away_since: row.try_get("away_since").ok(),
             };
 
             results.push((user, agent));
@@ -2561,6 +2569,275 @@ impl Database {
 
             Ok((conversations, total))
         }
+    }
+
+    // ========================================
+    // Agent Availability Operations (Feature 006)
+    // ========================================
+
+    /// Update agent availability status with away_since logic
+    pub async fn update_agent_availability_with_timestamp(
+        &self,
+        agent_id: &str,
+        status: AgentAvailability,
+    ) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        // Set away_since when transitioning to away/away_manual, clear otherwise
+        let away_since = match status {
+            AgentAvailability::Away | AgentAvailability::AwayManual => Some(now.clone()),
+            _ => None,
+        };
+
+        sqlx::query(
+            "UPDATE agents
+             SET availability_status = ?,
+                 away_since = ?,
+                 updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(status.to_string())
+        .bind(away_since)
+        .bind(now)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Update agent's last_activity_at timestamp
+    pub async fn update_agent_activity(&self, agent_id: &str) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query(
+            "UPDATE agents
+             SET last_activity_at = ?
+             WHERE id = ?",
+        )
+        .bind(now)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Update agent's last_login_at timestamp
+    pub async fn update_agent_last_login(&self, agent_id: &str) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query(
+            "UPDATE agents
+             SET last_login_at = ?
+             WHERE id = ?",
+        )
+        .bind(now)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get agents who are online but inactive beyond threshold
+    pub async fn get_inactive_online_agents(
+        &self,
+        inactivity_threshold_seconds: i64,
+    ) -> ApiResult<Vec<Agent>> {
+        let threshold_time = chrono::Utc::now() - chrono::Duration::seconds(inactivity_threshold_seconds);
+        let threshold_str = threshold_time.to_rfc3339();
+
+        let rows = sqlx::query(
+            "SELECT id, user_id, first_name, password_hash, availability_status,
+                    last_login_at, last_activity_at, away_since
+             FROM agents
+             WHERE availability_status = ?
+               AND last_activity_at IS NOT NULL
+               AND last_activity_at < ?",
+        )
+        .bind("online")
+        .bind(threshold_str)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let agents = rows
+            .into_iter()
+            .map(|row| {
+                let status_str: String = row.try_get("availability_status").unwrap_or_else(|_| "offline".to_string());
+                let status = status_str.parse().unwrap_or(AgentAvailability::Offline);
+
+                Ok(Agent {
+                    id: row.try_get("id")?,
+                    user_id: row.try_get("user_id")?,
+                    first_name: row.try_get("first_name")?,
+                    password_hash: row.try_get("password_hash")?,
+                    availability_status: status,
+                    last_login_at: row.try_get("last_login_at").ok(),
+                    last_activity_at: row.try_get("last_activity_at").ok(),
+                    away_since: row.try_get("away_since").ok(),
+                })
+            })
+            .collect::<ApiResult<Vec<Agent>>>()?;
+
+        Ok(agents)
+    }
+
+    /// Get agents who are away/away_manual and idle beyond threshold
+    pub async fn get_idle_away_agents(
+        &self,
+        max_idle_threshold_seconds: i64,
+    ) -> ApiResult<Vec<Agent>> {
+        let threshold_time = chrono::Utc::now() - chrono::Duration::seconds(max_idle_threshold_seconds);
+        let threshold_str = threshold_time.to_rfc3339();
+
+        let rows = sqlx::query(
+            "SELECT id, user_id, first_name, password_hash, availability_status,
+                    last_login_at, last_activity_at, away_since
+             FROM agents
+             WHERE availability_status IN (?, ?)
+               AND away_since IS NOT NULL
+               AND away_since < ?",
+        )
+        .bind("away")
+        .bind("away_manual")
+        .bind(threshold_str)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let agents = rows
+            .into_iter()
+            .map(|row| {
+                let status_str: String = row.try_get("availability_status").unwrap_or_else(|_| "offline".to_string());
+                let status = status_str.parse().unwrap_or(AgentAvailability::Offline);
+
+                Ok(Agent {
+                    id: row.try_get("id")?,
+                    user_id: row.try_get("user_id")?,
+                    first_name: row.try_get("first_name")?,
+                    password_hash: row.try_get("password_hash")?,
+                    availability_status: status,
+                    last_login_at: row.try_get("last_login_at").ok(),
+                    last_activity_at: row.try_get("last_activity_at").ok(),
+                    away_since: row.try_get("away_since").ok(),
+                })
+            })
+            .collect::<ApiResult<Vec<Agent>>>()?;
+
+        Ok(agents)
+    }
+
+    // ========================================
+    // Agent Activity Log Operations
+    // ========================================
+
+    /// Create activity log entry
+    pub async fn create_activity_log(&self, log: &AgentActivityLog) -> ApiResult<()> {
+        sqlx::query(
+            "INSERT INTO agent_activity_logs
+             (id, agent_id, event_type, old_status, new_status, metadata, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&log.id)
+        .bind(&log.agent_id)
+        .bind(log.event_type.to_string())
+        .bind(&log.old_status)
+        .bind(&log.new_status)
+        .bind(&log.metadata)
+        .bind(&log.created_at)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get agent activity logs (paginated)
+    pub async fn get_agent_activity_logs(
+        &self,
+        agent_id: &str,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<AgentActivityLog>, i64)> {
+        // Get total count
+        let count_row = sqlx::query("SELECT COUNT(*) as count FROM agent_activity_logs WHERE agent_id = ?")
+            .bind(agent_id)
+            .fetch_one(&self.pool)
+            .await?;
+        let total: i64 = count_row.try_get("count")?;
+
+        // Get logs
+        let rows = sqlx::query(
+            "SELECT id, agent_id, event_type, old_status, new_status, metadata, created_at
+             FROM agent_activity_logs
+             WHERE agent_id = ?
+             ORDER BY created_at DESC
+             LIMIT ? OFFSET ?",
+        )
+        .bind(agent_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let logs = rows
+            .into_iter()
+            .map(|row| {
+                let event_type_str: String = row.try_get("event_type")?;
+                let event_type = event_type_str.parse().unwrap_or(ActivityEventType::AvailabilityChanged);
+
+                Ok(AgentActivityLog {
+                    id: row.try_get("id")?,
+                    agent_id: row.try_get("agent_id")?,
+                    event_type,
+                    old_status: row.try_get("old_status").ok(),
+                    new_status: row.try_get("new_status").ok(),
+                    metadata: row.try_get("metadata").ok(),
+                    created_at: row.try_get("created_at")?,
+                })
+            })
+            .collect::<ApiResult<Vec<AgentActivityLog>>>()?;
+
+        Ok((logs, total))
+    }
+
+    // ========================================
+    // System Configuration Operations
+    // ========================================
+
+    /// Get configuration value by key
+    pub async fn get_config_value(&self, key: &str) -> ApiResult<Option<String>> {
+        let row = sqlx::query("SELECT value FROM system_config WHERE key = ?")
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            Ok(Some(row.try_get("value")?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Set configuration value
+    pub async fn set_config_value(&self, key: &str, value: &str, description: Option<&str>) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query(
+            "INSERT INTO system_config (key, value, description, updated_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(key) DO UPDATE SET
+                 value = excluded.value,
+                 description = COALESCE(excluded.description, description),
+                 updated_at = excluded.updated_at",
+        )
+        .bind(key)
+        .bind(value)
+        .bind(description)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }
 

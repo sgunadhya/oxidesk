@@ -50,14 +50,19 @@ async fn setup_schema(db: &Database) {
         .await
         .ok();
 
-    // Create agents table with availability_status
+    // Create agents table with availability_status and timestamps
     sqlx::query(
         "CREATE TABLE agents (
             id TEXT PRIMARY KEY,
             user_id TEXT UNIQUE NOT NULL,
             first_name TEXT NOT NULL,
             password_hash TEXT NOT NULL,
-            availability_status TEXT NOT NULL DEFAULT 'online' CHECK(availability_status IN ('online', 'away', 'away_and_reassigning')),
+            availability_status TEXT NOT NULL DEFAULT 'offline' CHECK(availability_status IN ('offline', 'online', 'away', 'away_manual', 'away_and_reassigning')),
+            last_login_at TEXT,
+            last_activity_at TEXT,
+            away_since TEXT,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )"
     )
@@ -69,6 +74,61 @@ async fn setup_schema(db: &Database) {
         .execute(pool)
         .await
         .ok();
+
+    sqlx::query("CREATE INDEX idx_agents_last_activity ON agents(last_activity_at)")
+        .execute(pool)
+        .await
+        .ok();
+
+    // Create agent_activity_logs table
+    sqlx::query(
+        "CREATE TABLE agent_activity_logs (
+            id TEXT PRIMARY KEY NOT NULL,
+            agent_id TEXT NOT NULL,
+            event_type TEXT NOT NULL CHECK(event_type IN ('agent_login', 'agent_logout', 'availability_changed')),
+            old_status TEXT,
+            new_status TEXT,
+            metadata TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create agent_activity_logs table");
+
+    sqlx::query("CREATE INDEX idx_activity_logs_agent ON agent_activity_logs(agent_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX idx_activity_logs_created ON agent_activity_logs(created_at DESC)")
+        .execute(pool)
+        .await
+        .ok();
+
+    // Create system_config table
+    sqlx::query(
+        "CREATE TABLE system_config (
+            key TEXT PRIMARY KEY NOT NULL,
+            value TEXT NOT NULL,
+            description TEXT,
+            updated_at TEXT NOT NULL
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create system_config table");
+
+    // Seed availability configuration
+    sqlx::query(
+        "INSERT INTO system_config (key, value, description, updated_at) VALUES
+        ('availability.inactivity_timeout_seconds', '300', 'Time in seconds before online agent goes away due to inactivity', datetime('now')),
+        ('availability.max_idle_threshold_seconds', '1800', 'Time in seconds before away agent is reassigned', datetime('now'))"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to seed availability config");
 
     // Create contacts table
     sqlx::query(

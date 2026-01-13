@@ -7,6 +7,8 @@ pub mod message;
 pub mod team;
 pub mod assignment;
 pub mod tag;
+pub mod agent_activity;
+pub mod config;
 
 pub use user::*;
 pub use role::*;
@@ -17,3 +19,5 @@ pub use message::*;
 pub use team::*;
 pub use assignment::*;
 pub use tag::*;
+pub use agent_activity::*;
+pub use config::*;

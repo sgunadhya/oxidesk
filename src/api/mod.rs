@@ -10,5 +10,6 @@ pub mod teams;
 pub mod assignments;
 pub mod tags;
 pub mod conversation_tags;
+pub mod availability;
 
 pub use middleware::*;

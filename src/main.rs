@@ -85,6 +85,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let notification_service = oxidesk::NotificationService::new();
     tracing::info!("Notification service initialized (stub)");
 
+    // Initialize availability service
+    let availability_service = oxidesk::AvailabilityService::new(
+        db.clone(),
+        event_bus.clone(),
+    );
+    tracing::info!("Availability service initialized");
+
     // Create application state
     let state = AppState {
         db: db.clone(),
@@ -92,6 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         event_bus: event_bus.clone(),
         delivery_service: delivery_service.clone(),
         notification_service: notification_service.clone(),
+        availability_service: availability_service.clone(),
     };
 
     // Start session cleanup background task
@@ -248,12 +256,104 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // TODO: Feature 009 will add automation rule evaluation
                             // TODO: Feature 012 will add webhook triggering
                         }
+                        oxidesk::SystemEvent::AgentAvailabilityChanged {
+                            agent_id,
+                            old_status,
+                            new_status,
+                            timestamp,
+                            reason,
+                        } => {
+                            tracing::info!(
+                                "Automation: Agent {} availability changed from {} to {} ({}) at {}",
+                                agent_id,
+                                old_status,
+                                new_status,
+                                reason,
+                                timestamp
+                            );
+                            // TODO: Feature 009 will add automation rule evaluation
+                            // TODO: Feature 012 will add webhook triggering
+                        }
+                        oxidesk::SystemEvent::AgentLoggedIn {
+                            agent_id,
+                            user_id,
+                            timestamp,
+                        } => {
+                            tracing::info!(
+                                "Automation: Agent {} (user {}) logged in at {}",
+                                agent_id,
+                                user_id,
+                                timestamp
+                            );
+                        }
+                        oxidesk::SystemEvent::AgentLoggedOut {
+                            agent_id,
+                            user_id,
+                            timestamp,
+                        } => {
+                            tracing::info!(
+                                "Automation: Agent {} (user {}) logged out at {}",
+                                agent_id,
+                                user_id,
+                                timestamp
+                            );
+                        }
                     }
                 }
                 Err(e) => {
                     tracing::error!("Automation listener error: {}", e);
                     // Sleep briefly before retrying
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
+    });
+
+    // Start availability inactivity checker background task
+    let availability_service_inactivity = availability_service.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        tracing::info!("Availability inactivity checker started (every 30 seconds)");
+
+        loop {
+            interval.tick().await;
+
+            match availability_service_inactivity.check_inactivity_timeouts().await {
+                Ok(affected) => {
+                    if !affected.is_empty() {
+                        tracing::info!(
+                            "Inactivity check: {} agents transitioned to away",
+                            affected.len()
+                        );
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to check inactivity timeouts: {}", e);
+                }
+            }
+        }
+    });
+
+    // Start availability max idle checker background task
+    let availability_service_idle = availability_service.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        tracing::info!("Availability max idle checker started (every 30 seconds)");
+
+        loop {
+            interval.tick().await;
+
+            match availability_service_idle.check_max_idle_thresholds().await {
+                Ok(affected) => {
+                    if !affected.is_empty() {
+                        tracing::info!(
+                            "Max idle check: {} agents reassigned and went offline",
+                            affected.len()
+                        );
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to check max idle thresholds: {}", e);
                 }
             }
         }
@@ -313,6 +413,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/conversations/:id/tags", post(api::conversation_tags::add_tags_to_conversation))
         .route("/api/conversations/:id/tags/:tag_id", delete(api::conversation_tags::remove_tag_from_conversation))
         .route("/api/conversations/:id/tags", put(api::conversation_tags::replace_conversation_tags))
+        // Agent availability routes
+        .route("/api/agents/:id/availability", post(api::availability::set_availability))
+        .route("/api/agents/:id/availability", get(api::availability::get_availability))
+        .route("/api/agents/:id/activity", get(api::availability::get_activity_log))
+        // Add activity tracking middleware (before auth middleware)
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            api::middleware::track_activity_middleware,
+        ))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             api::middleware::require_auth,
