@@ -92,6 +92,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     tracing::info!("Availability service initialized");
 
+    // Initialize SLA service
+    let event_bus_arc = std::sync::Arc::new(tokio::sync::RwLock::new(event_bus.clone()));
+    let sla_service = oxidesk::SlaService::new(
+        db.clone(),
+        event_bus_arc,
+    );
+    tracing::info!("SLA service initialized");
+
     // Create application state
     let state = AppState {
         db: db.clone(),
@@ -100,6 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         delivery_service: delivery_service.clone(),
         notification_service: notification_service.clone(),
         availability_service: availability_service.clone(),
+        sla_service: sla_service.clone(),
     };
 
     // Start session cleanup background task
@@ -123,6 +132,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start automation listener background task
     let automation_event_bus = event_bus.clone();
+    let automation_sla_service = sla_service.clone();
     tokio::spawn(async move {
         let mut receiver = automation_event_bus.subscribe();
         tracing::info!("Automation listener started");
@@ -151,6 +161,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 timestamp
                             );
 
+                            // Handle resolution SLA
+                            if new_status == oxidesk::ConversationStatus::Resolved {
+                                if let Err(e) = automation_sla_service
+                                    .handle_conversation_resolved(&conversation_id, &timestamp)
+                                    .await
+                                {
+                                    tracing::error!("Failed to handle resolution SLA: {}", e);
+                                }
+                            }
+
                             // TODO: In future, this would trigger automation rules:
                             // - Auto-assign to agent
                             // - Send notifications
@@ -171,6 +191,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 contact_id,
                                 timestamp
                             );
+
+                            // Handle next response SLA
+                            if let Err(e) = automation_sla_service
+                                .handle_contact_message(&conversation_id, &contact_id, &timestamp)
+                                .await
+                            {
+                                tracing::error!("Failed to handle next response SLA: {}", e);
+                            }
+
                             // TODO: Trigger automation rules for incoming messages
                         }
                         oxidesk::SystemEvent::MessageSent {
@@ -186,7 +215,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 agent_id,
                                 timestamp
                             );
-                            // TODO: Trigger automation rules for sent messages
+
+                            // Handle first response SLA
+                            if let Err(e) = automation_sla_service
+                                .handle_agent_message(&conversation_id, &agent_id, &timestamp)
+                                .await
+                            {
+                                tracing::error!("Failed to handle first response SLA: {}", e);
+                            }
                         }
                         oxidesk::SystemEvent::MessageFailed {
                             message_id,
@@ -297,6 +333,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 user_id,
                                 timestamp
                             );
+                        }
+                        oxidesk::SystemEvent::SlaBreached {
+                            event_id,
+                            applied_sla_id,
+                            conversation_id,
+                            event_type,
+                            deadline_at,
+                            breached_at,
+                            timestamp,
+                        } => {
+                            tracing::warn!(
+                                "Automation: SLA breached for conversation {} - event type: {} (event: {}, applied_sla: {}) deadline: {} breached: {} at {}",
+                                conversation_id,
+                                event_type,
+                                event_id,
+                                applied_sla_id,
+                                deadline_at,
+                                breached_at,
+                                timestamp
+                            );
+                            // TODO: Feature 010 will add notification sending
+                            // TODO: Feature 012 will add webhook triggering
                         }
                     }
                 }
@@ -417,6 +475,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/agents/:id/availability", post(api::availability::set_availability))
         .route("/api/agents/:id/availability", get(api::availability::get_availability))
         .route("/api/agents/:id/activity", get(api::availability::get_activity_log))
+        // SLA routes
+        .route("/api/sla/policies", post(api::sla::create_sla_policy))
+        .route("/api/sla/policies", get(api::sla::list_sla_policies))
+        .route("/api/sla/policies/:id", get(api::sla::get_sla_policy))
+        .route("/api/sla/policies/:id", put(api::sla::update_sla_policy))
+        .route("/api/sla/policies/:id", delete(api::sla::delete_sla_policy))
+        .route("/api/sla/conversations/:conversation_id", get(api::sla::get_applied_sla_by_conversation))
+        .route("/api/sla/applied", get(api::sla::list_applied_slas))
+        .route("/api/sla/applied/:applied_sla_id/events", get(api::sla::get_sla_events))
+        .route("/api/teams/:id/sla-policy", put(api::sla::assign_sla_policy_to_team))
         // Add activity tracking middleware (before auth middleware)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

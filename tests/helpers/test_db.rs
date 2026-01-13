@@ -503,6 +503,91 @@ async fn setup_schema(db: &Database) {
         .execute(pool)
         .await
         .ok();
+
+    // Create SLA policies table
+    sqlx::query(
+        "CREATE TABLE sla_policies (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            first_response_time TEXT NOT NULL,
+            resolution_time TEXT NOT NULL,
+            next_response_time TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create sla_policies table");
+
+    sqlx::query("CREATE INDEX idx_sla_policies_name ON sla_policies(name)")
+        .execute(pool)
+        .await
+        .ok();
+
+    // Create applied SLAs table
+    sqlx::query(
+        "CREATE TABLE applied_slas (
+            id TEXT PRIMARY KEY NOT NULL,
+            conversation_id TEXT UNIQUE NOT NULL,
+            sla_policy_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'met', 'breached')),
+            first_response_deadline_at TEXT NOT NULL,
+            resolution_deadline_at TEXT NOT NULL,
+            applied_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+            FOREIGN KEY (sla_policy_id) REFERENCES sla_policies(id) ON DELETE RESTRICT
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create applied_slas table");
+
+    sqlx::query("CREATE UNIQUE INDEX idx_applied_slas_conversation ON applied_slas(conversation_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX idx_applied_slas_policy ON applied_slas(sla_policy_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX idx_applied_slas_status ON applied_slas(status)")
+        .execute(pool)
+        .await
+        .ok();
+
+    // Create SLA events table
+    sqlx::query(
+        "CREATE TABLE sla_events (
+            id TEXT PRIMARY KEY NOT NULL,
+            applied_sla_id TEXT NOT NULL,
+            event_type TEXT NOT NULL CHECK(event_type IN ('first_response', 'resolution', 'next_response')),
+            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'met', 'breached')),
+            deadline_at TEXT NOT NULL,
+            met_at TEXT,
+            breached_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (applied_sla_id) REFERENCES applied_slas(id) ON DELETE CASCADE
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create sla_events table");
+
+    sqlx::query("CREATE INDEX idx_sla_events_applied_sla ON sla_events(applied_sla_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX idx_sla_events_status_deadline ON sla_events(status, deadline_at)")
+        .execute(pool)
+        .await
+        .ok();
 }
 
 async fn seed_test_data(db: &Database) {

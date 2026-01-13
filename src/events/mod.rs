@@ -68,6 +68,15 @@ pub enum SystemEvent {
         user_id: String,
         timestamp: String, // ISO 8601
     },
+    SlaBreached {
+        event_id: String,
+        applied_sla_id: String,
+        conversation_id: String,
+        event_type: String, // "first_response", "resolution", "next_response"
+        deadline_at: String, // ISO 8601
+        breached_at: String, // ISO 8601
+        timestamp: String, // ISO 8601
+    },
 }
 
 /// Event bus for publishing and subscribing to system events

@@ -14,6 +14,7 @@ pub mod assignment_service;
 pub mod tag_service;
 pub mod conversation_tag_service;
 pub mod availability_service;
+pub mod sla_service;
 
 pub use auth::*;
 pub use email_validator::*;
@@ -26,3 +27,4 @@ pub use assignment_service::*;
 pub use tag_service::*;
 pub use conversation_tag_service::*;
 pub use availability_service::*;
+pub use sla_service::*;

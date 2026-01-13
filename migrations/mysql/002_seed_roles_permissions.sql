@@ -28,7 +28,11 @@ INSERT INTO permissions (id, name, description, created_at, updated_at) VALUES
 
 -- Role management
 ('13000000-0000-0000-0000-000000000001', 'roles:read', 'View roles', NOW(), NOW()),
-('13000000-0000-0000-0000-000000000002', 'roles:manage', 'Create/update/delete roles', NOW(), NOW());
+('13000000-0000-0000-0000-000000000002', 'roles:manage', 'Create/update/delete roles', NOW(), NOW()),
+
+-- SLA management
+('14000000-0000-0000-0000-000000000001', 'sla:read', 'View SLA policies and applied SLAs', NOW(), NOW()),
+('14000000-0000-0000-0000-000000000002', 'sla:manage', 'Create/update/delete SLA policies', NOW(), NOW());
 
 -- Assign all permissions to Admin role
 INSERT INTO role_permissions (role_id, permission_id, created_at)
@@ -40,4 +44,5 @@ INSERT INTO role_permissions (role_id, permission_id, created_at) VALUES
 ('00000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', NOW()),
 ('00000000-0000-0000-0000-000000000002', '11000000-0000-0000-0000-000000000001', NOW()),
 ('00000000-0000-0000-0000-000000000002', '12000000-0000-0000-0000-000000000001', NOW()),
-('00000000-0000-0000-0000-000000000002', '13000000-0000-0000-0000-000000000001', NOW());
+('00000000-0000-0000-0000-000000000002', '13000000-0000-0000-0000-000000000001', NOW()),
+('00000000-0000-0000-0000-000000000002', '14000000-0000-0000-0000-000000000001', NOW());

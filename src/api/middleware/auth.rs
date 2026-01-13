@@ -17,6 +17,7 @@ pub struct AppState {
     pub delivery_service: crate::services::DeliveryService,
     pub notification_service: crate::services::NotificationService,
     pub availability_service: crate::services::AvailabilityService,
+    pub sla_service: crate::services::SlaService,
 }
 
 /// Extract and validate session token from Authorization header
