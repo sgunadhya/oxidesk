@@ -28,6 +28,7 @@ pub mod csrf;
 pub mod rate_limiter;
 pub mod auth_logger;
 pub mod oidc_service;
+pub mod permission_service;
 
 pub use auth::*;
 pub use email_validator::*;
@@ -52,3 +53,4 @@ pub use csrf::*;
 pub use rate_limiter::*;
 pub use auth_logger::*;
 pub use oidc_service::*;
+pub use permission_service::*;

@@ -332,8 +332,8 @@ mod tests {
     use super::*;
     use crate::models::conversation::ConversationStatus;
 
-    #[test]
-    fn test_construct_payload_conversation_created() {
+    #[tokio::test]
+    async fn test_construct_payload_conversation_created() {
         let db = Database::connect("sqlite::memory:").await.unwrap();
         let event_bus = EventBus::default();
         let worker = WebhookWorker::new(db, event_bus);
@@ -356,8 +356,8 @@ mod tests {
         assert_eq!(payload["data"]["status"], "open");
     }
 
-    #[test]
-    fn test_construct_payload_message_sent() {
+    #[tokio::test]
+    async fn test_construct_payload_message_sent() {
         let db = Database::connect("sqlite::memory:").await.unwrap();
         let event_bus = EventBus::default();
         let worker = WebhookWorker::new(db, event_bus);

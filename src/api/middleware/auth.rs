@@ -132,10 +132,9 @@ pub struct AuthenticatedUser {
 }
 
 impl AuthenticatedUser {
-    pub async fn has_permission(&self, _permission: &str) -> bool {
-        // TODO: Implement actual permission checking
-        // For now, Admin role has all permissions
-        self.roles.iter().any(|r| r.name == "Admin")
+    pub async fn has_permission(&self, permission: &str) -> bool {
+        // Use PermissionService to check permission across all roles
+        crate::services::PermissionService::has_permission(&self.roles, permission)
     }
 
     pub fn is_admin(&self) -> bool {

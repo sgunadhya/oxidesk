@@ -171,7 +171,7 @@ impl Database {
     // Role operations
     pub async fn get_role_by_name(&self, name: &str) -> ApiResult<Option<Role>> {
         let row = sqlx::query(
-            "SELECT id, name, description, created_at, updated_at
+            "SELECT id, name, description, permissions, CAST(is_protected AS INTEGER) as is_protected, created_at, updated_at
              FROM roles
              WHERE name = ?",
         )
@@ -180,10 +180,16 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
+            let permissions_json: String = row.try_get("permissions")?;
+            let permissions: Vec<String> = serde_json::from_str(&permissions_json)
+                .unwrap_or_else(|_| Vec::new());
+
             Ok(Some(Role {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
                 description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                permissions,
+                is_protected: row.try_get::<i32, _>("is_protected")? != 0,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             }))
@@ -208,7 +214,7 @@ impl Database {
 
     pub async fn get_user_roles(&self, user_id: &str) -> ApiResult<Vec<Role>> {
         let rows = sqlx::query(
-            "SELECT r.id, r.name, r.description, r.created_at, r.updated_at
+            "SELECT r.id, r.name, r.description, r.permissions, CAST(r.is_protected AS INTEGER) as is_protected, r.created_at, r.updated_at
              FROM roles r
              INNER JOIN user_roles ur ON r.id = ur.role_id
              WHERE ur.user_id = ?",
@@ -219,10 +225,16 @@ impl Database {
 
         let mut roles = Vec::new();
         for row in rows {
+            let permissions_json: String = row.try_get("permissions")?;
+            let permissions: Vec<String> = serde_json::from_str(&permissions_json)
+                .unwrap_or_else(|_| Vec::new());
+
             roles.push(Role {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
                 description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                permissions,
+                is_protected: row.try_get::<i32, _>("is_protected")? != 0,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             });
@@ -1038,7 +1050,7 @@ impl Database {
     // Role operations
     pub async fn list_roles(&self) -> ApiResult<Vec<Role>> {
         let rows = sqlx::query(
-            "SELECT id, name, description, created_at, updated_at
+            "SELECT id, name, description, permissions, CAST(is_protected AS INTEGER) as is_protected, created_at, updated_at
              FROM roles
              ORDER BY name",
         )
@@ -1047,10 +1059,16 @@ impl Database {
 
         let mut roles = Vec::new();
         for row in rows {
+            let permissions_json: String = row.try_get("permissions")?;
+            let permissions: Vec<String> = serde_json::from_str(&permissions_json)
+                .unwrap_or_else(|_| Vec::new());
+
             roles.push(Role {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
                 description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                permissions,
+                is_protected: row.try_get::<i32, _>("is_protected")? != 0,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             });
@@ -1061,7 +1079,7 @@ impl Database {
 
     pub async fn get_role_by_id(&self, id: &str) -> ApiResult<Option<Role>> {
         let row = sqlx::query(
-            "SELECT id, name, description, created_at, updated_at
+            "SELECT id, name, description, permissions, CAST(is_protected AS INTEGER) as is_protected, created_at, updated_at
              FROM roles
              WHERE id = ?",
         )
@@ -1070,10 +1088,16 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
+            let permissions_json: String = row.try_get("permissions")?;
+            let permissions: Vec<String> = serde_json::from_str(&permissions_json)
+                .unwrap_or_else(|_| Vec::new());
+
             Ok(Some(Role {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
                 description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                permissions,
+                is_protected: row.try_get::<i32, _>("is_protected")? != 0,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             }))
@@ -1084,14 +1108,18 @@ impl Database {
 
     pub async fn create_role(&self, role: &Role) -> ApiResult<()> {
         let description_value: Option<&str> = role.description.as_deref();
+        let permissions_json = serde_json::to_string(&role.permissions)
+            .unwrap_or_else(|_| "[]".to_string());
 
         sqlx::query(
-            "INSERT INTO roles (id, name, description, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO roles (id, name, description, permissions, is_protected, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&role.id)
         .bind(&role.name)
         .bind(description_value)
+        .bind(&permissions_json)
+        .bind(if role.is_protected { 1 } else { 0 })
         .bind(&role.created_at)
         .bind(&role.updated_at)
         .execute(&self.pool)
@@ -1100,24 +1128,61 @@ impl Database {
         Ok(())
     }
 
-    pub async fn update_role(&self, id: &str, name: &str, description: &Option<String>) -> ApiResult<()> {
+    pub async fn update_role(
+        &self,
+        id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+        permissions: Option<&Vec<String>>,
+    ) -> ApiResult<()> {
         let now = time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap();
 
-        let description_value: Option<&str> = description.as_deref();
+        // Build dynamic UPDATE query based on which fields are provided
+        if let Some(perms) = permissions {
+            let permissions_json = serde_json::to_string(perms)
+                .unwrap_or_else(|_| "[]".to_string());
 
-        sqlx::query(
-            "UPDATE roles
-             SET name = ?, description = ?, updated_at = ?
-             WHERE id = ?",
-        )
-        .bind(name)
-        .bind(description_value)
-        .bind(&now)
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+            if let Some(n) = name {
+                sqlx::query(
+                    "UPDATE roles
+                     SET name = ?, description = ?, permissions = ?, updated_at = ?
+                     WHERE id = ?",
+                )
+                .bind(n)
+                .bind(description)
+                .bind(&permissions_json)
+                .bind(&now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+            } else {
+                sqlx::query(
+                    "UPDATE roles
+                     SET description = ?, permissions = ?, updated_at = ?
+                     WHERE id = ?",
+                )
+                .bind(description)
+                .bind(&permissions_json)
+                .bind(&now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+            }
+        } else if let Some(n) = name {
+            sqlx::query(
+                "UPDATE roles
+                 SET name = ?, description = ?, updated_at = ?
+                 WHERE id = ?",
+            )
+            .bind(n)
+            .bind(description)
+            .bind(&now)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        }
 
         Ok(())
     }

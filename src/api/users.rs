@@ -75,7 +75,8 @@ pub async fn list_users(
                             id: r.id.clone(),
                             name: r.name.clone(),
                             description: r.description.clone(),
-                            permissions: None,
+                            permissions: r.permissions.clone(),
+                            is_protected: r.is_protected,
                             created_at: r.created_at.clone(),
                             updated_at: r.updated_at.clone(),
                         })
@@ -147,7 +148,8 @@ pub async fn get_user(
                     id: r.id.clone(),
                     name: r.name.clone(),
                     description: r.description.clone(),
-                    permissions: None,
+                    permissions: r.permissions.clone(),
+                    is_protected: r.is_protected,
                     created_at: r.created_at.clone(),
                     updated_at: r.updated_at.clone(),
                 })

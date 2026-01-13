@@ -470,4 +470,47 @@ impl AssignmentService {
     ) -> ApiResult<()> {
         self.db.update_agent_availability(user_id, status).await
     }
+
+    // RBAC System: Check conversation access based on assignment
+    /// Check if user has access to a conversation based on assignment
+    /// Used for assignment-based filtering with "conversations:read_assigned" permission
+    ///
+    /// Returns true if:
+    /// - Conversation is assigned directly to the user (assigned_user_id == user_id), OR
+    /// - Conversation is assigned to a team the user is a member of (assigned_team_id IN user_teams)
+    pub async fn has_conversation_access(
+        &self,
+        user_id: &str,
+        conversation_id: &str,
+    ) -> ApiResult<bool> {
+        // Get conversation assignment
+        let conversation = self.db.get_conversation_by_id(conversation_id).await?
+            .ok_or_else(|| ApiError::NotFound(format!("Conversation {} not found", conversation_id)))?;
+
+        // Check direct user assignment
+        if let Some(assigned_user_id) = &conversation.assigned_user_id {
+            if assigned_user_id == user_id {
+                return Ok(true);
+            }
+        }
+
+        // Check team assignment
+        if let Some(assigned_team_id) = &conversation.assigned_team_id {
+            // Get user's teams
+            let user_teams = self.get_user_teams(user_id).await?;
+            if user_teams.iter().any(|team_id| team_id == assigned_team_id) {
+                return Ok(true);
+            }
+        }
+
+        // No assignment match
+        Ok(false)
+    }
+
+    /// Get all team IDs that a user is a member of
+    /// Used for team-based assignment filtering
+    pub async fn get_user_teams(&self, user_id: &str) -> ApiResult<Vec<String>> {
+        let teams = self.db.get_user_teams(user_id).await?;
+        Ok(teams.into_iter().map(|team| team.id).collect())
+    }
 }

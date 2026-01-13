@@ -96,7 +96,8 @@ pub async fn login(
             id: r.id.clone(),
             name: r.name.clone(),
             description: r.description.clone(),
-            permissions: None,
+            permissions: r.permissions.clone(),
+            is_protected: r.is_protected,
             created_at: r.created_at.clone(),
             updated_at: r.updated_at.clone(),
         })
@@ -157,7 +158,8 @@ pub async fn get_session(
             id: r.id.clone(),
             name: r.name.clone(),
             description: r.description.clone(),
-            permissions: None,
+            permissions: r.permissions.clone(),
+            is_protected: r.is_protected,
             created_at: r.created_at.clone(),
             updated_at: r.updated_at.clone(),
         })
@@ -380,7 +382,8 @@ pub async fn oidc_callback(
             id: r.id.clone(),
             name: r.name.clone(),
             description: r.description.clone(),
-            permissions: None,
+            permissions: r.permissions.clone(),
+            is_protected: r.is_protected,
             created_at: r.created_at.clone(),
             updated_at: r.updated_at.clone(),
         })
