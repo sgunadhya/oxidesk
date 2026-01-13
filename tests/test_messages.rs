@@ -138,6 +138,8 @@ async fn create_test_conversation(
         created_at: now.clone(),
         updated_at: now,
         version: 0,
+        tags: None,
+        priority: None,
     }
 }
 

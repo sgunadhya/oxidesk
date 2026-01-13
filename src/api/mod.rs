@@ -12,5 +12,6 @@ pub mod tags;
 pub mod conversation_tags;
 pub mod availability;
 pub mod sla;
+pub mod automation;
 
 pub use middleware::*;
