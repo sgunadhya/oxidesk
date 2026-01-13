@@ -34,10 +34,11 @@ pub async fn send_message(
     Path(conversation_id): Path<String>,
     Json(request): Json<SendMessageRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    let message_service = MessageService::with_delivery_and_events(
+    let message_service = MessageService::with_all_services(
         state.db.clone(),
         state.delivery_service.clone(),
         state.event_bus.clone(),
+        state.connection_manager.clone(),
     );
 
     let message = message_service

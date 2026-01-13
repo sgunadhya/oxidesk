@@ -7,7 +7,9 @@ use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
     models::*,
+    services::connection_manager::ConnectionManager,
 };
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -18,6 +20,7 @@ pub struct AppState {
     pub notification_service: crate::services::NotificationService,
     pub availability_service: crate::services::AvailabilityService,
     pub sla_service: crate::services::SlaService,
+    pub connection_manager: Arc<dyn ConnectionManager>,
 }
 
 /// Extract and validate session token from Authorization header

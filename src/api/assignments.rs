@@ -22,6 +22,7 @@ pub async fn assign_conversation(
         state.db.clone(),
         state.event_bus.clone(),
         state.notification_service.clone(),
+        state.connection_manager.clone(),
     );
     assignment_service.set_sla_service(state.sla_service.clone());
 
@@ -65,6 +66,7 @@ pub async fn unassign_conversation(
         state.db.clone(),
         state.event_bus.clone(),
         state.notification_service.clone(),
+        state.connection_manager.clone(),
     );
 
     let conversation = assignment_service
@@ -92,6 +94,7 @@ pub async fn update_agent_availability(
         state.db.clone(),
         state.event_bus.clone(),
         state.notification_service.clone(),
+        state.connection_manager.clone(),
     );
 
     // Update availability via service
@@ -141,6 +144,7 @@ pub async fn get_unassigned_conversations(
         state.db.clone(),
         state.event_bus.clone(),
         state.notification_service.clone(),
+        state.connection_manager.clone(),
     );
 
     // Check permission via service
@@ -182,6 +186,7 @@ pub async fn get_assigned_conversations(
         state.db.clone(),
         state.event_bus.clone(),
         state.notification_service.clone(),
+        state.connection_manager.clone(),
     );
 
     let offset = (params.page - 1) * params.per_page;
@@ -213,6 +218,7 @@ pub async fn get_team_conversations(
         state.db.clone(),
         state.event_bus.clone(),
         state.notification_service.clone(),
+        state.connection_manager.clone(),
     );
 
     // Verify user is a member of the team via service

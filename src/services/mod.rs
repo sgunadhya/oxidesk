@@ -19,6 +19,7 @@ pub mod condition_evaluator;
 pub mod action_executor;
 pub mod automation_service;
 pub mod macro_service;
+pub mod connection_manager;
 
 pub use auth::*;
 pub use email_validator::*;
@@ -34,3 +35,4 @@ pub use availability_service::*;
 pub use sla_service::*;
 pub use automation_service::*;
 pub use macro_service::*;
+pub use connection_manager::*;
