@@ -637,6 +637,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/automation/rules/:id/enable", patch(api::automation::enable_automation_rule))
         .route("/api/automation/rules/:id/disable", patch(api::automation::disable_automation_rule))
         .route("/api/automation/evaluation-logs", get(api::automation::list_evaluation_logs))
+        // Macro endpoints
+        .route("/api/macros", post(api::macros::create_macro))
+        .route("/api/macros", get(api::macros::list_macros))
+        .route("/api/macros/:id", get(api::macros::get_macro))
+        .route("/api/macros/:id", put(api::macros::update_macro))
+        .route("/api/macros/:id", delete(api::macros::delete_macro))
+        .route("/api/macros/:id/apply", post(api::macros::apply_macro))
+        .route("/api/macros/:id/access", post(api::macros::grant_macro_access))
+        .route("/api/macros/:id/access", get(api::macros::list_macro_access))
+        .route("/api/macros/:id/access/:entity_type/:entity_id", delete(api::macros::revoke_macro_access))
+        .route("/api/macros/:id/logs", get(api::macros::get_macro_logs))
         // Add activity tracking middleware (before auth middleware)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
