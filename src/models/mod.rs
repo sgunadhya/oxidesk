@@ -6,6 +6,7 @@ pub mod password_reset;
 pub mod message;
 pub mod team;
 pub mod assignment;
+pub mod tag;
 
 pub use user::*;
 pub use role::*;
@@ -15,3 +16,4 @@ pub use password_reset::*;
 pub use message::*;
 pub use team::*;
 pub use assignment::*;
+pub use tag::*;

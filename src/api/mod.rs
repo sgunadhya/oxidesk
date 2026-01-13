@@ -8,5 +8,7 @@ pub mod users;
 pub mod messages;
 pub mod teams;
 pub mod assignments;
+pub mod tags;
+pub mod conversation_tags;
 
 pub use middleware::*;
