@@ -194,6 +194,51 @@ impl AuthLogger {
     ) -> Result<Vec<AuthEvent>, crate::api::middleware::ApiError> {
         db.get_recent_auth_events(limit, offset).await
     }
+
+    /// Log an authorization denial event (RBAC System)
+    /// Called when user lacks required permission for an action
+    pub async fn log_authorization_denied(
+        db: &Database,
+        user_id: String,
+        email: String,
+        auth_method: AuthMethod,
+        ip_address: String,
+        user_agent: Option<String>,
+        required_permission: String,
+        resource_id: Option<String>,
+    ) -> Result<(), crate::api::middleware::ApiError> {
+        let error_reason = if let Some(res_id) = resource_id {
+            format!(
+                "Required permission '{}' for resource '{}'",
+                required_permission, res_id
+            )
+        } else {
+            format!("Required permission '{}'", required_permission)
+        };
+
+        let event = AuthEvent::new(
+            AuthEventType::AuthorizationDenied,
+            Some(user_id.clone()),
+            email.clone(),
+            auth_method,
+            None, // no provider for authorization
+            ip_address,
+            user_agent,
+            Some(error_reason.clone()),
+        );
+
+        db.create_auth_event(&event).await?;
+        tracing::warn!(
+            event_type = "authorization_denied",
+            user_id = %user_id,
+            email = %email,
+            required_permission = %required_permission,
+            error_reason = %error_reason,
+            "Authorization denied"
+        );
+
+        Ok(())
+    }
 }
 
 /// Helper function to extract IP address from request

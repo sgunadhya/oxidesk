@@ -14,6 +14,7 @@ type HmacSha256 = Hmac<Sha256>;
 ///
 /// # Example
 /// ```
+/// use oxidesk::services::webhook_signature::sign_payload;
 /// let payload = r#"{"event":"conversation.created","data":{}}"#;
 /// let secret = "my_webhook_secret_key";
 /// let signature = sign_payload(payload, secret);
@@ -43,6 +44,7 @@ pub fn sign_payload(payload: &str, secret: &str) -> String {
 ///
 /// # Example
 /// ```
+/// use oxidesk::services::webhook_signature::{sign_payload, verify_signature};
 /// let payload = r#"{"event":"test"}"#;
 /// let secret = "my_secret";
 /// let signature = sign_payload(payload, secret);

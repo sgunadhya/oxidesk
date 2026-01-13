@@ -215,11 +215,13 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         id: "00000000-0000-0000-0000-000000000001".to_string(), // seeded admin role
         name: "Admin".to_string(),
         description: Some("Full system access".to_string()),
+        permissions: vec![], // Admin has all permissions
+        is_protected: true,
         created_at: chrono::Utc::now().to_rfc3339(),
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
-    // Implement assign_role if needed or raw query. 
-    // db.assign_role(...) might verify role existence. 
+    // Implement assign_role if needed or raw query.
+    // db.assign_role(...) might verify role existence.
     sqlx::query("INSERT INTO user_roles (user_id, role_id, created_at) VALUES (?, ?, ?)")
         .bind(&user.id)
         .bind(&role.id)
@@ -228,10 +230,24 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         .await
         .expect("Failed to assign role");
 
+    // Create test session
+    let session = oxidesk::models::Session {
+        id: Uuid::new_v4().to_string(),
+        user_id: user.id.clone(),
+        token: "test-token".to_string(),
+        csrf_token: "test-csrf".to_string(),
+        expires_at: chrono::Utc::now().checked_add_signed(chrono::Duration::hours(24)).unwrap().to_rfc3339(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        last_accessed_at: chrono::Utc::now().to_rfc3339(),
+        auth_method: oxidesk::models::AuthMethod::Password,
+        provider_name: None,
+    };
+
     AuthenticatedUser {
         user,
         agent,
         roles: vec![role],
+        session,
         token: "test-token".to_string(),
     }
 }

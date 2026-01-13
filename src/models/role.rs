@@ -6,6 +6,8 @@ pub struct Role {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
+    pub permissions: Vec<String>,  // Permission strings like "conversations:read_assigned"
+    pub is_protected: bool,  // Prevents modification of Admin role
     pub created_at: String,
     pub updated_at: String,
 }
@@ -39,8 +41,8 @@ pub struct RoleResponse {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub permissions: Option<Vec<PermissionResponse>>,
+    pub permissions: Vec<String>,  // Array of permission strings
+    pub is_protected: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -58,17 +60,18 @@ pub struct PermissionResponse {
 pub struct CreateRoleRequest {
     pub name: String,
     pub description: Option<String>,
-    pub permission_ids: Vec<String>,
+    pub permissions: Vec<String>,  // Permission strings like "conversations:read_assigned"
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateRoleRequest {
-    pub name: String,
+    pub name: Option<String>,
     pub description: Option<String>,
+    pub permissions: Option<Vec<String>>,  // Permission strings
 }
 
 impl Role {
-    pub fn new(name: String, description: Option<String>) -> Self {
+    pub fn new(name: String, description: Option<String>, permissions: Vec<String>) -> Self {
         let now = time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap();
@@ -77,6 +80,8 @@ impl Role {
             id: Uuid::new_v4().to_string(),
             name,
             description,
+            permissions,
+            is_protected: false,  // Only Admin role should have this set to true
             created_at: now.clone(),
             updated_at: now,
         }
