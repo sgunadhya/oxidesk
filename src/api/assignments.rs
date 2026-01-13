@@ -18,11 +18,12 @@ pub async fn assign_conversation(
     Path(conversation_id): Path<String>,
     Json(req): Json<AssignConversationRequest>,
 ) -> ApiResult<Json<ConversationResponse>> {
-    let assignment_service = AssignmentService::new(
+    let mut assignment_service = AssignmentService::new(
         state.db.clone(),
         state.event_bus.clone(),
         state.notification_service.clone(),
     );
+    assignment_service.set_sla_service(state.sla_service.clone());
 
     // Get user's permissions via service
     let permissions = assignment_service.get_user_permissions(&user.user.id).await?;

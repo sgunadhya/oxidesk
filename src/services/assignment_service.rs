@@ -3,13 +3,14 @@ use crate::{
     database::Database,
     events::{EventBus, SystemEvent},
     models::{AgentAvailability, AssignmentHistory, Conversation, ConversationStatus, Permission},
-    services::notification_service::NotificationService,
+    services::{notification_service::NotificationService, SlaService},
 };
 
 pub struct AssignmentService {
     db: Database,
     event_bus: EventBus,
     notification_service: NotificationService,
+    sla_service: Option<SlaService>,
 }
 
 impl AssignmentService {
@@ -22,7 +23,13 @@ impl AssignmentService {
             db,
             event_bus,
             notification_service,
+            sla_service: None,
         }
+    }
+
+    /// Set the SLA service (called after initialization to avoid circular dependencies)
+    pub fn set_sla_service(&mut self, sla_service: SlaService) {
+        self.sla_service = Some(sla_service);
     }
 
     // Helper: Check if user has permission
@@ -242,14 +249,46 @@ impl AssignmentService {
             })
     }
 
-    // Stub method for SLA application (Feature 008 will implement)
+    /// Apply team's SLA policy to conversation
     async fn apply_team_sla(&self, conversation_id: &str, team_id: &str) -> ApiResult<()> {
-        tracing::info!(
-            "STUB: Would apply SLA policy for team {} to conversation {}",
-            team_id,
-            conversation_id
-        );
-        // TODO: Feature 008 will implement actual SLA application
+        // Get the team
+        let team = self
+            .db
+            .get_team_by_id(team_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Team not found: {}", team_id)))?;
+
+        // Check if team has an SLA policy
+        if let Some(sla_policy_id) = team.sla_policy_id {
+            // Get SLA service
+            if let Some(sla_service) = &self.sla_service {
+                // Get conversation to get its created_at timestamp
+                let conversation = self
+                    .db
+                    .get_conversation_by_id(conversation_id)
+                    .await?
+                    .ok_or_else(|| {
+                        ApiError::NotFound(format!("Conversation not found: {}", conversation_id))
+                    })?;
+
+                // Apply SLA using conversation's created_at as base timestamp
+                sla_service
+                    .apply_sla(conversation_id, &sla_policy_id, &conversation.created_at)
+                    .await?;
+
+                tracing::info!(
+                    "Applied SLA policy {} from team {} to conversation {}",
+                    sla_policy_id,
+                    team_id,
+                    conversation_id
+                );
+            } else {
+                tracing::warn!("SLA service not initialized, skipping SLA application");
+            }
+        } else {
+            tracing::debug!("Team {} has no SLA policy, skipping SLA application", team_id);
+        }
+
         Ok(())
     }
 

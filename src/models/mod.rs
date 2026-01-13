@@ -9,6 +9,7 @@ pub mod assignment;
 pub mod tag;
 pub mod agent_activity;
 pub mod config;
+pub mod sla;
 
 pub use user::*;
 pub use role::*;
@@ -21,3 +22,4 @@ pub use assignment::*;
 pub use tag::*;
 pub use agent_activity::*;
 pub use config::*;
+pub use sla::*;
