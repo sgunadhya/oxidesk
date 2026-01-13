@@ -12,6 +12,7 @@ pub mod config;
 pub mod sla;
 pub mod automation_rule;
 pub mod rule_evaluation_log;
+pub mod macro_models;
 
 pub use user::*;
 pub use role::*;
@@ -27,3 +28,4 @@ pub use config::*;
 pub use sla::*;
 pub use automation_rule::*;
 pub use rule_evaluation_log::*;
+pub use macro_models::*;
