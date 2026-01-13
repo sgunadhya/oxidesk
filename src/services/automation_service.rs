@@ -1,0 +1,229 @@
+use crate::models::{
+    AutomationRule, Conversation, RuleEvaluationLog, ConditionResult, ActionResult,
+};
+use crate::database::Database;
+use crate::services::condition_evaluator::ConditionEvaluator;
+use crate::services::action_executor::ActionExecutor;
+use std::sync::Arc;
+use std::time::Instant;
+
+#[derive(Debug, Clone)]
+pub struct AutomationConfig {
+    pub cascade_max_depth: u32,
+    pub condition_timeout_secs: u64,
+    pub action_timeout_secs: u64,
+}
+
+impl Default for AutomationConfig {
+    fn default() -> Self {
+        Self {
+            cascade_max_depth: 3,
+            condition_timeout_secs: 5,
+            action_timeout_secs: 10,
+        }
+    }
+}
+
+pub struct AutomationService {
+    db: Arc<Database>,
+    condition_evaluator: ConditionEvaluator,
+    action_executor: ActionExecutor,
+    config: AutomationConfig,
+}
+
+impl AutomationService {
+    pub fn new(db: Arc<Database>, config: AutomationConfig) -> Self {
+        Self {
+            condition_evaluator: ConditionEvaluator::new(),
+            action_executor: ActionExecutor::new(db.clone()),
+            db,
+            config,
+        }
+    }
+
+    /// Handle a conversation-related event
+    pub async fn handle_conversation_event(
+        &self,
+        event_type: &str,
+        conversation: &Conversation,
+        executed_by: &str,
+    ) -> Result<(), String> {
+        self.handle_conversation_event_with_depth(event_type, conversation, executed_by, 0)
+            .await
+    }
+
+    /// Handle a conversation-related event with cascade depth tracking
+    pub async fn handle_conversation_event_with_depth(
+        &self,
+        event_type: &str,
+        conversation: &Conversation,
+        executed_by: &str,
+        cascade_depth: u32,
+    ) -> Result<(), String> {
+        // Check cascade depth limit
+        if cascade_depth > self.config.cascade_max_depth {
+            tracing::warn!(
+                "Cascade depth {} exceeds limit {} for conversation {}, skipping automation",
+                cascade_depth,
+                self.config.cascade_max_depth,
+                conversation.id
+            );
+            return Ok(());
+        }
+
+        tracing::info!(
+            "Processing automation rules for event '{}' on conversation {} (depth={})",
+            event_type,
+            conversation.id,
+            cascade_depth
+        );
+
+        // Get enabled rules that subscribe to this event type
+        let rules = self
+            .db
+            .get_enabled_rules_for_event(event_type)
+            .await
+            .map_err(|e| format!("Failed to fetch rules: {}", e))?;
+
+        if rules.is_empty() {
+            tracing::debug!("No enabled rules found for event '{}'", event_type);
+            return Ok(());
+        }
+
+        tracing::info!(
+            "Found {} enabled rule(s) for event '{}'",
+            rules.len(),
+            event_type
+        );
+
+        // Sort rules by priority (lower number = higher priority, executes last to win conflicts)
+        let mut sorted_rules = rules;
+        sorted_rules.sort_by_key(|r| std::cmp::Reverse(r.priority));
+
+        // Evaluate and execute each rule
+        for rule in sorted_rules {
+            if let Err(e) = self
+                .evaluate_and_execute_rule(&rule, event_type, conversation, executed_by, cascade_depth)
+                .await
+            {
+                // Log error but continue with other rules
+                tracing::error!(
+                    "Error evaluating rule '{}' ({}): {}",
+                    rule.name,
+                    rule.id,
+                    e
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Evaluate a single rule and execute its action if condition matches
+    async fn evaluate_and_execute_rule(
+        &self,
+        rule: &AutomationRule,
+        event_type: &str,
+        conversation: &Conversation,
+        executed_by: &str,
+        cascade_depth: u32,
+    ) -> Result<(), String> {
+        let start_time = Instant::now();
+
+        tracing::debug!(
+            "Evaluating rule '{}' ({}) for conversation {}",
+            rule.name,
+            rule.id,
+            conversation.id
+        );
+
+        // Evaluate condition
+        let (condition_result, condition_matched, condition_error) =
+            match self.condition_evaluator.evaluate(&rule.condition, conversation).await {
+                Ok(true) => (ConditionResult::True, true, None),
+                Ok(false) => (ConditionResult::False, false, None),
+                Err(e) => {
+                    tracing::error!(
+                        "Condition evaluation error for rule '{}': {}",
+                        rule.name,
+                        e
+                    );
+                    (ConditionResult::Error, false, Some(e.to_string()))
+                }
+            };
+
+        // Execute action if condition matched
+        let (action_executed, action_result, action_error) = if condition_matched {
+            tracing::info!(
+                "Condition matched for rule '{}', executing action {:?}",
+                rule.name,
+                rule.action.action_type
+            );
+
+            match self
+                .action_executor
+                .execute(&rule.action, &conversation.id, executed_by)
+                .await
+            {
+                Ok(()) => {
+                    tracing::info!(
+                        "Action {:?} executed successfully for rule '{}'",
+                        rule.action.action_type,
+                        rule.name
+                    );
+                    (true, ActionResult::Success, None)
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Action execution error for rule '{}': {}",
+                        rule.name,
+                        e
+                    );
+                    (false, ActionResult::Error, Some(e.to_string()))
+                }
+            }
+        } else {
+            tracing::debug!(
+                "Condition not matched for rule '{}', skipping action",
+                rule.name
+            );
+            (false, ActionResult::Skipped, None)
+        };
+
+        let evaluation_time_ms = start_time.elapsed().as_millis() as i64;
+
+        // Create evaluation log
+        let error_message = condition_error.or(action_error);
+        let log = RuleEvaluationLog {
+            id: uuid::Uuid::new_v4().to_string(),
+            rule_id: rule.id.clone(),
+            rule_name: rule.name.clone(),
+            event_type: event_type.to_string(),
+            conversation_id: Some(conversation.id.clone()),
+            matched: true, // Rule matched event subscription
+            condition_result: Some(condition_result),
+            action_executed,
+            action_result: Some(action_result),
+            error_message,
+            evaluation_time_ms,
+            evaluated_at: chrono::Utc::now().to_rfc3339(),
+            cascade_depth,
+        };
+
+        self.db
+            .create_rule_evaluation_log(&log)
+            .await
+            .map_err(|e| format!("Failed to create evaluation log: {}", e))?;
+
+        tracing::info!(
+            "Rule '{}' evaluation complete: matched={}, condition={:?}, action_executed={}, time={}ms",
+            rule.name,
+            log.matched,
+            log.condition_result,
+            action_executed,
+            evaluation_time_ms
+        );
+
+        Ok(())
+    }
+}

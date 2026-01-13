@@ -66,6 +66,9 @@ pub struct Conversation {
     pub created_at: String,
     pub updated_at: String,
     pub version: i32,
+    #[sqlx(skip)]
+    pub tags: Option<Vec<String>>,
+    pub priority: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,6 +94,8 @@ pub struct ConversationResponse {
     pub assigned_by: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub tags: Option<Vec<String>>,
+    pub priority: Option<String>,
 }
 
 impl From<Conversation> for ConversationResponse {
@@ -110,6 +115,8 @@ impl From<Conversation> for ConversationResponse {
             assigned_by: conv.assigned_by,
             created_at: conv.created_at,
             updated_at: conv.updated_at,
+            tags: conv.tags,
+            priority: conv.priority,
         }
     }
 }

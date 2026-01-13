@@ -135,6 +135,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let automation_sla_service = sla_service.clone();
     let automation_db = db.clone();
     tokio::spawn(async move {
+        // Initialize automation service inside the task
+        let automation_rule_service = std::sync::Arc::new(oxidesk::AutomationService::new(
+            std::sync::Arc::new(automation_db.clone()),
+            oxidesk::services::automation_service::AutomationConfig::default(),
+        ));
+        tracing::info!("Automation service initialized in background task");
+
         let mut receiver = automation_event_bus.subscribe();
         tracing::info!("Automation listener started");
 
@@ -144,7 +151,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     tracing::debug!("Automation listener received event: {:?}", event);
 
                     // Process automation rules based on event
-                    // For now, just log the event
                     match event {
                         oxidesk::SystemEvent::ConversationStatusChanged {
                             conversation_id,
@@ -172,12 +178,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
 
-                            // TODO: In future, this would trigger automation rules:
-                            // - Auto-assign to agent
-                            // - Send notifications
-                            // - Update metrics
-                            // - Trigger webhooks
-                            // etc.
+                            // Trigger automation rules for status change
+                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                                let executed_by = agent_id.as_deref().unwrap_or("system");
+                                if let Err(e) = automation_rule_service
+                                    .handle_conversation_event("conversation.status_changed", &conversation, executed_by)
+                                    .await
+                                {
+                                    tracing::error!("Failed to execute automation rules for status change: {}", e);
+                                }
+                            }
                         }
                         oxidesk::SystemEvent::MessageReceived {
                             message_id,
@@ -201,7 +211,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 tracing::error!("Failed to handle next response SLA: {}", e);
                             }
 
-                            // TODO: Trigger automation rules for incoming messages
+                            // Trigger automation rules for incoming messages
+                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                                if let Err(e) = automation_rule_service
+                                    .handle_conversation_event("conversation.message_received", &conversation, "system")
+                                    .await
+                                {
+                                    tracing::error!("Failed to execute automation rules for message received: {}", e);
+                                }
+                            }
                         }
                         oxidesk::SystemEvent::MessageSent {
                             message_id,
@@ -224,6 +242,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             {
                                 tracing::error!("Failed to handle first response SLA: {}", e);
                             }
+
+                            // Trigger automation rules for sent messages
+                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                                if let Err(e) = automation_rule_service
+                                    .handle_conversation_event("conversation.message_sent", &conversation, &agent_id)
+                                    .await
+                                {
+                                    tracing::error!("Failed to execute automation rules for message sent: {}", e);
+                                }
+                            }
                         }
                         oxidesk::SystemEvent::MessageFailed {
                             message_id,
@@ -238,7 +266,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 retry_count,
                                 timestamp
                             );
-                            // TODO: Trigger automation rules for failed messages
+
+                            // Trigger automation rules for failed messages
+                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                                if let Err(e) = automation_rule_service
+                                    .handle_conversation_event("conversation.message_failed", &conversation, "system")
+                                    .await
+                                {
+                                    tracing::error!("Failed to execute automation rules for message failed: {}", e);
+                                }
+                            }
                         }
                         oxidesk::SystemEvent::ConversationAssigned {
                             conversation_id,
@@ -307,7 +344,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
 
-                            // TODO: Feature 009 will add automation rule evaluation
+                            // Trigger automation rules for assignment change
+                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                                if let Err(e) = automation_rule_service
+                                    .handle_conversation_event("conversation.assignment_changed", &conversation, &assigned_by)
+                                    .await
+                                {
+                                    tracing::error!("Failed to execute automation rules for assignment change: {}", e);
+                                }
+                            }
                             // TODO: Feature 012 will add webhook triggering
                         }
                         oxidesk::SystemEvent::ConversationUnassigned {
@@ -325,6 +370,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 unassigned_by,
                                 timestamp
                             );
+
+                            // Trigger automation rules for unassignment
+                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                                if let Err(e) = automation_rule_service
+                                    .handle_conversation_event("conversation.unassigned", &conversation, &unassigned_by)
+                                    .await
+                                {
+                                    tracing::error!("Failed to execute automation rules for unassignment: {}", e);
+                                }
+                            }
                             // TODO: Feature 012 will add webhook triggering
                         }
                         oxidesk::SystemEvent::ConversationTagsChanged {
@@ -342,7 +397,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 previous_tags,
                                 new_tags
                             );
-                            // TODO: Feature 009 will add automation rule evaluation
+
+                            // Trigger automation rules for tags change
+                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                                if let Err(e) = automation_rule_service
+                                    .handle_conversation_event("conversation.tags_changed", &conversation, &changed_by)
+                                    .await
+                                {
+                                    tracing::error!("Failed to execute automation rules for tags change: {}", e);
+                                }
+                            }
                             // TODO: Feature 012 will add webhook triggering
                         }
                         oxidesk::SystemEvent::AgentAvailabilityChanged {
@@ -406,6 +470,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 breached_at,
                                 timestamp
                             );
+
+                            // Trigger automation rules for SLA breach
+                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                                if let Err(e) = automation_rule_service
+                                    .handle_conversation_event("conversation.sla_breached", &conversation, "system")
+                                    .await
+                                {
+                                    tracing::error!("Failed to execute automation rules for SLA breach: {}", e);
+                                }
+                            }
                             // TODO: Feature 010 will add notification sending
                             // TODO: Feature 012 will add webhook triggering
                         }
@@ -554,6 +628,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/sla/apply", post(api::sla::apply_sla))
         .route("/api/sla/applied/:applied_sla_id/events", get(api::sla::get_sla_events))
         .route("/api/teams/:id/sla-policy", put(api::sla::assign_sla_policy_to_team))
+        // Automation rules endpoints
+        .route("/api/automation/rules", post(api::automation::create_automation_rule))
+        .route("/api/automation/rules", get(api::automation::list_automation_rules))
+        .route("/api/automation/rules/:id", get(api::automation::get_automation_rule))
+        .route("/api/automation/rules/:id", put(api::automation::update_automation_rule))
+        .route("/api/automation/rules/:id", delete(api::automation::delete_automation_rule))
+        .route("/api/automation/rules/:id/enable", patch(api::automation::enable_automation_rule))
+        .route("/api/automation/rules/:id/disable", patch(api::automation::disable_automation_rule))
+        .route("/api/automation/evaluation-logs", get(api::automation::list_evaluation_logs))
         // Add activity tracking middleware (before auth middleware)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

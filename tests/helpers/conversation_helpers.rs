@@ -113,6 +113,8 @@ pub async fn create_test_conversation(
         created_at: row.try_get("created_at").unwrap(),
         updated_at: row.try_get("updated_at").unwrap(),
         version: row.try_get("version").unwrap(),
+        tags: None,
+        priority: None,
     }
 }
 
@@ -174,6 +176,8 @@ pub async fn create_snoozed_conversation(
         created_at: row.try_get("created_at").unwrap(),
         updated_at: row.try_get("updated_at").unwrap(),
         version: row.try_get("version").unwrap(),
+        tags: None,
+        priority: None,
     }
 }
 

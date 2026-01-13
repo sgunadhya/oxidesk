@@ -10,6 +10,8 @@ pub mod tag;
 pub mod agent_activity;
 pub mod config;
 pub mod sla;
+pub mod automation_rule;
+pub mod rule_evaluation_log;
 
 pub use user::*;
 pub use role::*;
@@ -23,3 +25,5 @@ pub use tag::*;
 pub use agent_activity::*;
 pub use config::*;
 pub use sla::*;
+pub use automation_rule::*;
+pub use rule_evaluation_log::*;

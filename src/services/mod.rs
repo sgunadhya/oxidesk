@@ -15,6 +15,9 @@ pub mod tag_service;
 pub mod conversation_tag_service;
 pub mod availability_service;
 pub mod sla_service;
+pub mod condition_evaluator;
+pub mod action_executor;
+pub mod automation_service;
 
 pub use auth::*;
 pub use email_validator::*;
@@ -28,3 +31,4 @@ pub use tag_service::*;
 pub use conversation_tag_service::*;
 pub use availability_service::*;
 pub use sla_service::*;
+pub use automation_service::*;
