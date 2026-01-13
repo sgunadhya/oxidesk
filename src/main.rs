@@ -16,7 +16,7 @@ use oxidesk::{
 
 use axum::{
     extract::State,
-    routing::{get, post, delete, patch},
+    routing::{get, post, delete, patch, put},
     Router,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -81,12 +81,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     tracing::info!("Delivery service initialized with mock provider");
 
+    // Initialize notification service
+    let notification_service = oxidesk::NotificationService::new();
+    tracing::info!("Notification service initialized (stub)");
+
     // Create application state
     let state = AppState {
         db: db.clone(),
         session_duration_hours: config.session_duration_hours,
         event_bus: event_bus.clone(),
         delivery_service: delivery_service.clone(),
+        notification_service: notification_service.clone(),
     };
 
     // Start session cleanup background task
@@ -190,6 +195,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
                             // TODO: Trigger automation rules for failed messages
                         }
+                        oxidesk::SystemEvent::ConversationAssigned {
+                            conversation_id,
+                            assigned_user_id,
+                            assigned_team_id,
+                            assigned_by,
+                            timestamp,
+                        } => {
+                            tracing::info!(
+                                "Automation: Conversation {} assigned (user: {:?}, team: {:?}) by {} at {}",
+                                conversation_id,
+                                assigned_user_id,
+                                assigned_team_id,
+                                assigned_by,
+                                timestamp
+                            );
+                            // TODO: Feature 009 will add automation rule evaluation
+                            // TODO: Feature 012 will add webhook triggering
+                        }
+                        oxidesk::SystemEvent::ConversationUnassigned {
+                            conversation_id,
+                            previous_assigned_user_id,
+                            previous_assigned_team_id,
+                            unassigned_by,
+                            timestamp,
+                        } => {
+                            tracing::info!(
+                                "Automation: Conversation {} unassigned (was user: {:?}, team: {:?}) by {} at {}",
+                                conversation_id,
+                                previous_assigned_user_id,
+                                previous_assigned_team_id,
+                                unassigned_by,
+                                timestamp
+                            );
+                            // TODO: Feature 012 will add webhook triggering
+                        }
                     }
                 }
                 Err(e) => {
@@ -230,6 +270,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/users", get(api::users::list_users))
         .route("/api/users/:id", get(api::users::get_user))
         .route("/api/users/:id", delete(api::users::delete_user))
+        // Team routes
+        .route("/api/teams", post(api::teams::create_team))
+        .route("/api/teams", get(api::teams::list_teams))
+        .route("/api/teams/:id", get(api::teams::get_team))
+        .route("/api/teams/:id/members", post(api::teams::add_team_member))
+        .route("/api/teams/:id/members", get(api::teams::get_team_members))
+        .route("/api/teams/:id/members/:user_id", delete(api::teams::remove_team_member))
+        // Assignment routes
+        .route("/api/conversations/:id/assign", post(api::assignments::assign_conversation))
+        .route("/api/conversations/:id/unassign", post(api::assignments::unassign_conversation))
+        .route("/api/conversations/unassigned", get(api::assignments::get_unassigned_conversations))
+        .route("/api/conversations/assigned", get(api::assignments::get_assigned_conversations))
+        .route("/api/teams/:id/conversations", get(api::assignments::get_team_conversations))
+        .route("/api/agents/:id/availability", put(api::assignments::update_agent_availability))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             api::middleware::require_auth,

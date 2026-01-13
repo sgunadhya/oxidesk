@@ -16,7 +16,33 @@ pub async fn create_test_contact(db: &Database, email: &str) -> Contact {
     db.create_user(&user).await.expect("Failed to create user");
     db.create_contact(&contact).await.expect("Failed to create contact");
 
+    // Create contact_channel linking this contact to the test inbox
+    let pool = db.pool();
+    let channel_id = Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO contact_channels (id, contact_id, inbox_id, email, created_at, updated_at)
+         VALUES (?, ?, 'inbox-001', ?, datetime('now'), datetime('now'))"
+    )
+    .bind(&channel_id)
+    .bind(&contact.id)
+    .bind(&normalized_email)
+    .execute(pool)
+    .await
+    .expect("Failed to create contact channel");
+
     contact
+}
+
+/// Create a test agent with the given email and name
+pub async fn create_test_agent(db: &Database, email: &str, first_name: &str) -> Agent {
+    let normalized_email = validate_and_normalize_email(email).expect("Invalid email");
+    let user = User::new(normalized_email.clone(), UserType::Agent);
+    let agent = Agent::new(user.id.clone(), first_name.to_string(), "test-password-hash".to_string());
+
+    db.create_user(&user).await.expect("Failed to create user");
+    db.create_agent(&agent).await.expect("Failed to create agent");
+
+    agent
 }
 
 /// Create a test conversation with specified status
@@ -50,7 +76,8 @@ pub async fn create_test_conversation(
     // Fetch the created conversation by ID
     let query_select = r#"
         SELECT id, reference_number, status, inbox_id, contact_id, subject,
-               resolved_at, snoozed_until, created_at, updated_at, version
+               resolved_at, snoozed_until, assigned_user_id, assigned_team_id,
+               assigned_at, assigned_by, created_at, updated_at, version
         FROM conversations
         WHERE id = ?
     "#;
@@ -71,6 +98,10 @@ pub async fn create_test_conversation(
         subject: row.try_get("subject").ok(),
         resolved_at: row.try_get("resolved_at").ok(),
         snoozed_until: row.try_get("snoozed_until").ok(),
+        assigned_user_id: row.try_get("assigned_user_id").ok(),
+        assigned_team_id: row.try_get("assigned_team_id").ok(),
+        assigned_at: row.try_get("assigned_at").ok(),
+        assigned_by: row.try_get("assigned_by").ok(),
         created_at: row.try_get("created_at").unwrap(),
         updated_at: row.try_get("updated_at").unwrap(),
         version: row.try_get("version").unwrap(),
@@ -106,7 +137,8 @@ pub async fn create_snoozed_conversation(
 
     let query_select = r#"
         SELECT id, reference_number, status, inbox_id, contact_id, subject,
-               resolved_at, snoozed_until, created_at, updated_at, version
+               resolved_at, snoozed_until, assigned_user_id, assigned_team_id,
+               assigned_at, assigned_by, created_at, updated_at, version
         FROM conversations
         WHERE id = ?
     "#;
@@ -127,6 +159,10 @@ pub async fn create_snoozed_conversation(
         subject: row.try_get("subject").ok(),
         resolved_at: row.try_get("resolved_at").ok(),
         snoozed_until: row.try_get("snoozed_until").ok(),
+        assigned_user_id: row.try_get("assigned_user_id").ok(),
+        assigned_team_id: row.try_get("assigned_team_id").ok(),
+        assigned_at: row.try_get("assigned_at").ok(),
+        assigned_by: row.try_get("assigned_by").ok(),
         created_at: row.try_get("created_at").unwrap(),
         updated_at: row.try_get("updated_at").unwrap(),
         version: row.try_get("version").unwrap(),
@@ -155,6 +191,7 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         user_id: user.id.clone(),
         first_name: "Test Agent".to_string(),
         password_hash: "hash".to_string(),
+        availability_status: oxidesk::models::AgentAvailability::Online,
     };
     db.create_agent(&agent).await.expect("Failed to create agent");
 

@@ -50,19 +50,25 @@ async fn setup_schema(db: &Database) {
         .await
         .ok();
 
-    // Create agents table
+    // Create agents table with availability_status
     sqlx::query(
         "CREATE TABLE agents (
             id TEXT PRIMARY KEY,
             user_id TEXT UNIQUE NOT NULL,
             first_name TEXT NOT NULL,
             password_hash TEXT NOT NULL,
+            availability_status TEXT NOT NULL DEFAULT 'online' CHECK(availability_status IN ('online', 'away', 'away_and_reassigning')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )"
     )
     .execute(pool)
     .await
     .expect("Failed to create agents table");
+
+    sqlx::query("CREATE INDEX idx_agents_availability ON agents(availability_status)")
+        .execute(pool)
+        .await
+        .ok();
 
     // Create contacts table
     sqlx::query(
@@ -179,7 +185,54 @@ async fn setup_schema(db: &Database) {
     .await
     .expect("Failed to create inboxes table");
 
-    // Create conversations table
+    // Create teams table
+    sqlx::query(
+        "CREATE TABLE teams (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            sla_policy_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create teams table");
+
+    sqlx::query("CREATE INDEX idx_teams_name ON teams(name)")
+        .execute(pool)
+        .await
+        .ok();
+
+    // Create team_memberships table
+    sqlx::query(
+        "CREATE TABLE team_memberships (
+            id TEXT PRIMARY KEY NOT NULL,
+            team_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('member', 'lead')),
+            joined_at TEXT NOT NULL,
+            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(team_id, user_id)
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create team_memberships table");
+
+    sqlx::query("CREATE INDEX idx_team_memberships_team ON team_memberships(team_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX idx_team_memberships_user ON team_memberships(user_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    // Create conversations table with assignment fields
     sqlx::query(
         "CREATE TABLE conversations (
             id TEXT PRIMARY KEY NOT NULL,
@@ -190,6 +243,10 @@ async fn setup_schema(db: &Database) {
             subject TEXT,
             resolved_at TEXT,
             snoozed_until TEXT,
+            assigned_user_id TEXT,
+            assigned_team_id TEXT,
+            assigned_at TEXT,
+            assigned_by TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             version INTEGER NOT NULL DEFAULT 1,
@@ -200,6 +257,16 @@ async fn setup_schema(db: &Database) {
     .execute(pool)
     .await
     .expect("Failed to create conversations table");
+
+    sqlx::query("CREATE INDEX idx_conversations_assigned_user ON conversations(assigned_user_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX idx_conversations_assigned_team ON conversations(assigned_team_id)")
+        .execute(pool)
+        .await
+        .ok();
 
     // Create trigger for auto-incrementing reference_number starting from 100
     sqlx::query(
@@ -274,6 +341,61 @@ async fn setup_schema(db: &Database) {
         .execute(pool)
         .await
         .ok();
+
+    // Create conversation_participants table
+    sqlx::query(
+        "CREATE TABLE conversation_participants (
+            id TEXT PRIMARY KEY NOT NULL,
+            conversation_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            added_at TEXT NOT NULL,
+            added_by TEXT,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(conversation_id, user_id)
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create conversation_participants table");
+
+    sqlx::query("CREATE INDEX idx_participants_conversation ON conversation_participants(conversation_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX idx_participants_user ON conversation_participants(user_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    // Create assignment_history table
+    sqlx::query(
+        "CREATE TABLE assignment_history (
+            id TEXT PRIMARY KEY NOT NULL,
+            conversation_id TEXT NOT NULL,
+            assigned_user_id TEXT,
+            assigned_team_id TEXT,
+            assigned_by TEXT NOT NULL,
+            assigned_at TEXT NOT NULL,
+            unassigned_at TEXT,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+            FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create assignment_history table");
+
+    sqlx::query("CREATE INDEX idx_assignment_history_conversation ON assignment_history(conversation_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX idx_assignment_history_user ON assignment_history(assigned_user_id)")
+        .execute(pool)
+        .await
+        .ok();
 }
 
 async fn seed_test_data(db: &Database) {
@@ -313,7 +435,7 @@ async fn seed_test_data(db: &Database) {
 
     // Insert test inbox
     sqlx::query(
-        "INSERT INTO inboxes (id, name) VALUES ('test-inbox-001', 'Test Inbox')"
+        "INSERT INTO inboxes (id, name) VALUES ('inbox-001', 'Test Inbox')"
     )
     .execute(pool)
     .await

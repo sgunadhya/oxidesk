@@ -10,7 +10,7 @@ async fn test_conversation_created_with_open_status() {
 
     // Create test contact
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let inbox_id = "test-inbox-001".to_string();
+    let inbox_id = "inbox-001".to_string();
 
     // Create conversation
     let conversation = create_test_conversation(
@@ -31,7 +31,7 @@ async fn test_conversation_has_unique_uuid() {
     let db = setup_test_db().await;
 
     let contact = create_test_contact(&db, "customer1@example.com").await;
-    let inbox_id = "test-inbox-001".to_string();
+    let inbox_id = "inbox-001".to_string();
 
     // Create two conversations
     let conv1 = create_test_conversation(
@@ -62,7 +62,7 @@ async fn test_conversation_reference_number_starts_at_100() {
     let db = setup_test_db().await;
 
     let contact = create_test_contact(&db, "customer2@example.com").await;
-    let inbox_id = "test-inbox-001".to_string();
+    let inbox_id = "inbox-001".to_string();
 
     // Clear any existing conversations to ensure we start fresh
     sqlx::query("DELETE FROM conversations")
@@ -100,7 +100,7 @@ async fn test_conversation_assigned_to_inbox() {
     let db = setup_test_db().await;
 
     let contact = create_test_contact(&db, "customer3@example.com").await;
-    let inbox_id = "test-inbox-001".to_string();
+    let inbox_id = "inbox-001".to_string();
 
     let conversation = create_test_conversation(
         &db,
@@ -127,7 +127,7 @@ async fn test_conversation_linked_to_contact() {
     let db = setup_test_db().await;
 
     let contact = create_test_contact(&db, "customer4@example.com").await;
-    let inbox_id = "test-inbox-001".to_string();
+    let inbox_id = "inbox-001".to_string();
 
     let conversation = create_test_conversation(
         &db,

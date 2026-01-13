@@ -8,6 +8,44 @@ pub enum UserType {
     Contact,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "TEXT", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAvailability {
+    Online,
+    Away,
+    AwayAndReassigning,
+}
+
+impl Default for AgentAvailability {
+    fn default() -> Self {
+        AgentAvailability::Online
+    }
+}
+
+impl std::fmt::Display for AgentAvailability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AgentAvailability::Online => write!(f, "online"),
+            AgentAvailability::Away => write!(f, "away"),
+            AgentAvailability::AwayAndReassigning => write!(f, "away_and_reassigning"),
+        }
+    }
+}
+
+impl std::str::FromStr for AgentAvailability {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "online" => Ok(AgentAvailability::Online),
+            "away" => Ok(AgentAvailability::Away),
+            "away_and_reassigning" => Ok(AgentAvailability::AwayAndReassigning),
+            _ => Err(format!("Invalid agent availability: {}", s)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: String,
@@ -24,6 +62,7 @@ pub struct Agent {
     pub first_name: String,
     #[serde(skip_serializing)]
     pub password_hash: String,
+    pub availability_status: AgentAvailability,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,6 +214,7 @@ impl Agent {
             user_id,
             first_name,
             password_hash,
+            availability_status: AgentAvailability::default(),
         }
     }
 }

@@ -13,7 +13,7 @@ async fn test_agent_can_update_open_to_resolved() {
 
     // Create test contact and conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let inbox_id = "test-inbox-001".to_string();
+    let inbox_id = "inbox-001".to_string();
     let conversation = create_test_conversation(
         &db,
         inbox_id.clone(),
@@ -58,7 +58,7 @@ async fn test_resolved_at_timestamp_set_on_status_change() {
     let event_bus = EventBus::new(10);
 
     let contact = create_test_contact(&db, "customer2@example.com").await;
-    let inbox_id = "test-inbox-001".to_string();
+    let inbox_id = "inbox-001".to_string();
     let conversation = create_test_conversation(
         &db,
         inbox_id.clone(),
@@ -101,7 +101,7 @@ async fn test_invalid_status_transition_rejected() {
     let event_bus = EventBus::new(10);
 
     let contact = create_test_contact(&db, "customer3@example.com").await;
-    let inbox_id = "test-inbox-001".to_string();
+    let inbox_id = "inbox-001".to_string();
     let conversation = create_test_conversation(
         &db,
         inbox_id.clone(),
@@ -139,7 +139,7 @@ async fn test_automation_rules_evaluated_on_status_change() {
     let mut receiver = event_bus.subscribe();
 
     let contact = create_test_contact(&db, "customer5@example.com").await;
-    let inbox_id = "test-inbox-001".to_string();
+    let inbox_id = "inbox-001".to_string();
     let conversation = create_test_conversation(
         &db,
         inbox_id.clone(),
