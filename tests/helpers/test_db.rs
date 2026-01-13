@@ -396,6 +396,53 @@ async fn setup_schema(db: &Database) {
         .execute(pool)
         .await
         .ok();
+
+    // Create tags table
+    sqlx::query(
+        "CREATE TABLE tags (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            color TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create tags table");
+
+    sqlx::query("CREATE INDEX idx_tags_name ON tags(name)")
+        .execute(pool)
+        .await
+        .ok();
+
+    // Create conversation_tags table
+    sqlx::query(
+        "CREATE TABLE conversation_tags (
+            conversation_id TEXT NOT NULL,
+            tag_id TEXT NOT NULL,
+            added_by TEXT NOT NULL,
+            added_at TEXT NOT NULL,
+            PRIMARY KEY (conversation_id, tag_id),
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+            FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create conversation_tags table");
+
+    sqlx::query("CREATE INDEX idx_conversation_tags_conversation ON conversation_tags(conversation_id)")
+        .execute(pool)
+        .await
+        .ok();
+
+    sqlx::query("CREATE INDEX idx_conversation_tags_tag ON conversation_tags(tag_id)")
+        .execute(pool)
+        .await
+        .ok();
 }
 
 async fn seed_test_data(db: &Database) {
@@ -417,7 +464,12 @@ async fn seed_test_data(db: &Database) {
         ('10000000-0000-0000-0000-000000000001', 'users:read', 'View users', datetime('now'), datetime('now')),
         ('10000000-0000-0000-0000-000000000002', 'users:create', 'Create users', datetime('now'), datetime('now')),
         ('11000000-0000-0000-0000-000000000001', 'agents:read', 'View agents', datetime('now'), datetime('now')),
-        ('11000000-0000-0000-0000-000000000002', 'agents:create', 'Create agents', datetime('now'), datetime('now'))"
+        ('11000000-0000-0000-0000-000000000002', 'agents:create', 'Create agents', datetime('now'), datetime('now')),
+        ('tag-perm-001', 'tags:create', 'Create new tags', datetime('now'), datetime('now')),
+        ('tag-perm-002', 'tags:read', 'View tags', datetime('now'), datetime('now')),
+        ('tag-perm-003', 'tags:update', 'Update tag properties', datetime('now'), datetime('now')),
+        ('tag-perm-004', 'tags:delete', 'Delete tags', datetime('now'), datetime('now')),
+        ('tag-perm-005', 'conversations:update_tags', 'Modify conversation tags', datetime('now'), datetime('now'))"
     )
     .execute(pool)
     .await

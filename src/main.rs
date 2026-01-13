@@ -230,6 +230,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
                             // TODO: Feature 012 will add webhook triggering
                         }
+                        oxidesk::SystemEvent::ConversationTagsChanged {
+                            conversation_id,
+                            previous_tags,
+                            new_tags,
+                            changed_by,
+                            timestamp,
+                        } => {
+                            tracing::info!(
+                                "Automation: Conversation {} tags changed by {} at {} (was: {:?}, now: {:?})",
+                                conversation_id,
+                                changed_by,
+                                timestamp,
+                                previous_tags,
+                                new_tags
+                            );
+                            // TODO: Feature 009 will add automation rule evaluation
+                            // TODO: Feature 012 will add webhook triggering
+                        }
                     }
                 }
                 Err(e) => {
@@ -284,6 +302,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/conversations/assigned", get(api::assignments::get_assigned_conversations))
         .route("/api/teams/:id/conversations", get(api::assignments::get_team_conversations))
         .route("/api/agents/:id/availability", put(api::assignments::update_agent_availability))
+        // Tag management routes
+        .route("/api/tags", post(api::tags::create_tag))
+        .route("/api/tags", get(api::tags::list_tags))
+        .route("/api/tags/:id", get(api::tags::get_tag))
+        .route("/api/tags/:id", patch(api::tags::update_tag))
+        .route("/api/tags/:id", delete(api::tags::delete_tag))
+        // Conversation tagging routes
+        .route("/api/conversations/:id/tags", get(api::conversation_tags::get_conversation_tags))
+        .route("/api/conversations/:id/tags", post(api::conversation_tags::add_tags_to_conversation))
+        .route("/api/conversations/:id/tags/:tag_id", delete(api::conversation_tags::remove_tag_from_conversation))
+        .route("/api/conversations/:id/tags", put(api::conversation_tags::replace_conversation_tags))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             api::middleware::require_auth,

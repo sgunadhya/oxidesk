@@ -11,6 +11,8 @@ pub mod message_service;
 pub mod team_service;
 pub mod notification_service;
 pub mod assignment_service;
+pub mod tag_service;
+pub mod conversation_tag_service;
 
 pub use auth::*;
 pub use email_validator::*;
@@ -20,3 +22,5 @@ pub use message_service::*;
 pub use team_service::*;
 pub use notification_service::*;
 pub use assignment_service::*;
+pub use tag_service::*;
+pub use conversation_tag_service::*;

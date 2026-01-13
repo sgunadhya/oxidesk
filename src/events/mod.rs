@@ -44,6 +44,13 @@ pub enum SystemEvent {
         unassigned_by: String,
         timestamp: String, // ISO 8601
     },
+    ConversationTagsChanged {
+        conversation_id: String,
+        previous_tags: Vec<String>,
+        new_tags: Vec<String>,
+        changed_by: String,
+        timestamp: String, // ISO 8601
+    },
 }
 
 /// Event bus for publishing and subscribing to system events
