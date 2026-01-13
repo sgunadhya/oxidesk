@@ -1,15 +1,17 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
-    models::{Message, IncomingMessageRequest, SendMessageRequest},
-    services::DeliveryService,
+    models::{Message, IncomingMessageRequest, SendMessageRequest, UserNotification},
+    services::{DeliveryService, NotificationService, connection_manager::ConnectionManager},
     events::{EventBus, SystemEvent},
 };
+use std::sync::Arc;
 
 pub struct MessageService {
     db: Database,
     delivery_service: Option<DeliveryService>,
     event_bus: Option<EventBus>,
+    connection_manager: Option<Arc<dyn ConnectionManager>>,
 }
 
 impl MessageService {
@@ -18,6 +20,7 @@ impl MessageService {
             db,
             delivery_service: None,
             event_bus: None,
+            connection_manager: None,
         }
     }
 
@@ -26,6 +29,7 @@ impl MessageService {
             db,
             delivery_service: Some(delivery_service),
             event_bus: None,
+            connection_manager: None,
         }
     }
 
@@ -38,6 +42,21 @@ impl MessageService {
             db,
             delivery_service: Some(delivery_service),
             event_bus: Some(event_bus),
+            connection_manager: None,
+        }
+    }
+
+    pub fn with_all_services(
+        db: Database,
+        delivery_service: DeliveryService,
+        event_bus: EventBus,
+        connection_manager: Arc<dyn ConnectionManager>,
+    ) -> Self {
+        Self {
+            db,
+            delivery_service: Some(delivery_service),
+            event_bus: Some(event_bus),
+            connection_manager: Some(connection_manager),
         }
     }
 
@@ -125,7 +144,7 @@ impl MessageService {
         let message = Message::new_outgoing(
             conversation_id.clone(),
             request.content,
-            agent_id,
+            agent_id.clone(),
         );
 
         // Save to database
@@ -154,6 +173,47 @@ impl MessageService {
                 "Delivery service not configured, message not queued: id={}",
                 message.id
             );
+        }
+
+        // Parse @mentions and create notifications
+        let mention_usernames = NotificationService::extract_mentions(&message.content);
+        if !mention_usernames.is_empty() {
+            // Batch verify usernames
+            let mentioned_users = self.db.get_users_by_usernames(&mention_usernames).await?;
+
+            // Create notifications (filter self-mentions)
+            let mut notifications = Vec::new();
+            for user in mentioned_users {
+                if user.id == message.author_id {
+                    continue; // Skip self-mention
+                }
+
+                let notification = UserNotification::new_mention(
+                    user.id.clone(),
+                    conversation_id.clone(),
+                    message.id.clone(),
+                    message.author_id.clone(),
+                );
+
+                self.db.create_notification(&notification).await?;
+                notifications.push(notification);
+            }
+
+            // Send real-time notifications (best-effort)
+            if let Some(ref connection_manager) = self.connection_manager {
+                for notification in notifications {
+                    let connection_manager = connection_manager.clone();
+                    let notification_clone = notification.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = NotificationService::send_realtime_notification(
+                            &notification_clone,
+                            &connection_manager,
+                        ).await {
+                            tracing::debug!("Failed to send real-time notification: {}", e);
+                        }
+                    });
+                }
+            }
         }
 
         Ok(message)
@@ -223,6 +283,7 @@ impl Clone for MessageService {
             db: self.db.clone(),
             delivery_service: self.delivery_service.clone(),
             event_bus: self.event_bus.clone(),
+            connection_manager: self.connection_manager.clone(),
         }
     }
 }

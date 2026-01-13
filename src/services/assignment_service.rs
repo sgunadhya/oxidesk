@@ -2,14 +2,16 @@ use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
     events::{EventBus, SystemEvent},
-    models::{AgentAvailability, AssignmentHistory, Conversation, ConversationStatus, Permission},
-    services::{notification_service::NotificationService, SlaService},
+    models::{AgentAvailability, AssignmentHistory, Conversation, ConversationStatus, Permission, UserNotification},
+    services::{connection_manager::ConnectionManager, notification_service::NotificationService, SlaService},
 };
+use std::sync::Arc;
 
 pub struct AssignmentService {
     db: Database,
     event_bus: EventBus,
     notification_service: NotificationService,
+    connection_manager: Arc<dyn ConnectionManager>,
     sla_service: Option<SlaService>,
 }
 
@@ -18,11 +20,13 @@ impl AssignmentService {
         db: Database,
         event_bus: EventBus,
         notification_service: NotificationService,
+        connection_manager: Arc<dyn ConnectionManager>,
     ) -> Self {
         Self {
             db,
             event_bus,
             notification_service,
+            connection_manager,
             sla_service: None,
         }
     }
@@ -89,15 +93,34 @@ impl AssignmentService {
             timestamp: chrono::Utc::now().to_rfc3339(),
         });
 
-        // 7. Send notification (async, fire-and-forget)
-        let notification_service = self.notification_service.clone();
-        let user_id = agent_id.to_string();
-        let conv_id = conversation_id.to_string();
+        // 7. Create notification in database
+        let notification = UserNotification::new_assignment(
+            agent_id.to_string(),
+            conversation_id.to_string(),
+            agent_id.to_string(), // Self-assignment: assigner = assignee
+        );
+
+        if let Err(e) = self.db.create_notification(&notification).await {
+            tracing::error!("Failed to create assignment notification: {}", e);
+            // Continue execution - notification failure shouldn't fail assignment
+        }
+
+        // 8. Send real-time notification (best-effort, fire-and-forget)
+        let connection_manager = self.connection_manager.clone();
+        let notification_clone = notification.clone();
         tokio::spawn(async move {
-            let _ = notification_service.notify_assignment(&user_id, &conv_id).await;
+            if let Err(e) = NotificationService::send_realtime_notification(
+                &notification_clone,
+                &connection_manager,
+            )
+            .await
+            {
+                tracing::debug!("Failed to send real-time notification: {}", e);
+                // This is expected if user is not connected - notification is still in DB
+            }
         });
 
-        // 8. Return updated conversation
+        // 9. Return updated conversation
         self.db
             .get_conversation_by_id(conversation_id)
             .await?
@@ -168,15 +191,34 @@ impl AssignmentService {
             timestamp: chrono::Utc::now().to_rfc3339(),
         });
 
-        // 8. Send notification to target agent (async, fire-and-forget)
-        let notification_service = self.notification_service.clone();
-        let user_id = target_agent_id.to_string();
-        let conv_id = conversation_id.to_string();
+        // 8. Create notification in database
+        let notification = UserNotification::new_assignment(
+            target_agent_id.to_string(),
+            conversation_id.to_string(),
+            assigning_agent_id.to_string(),
+        );
+
+        if let Err(e) = self.db.create_notification(&notification).await {
+            tracing::error!("Failed to create assignment notification: {}", e);
+            // Continue execution - notification failure shouldn't fail assignment
+        }
+
+        // 9. Send real-time notification (best-effort, fire-and-forget)
+        let connection_manager = self.connection_manager.clone();
+        let notification_clone = notification.clone();
         tokio::spawn(async move {
-            let _ = notification_service.notify_assignment(&user_id, &conv_id).await;
+            if let Err(e) = NotificationService::send_realtime_notification(
+                &notification_clone,
+                &connection_manager,
+            )
+            .await
+            {
+                tracing::debug!("Failed to send real-time notification: {}", e);
+                // This is expected if user is not connected - notification is still in DB
+            }
         });
 
-        // 9. Return updated conversation
+        // 10. Return updated conversation
         self.db
             .get_conversation_by_id(conversation_id)
             .await?

@@ -14,5 +14,6 @@ pub mod availability;
 pub mod sla;
 pub mod automation;
 pub mod macros;
+pub mod notifications;
 
 pub use middleware::*;

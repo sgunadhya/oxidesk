@@ -6,8 +6,8 @@ use oxidesk::{
     config::Config,
     database::Database,
     models::{self, *},
-    services::{self, *},
-    web, 
+    services::{self, *, connection_manager::{ConnectionManager, InMemoryConnectionManager}},
+    web,
 };
 // Re-import initialize_admin for main.rs usage if it was public in lib? 
 // initialize_admin was defined in main.rs (line 305). Wait.
@@ -19,6 +19,7 @@ use axum::{
     routing::{get, post, delete, patch, put},
     Router,
 };
+use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -100,6 +101,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     tracing::info!("SLA service initialized");
 
+    // Initialize connection manager
+    let connection_manager: Arc<dyn ConnectionManager> = Arc::new(InMemoryConnectionManager::new());
+    tracing::info!("Connection manager initialized");
+
     // Create application state
     let state = AppState {
         db: db.clone(),
@@ -109,6 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         notification_service: notification_service.clone(),
         availability_service: availability_service.clone(),
         sla_service: sla_service.clone(),
+        connection_manager,
     };
 
     // Start session cleanup background task
@@ -648,6 +654,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/macros/:id/access", get(api::macros::list_macro_access))
         .route("/api/macros/:id/access/:entity_type/:entity_id", delete(api::macros::revoke_macro_access))
         .route("/api/macros/:id/logs", get(api::macros::get_macro_logs))
+        // Notification routes
+        .route("/api/notifications", get(api::notifications::list_notifications))
+        .route("/api/notifications/unread-count", get(api::notifications::get_unread_count))
+        .route("/api/notifications/stream", get(api::notifications::notification_stream))
+        .route("/api/notifications/:id/read", put(api::notifications::mark_notification_as_read))
+        .route("/api/notifications/read-all", put(api::notifications::mark_all_notifications_as_read))
         // Add activity tracking middleware (before auth middleware)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -683,7 +695,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(protected)
         .merge(web_protected)
         .merge(api::messages::routes())
-        .with_state(state);
+        .with_state(state.clone());
+
+    // Start notification cleanup background task
+    {
+        let cleanup_db = db.clone();
+        tokio::spawn(async move {
+            use tokio::time::{interval, Duration};
+            let mut cleanup_interval = interval(Duration::from_secs(24 * 60 * 60)); // 24 hours
+
+            tracing::info!("Notification cleanup task started (24-hour interval, 30-day retention)");
+
+            loop {
+                cleanup_interval.tick().await;
+
+                match oxidesk::NotificationService::cleanup_old_notifications(&cleanup_db, Some(30)).await {
+                    Ok(count) => {
+                        tracing::info!("Notification cleanup completed: {} old notifications deleted", count);
+                    }
+                    Err(e) => {
+                        tracing::error!("Notification cleanup failed: {}", e);
+                    }
+                }
+            }
+        });
+    }
 
     // Start server
     let addr = config.server_address();
