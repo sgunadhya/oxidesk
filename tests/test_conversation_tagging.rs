@@ -6,7 +6,8 @@ use helpers::*;
 
 #[tokio::test]
 async fn test_tag_crud_operations() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create a tag
     let tag1 = create_test_tag(&db, "Bug", Some("Technical issues".to_string()), Some("#FF0000".to_string())).await;
@@ -45,7 +46,8 @@ async fn test_tag_crud_operations() {
 
 #[tokio::test]
 async fn test_add_tags_to_conversation() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -93,7 +95,8 @@ async fn test_add_tags_to_conversation() {
 
 #[tokio::test]
 async fn test_remove_tag_from_conversation() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -132,7 +135,8 @@ async fn test_remove_tag_from_conversation() {
 
 #[tokio::test]
 async fn test_replace_conversation_tags() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -174,7 +178,8 @@ async fn test_replace_conversation_tags() {
 
 #[tokio::test]
 async fn test_get_conversations_by_tag() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -208,7 +213,8 @@ async fn test_get_conversations_by_tag() {
 
 #[tokio::test]
 async fn test_tag_deletion_cascades() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -239,7 +245,8 @@ async fn test_tag_deletion_cascades() {
 
 #[tokio::test]
 async fn test_get_conversations_by_multiple_tags_or() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -276,7 +283,8 @@ async fn test_get_conversations_by_multiple_tags_or() {
 
 #[tokio::test]
 async fn test_get_conversations_by_multiple_tags_and() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;

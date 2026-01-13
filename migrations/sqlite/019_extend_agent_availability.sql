@@ -15,11 +15,13 @@ CREATE TABLE agents_new (
     last_login_at TEXT,
     last_activity_at TEXT,
     away_since TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Copy data from old table (map existing values)
-INSERT INTO agents_new (id, user_id, first_name, password_hash, availability_status, last_login_at, last_activity_at, away_since)
+INSERT INTO agents_new (id, user_id, first_name, password_hash, availability_status, last_login_at, last_activity_at, away_since, created_at, updated_at)
 SELECT
     id,
     user_id,
@@ -33,7 +35,9 @@ SELECT
     END,
     NULL, -- last_login_at
     NULL, -- last_activity_at
-    NULL  -- away_since
+    NULL, -- away_since
+    datetime('now'), -- created_at
+    datetime('now')  -- updated_at
 FROM agents;
 
 -- Drop old table

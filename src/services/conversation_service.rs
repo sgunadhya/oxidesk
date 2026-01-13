@@ -136,6 +136,7 @@ pub async fn create_conversation(
     db: &Database,
     auth_user: &AuthenticatedUser,
     request: CreateConversation,
+    sla_service: Option<&crate::services::SlaService>,
 ) -> ApiResult<Conversation> {
     // Check permission
     let has_permission = auth_user.is_admin()
@@ -163,6 +164,43 @@ pub async fn create_conversation(
 
     // Create conversation
     let conversation = db.create_conversation(&request).await?;
+
+    // Auto-apply SLA if conversation is assigned to a team with a default SLA policy
+    if let Some(sla_svc) = sla_service {
+        if let Some(team_id) = &conversation.assigned_team_id {
+            if let Ok(Some(team)) = db.get_team_by_id(team_id).await {
+                if let Some(policy_id) = team.sla_policy_id {
+                    let base_timestamp = chrono::Utc::now().to_rfc3339();
+
+                    tracing::info!(
+                        "Auto-applying SLA policy {} to conversation {} (team: {})",
+                        policy_id,
+                        conversation.id,
+                        team_id
+                    );
+
+                    match sla_svc.apply_sla(&conversation.id, &policy_id, &base_timestamp).await {
+                        Ok(_) => {
+                            tracing::info!(
+                                "Successfully auto-applied SLA policy {} to conversation {}",
+                                policy_id,
+                                conversation.id
+                            );
+                        }
+                        Err(e) => {
+                            // Log error but don't fail conversation creation
+                            tracing::error!(
+                                "Failed to auto-apply SLA policy {} to conversation {}: {}",
+                                policy_id,
+                                conversation.id,
+                                e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     Ok(conversation)
 }

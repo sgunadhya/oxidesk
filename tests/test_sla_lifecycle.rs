@@ -13,7 +13,8 @@ use oxidesk::{
 
 #[tokio::test]
 async fn test_apply_sla_on_team_assignment() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
@@ -57,7 +58,8 @@ async fn test_apply_sla_on_team_assignment() {
 
 #[tokio::test]
 async fn test_first_response_deadline_calculation() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy with 2 hour first response time
     let policy = create_test_sla_policy(&db, "Fast Response", "2h", "24h", "4h").await;
@@ -100,7 +102,8 @@ async fn test_first_response_deadline_calculation() {
 
 #[tokio::test]
 async fn test_resolution_deadline_calculation() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy with 24 hour resolution time
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
@@ -143,7 +146,8 @@ async fn test_resolution_deadline_calculation() {
 
 #[tokio::test]
 async fn test_sla_events_created_as_pending() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
@@ -200,7 +204,8 @@ async fn test_sla_events_created_as_pending() {
 
 #[tokio::test]
 async fn test_no_sla_if_team_has_no_policy() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create team without SLA policy
     let team = Team::new("Support Team".to_string(), Some("Main support team".to_string()));
@@ -228,7 +233,8 @@ async fn test_no_sla_if_team_has_no_policy() {
 
 #[tokio::test]
 async fn test_first_response_met_on_agent_message() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
@@ -279,7 +285,8 @@ async fn test_first_response_met_on_agent_message() {
 
 #[tokio::test]
 async fn test_first_response_met_timestamp_recorded() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
@@ -340,7 +347,8 @@ async fn test_first_response_met_timestamp_recorded() {
 
 #[tokio::test]
 async fn test_applied_sla_remains_pending_after_first_response() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
@@ -390,7 +398,8 @@ async fn test_applied_sla_remains_pending_after_first_response() {
 
 #[tokio::test]
 async fn test_first_response_breach_detected() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy with very short deadline (1 minute)
     let policy = create_test_sla_policy(&db, "Urgent", "1m", "10m", "2m").await;
@@ -433,7 +442,8 @@ async fn test_first_response_breach_detected() {
 
 #[tokio::test]
 async fn test_first_response_breached_at_timestamp() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy with 1 minute deadline
     let policy = create_test_sla_policy(&db, "Urgent", "1m", "10m", "2m").await;
@@ -491,7 +501,8 @@ async fn test_first_response_breached_at_timestamp() {
 
 #[tokio::test]
 async fn test_resolution_breach_detected() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy with short resolution time
     let policy = create_test_sla_policy(&db, "Urgent", "10m", "1m", "5m").await;
@@ -533,7 +544,8 @@ async fn test_resolution_breach_detected() {
 
 #[tokio::test]
 async fn test_resolution_breach_updates_applied_sla_status() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Urgent", "10m", "1m", "5m").await;
@@ -569,7 +581,8 @@ async fn test_resolution_breach_updates_applied_sla_status() {
 
 #[tokio::test]
 async fn test_multiple_breaches_on_same_sla() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy with both deadlines in the past
     let policy = create_test_sla_policy(&db, "Urgent", "1m", "2m", "1m").await;
@@ -614,7 +627,8 @@ async fn test_multiple_breaches_on_same_sla() {
 
 #[tokio::test]
 async fn test_agent_reply_after_breach_stays_breached() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Urgent", "1m", "10m", "2m").await;
@@ -677,7 +691,8 @@ async fn test_agent_reply_after_breach_stays_breached() {
 
 #[tokio::test]
 async fn test_resolution_met_on_conversation_resolved() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "10m", "30m", "5m").await;
@@ -733,7 +748,8 @@ async fn test_resolution_met_on_conversation_resolved() {
 
 #[tokio::test]
 async fn test_resolution_met_timestamp_recorded() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "10m", "30m", "5m").await;
@@ -796,7 +812,8 @@ async fn test_resolution_met_timestamp_recorded() {
 
 #[tokio::test]
 async fn test_applied_sla_status_met_when_all_events_met() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "10m", "30m", "5m").await;
@@ -867,7 +884,8 @@ async fn test_applied_sla_status_met_when_all_events_met() {
 
 #[tokio::test]
 async fn test_next_response_event_created_on_contact_reply() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "10m", "30m", "5m").await;
@@ -926,7 +944,8 @@ async fn test_next_response_event_created_on_contact_reply() {
 
 #[tokio::test]
 async fn test_next_response_deadline_calculation() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy with 5 minute next response time
     let policy = create_test_sla_policy(&db, "Standard", "10m", "30m", "5m").await;
@@ -990,7 +1009,8 @@ async fn test_next_response_deadline_calculation() {
 
 #[tokio::test]
 async fn test_only_one_pending_next_response_event() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "10m", "30m", "5m").await;
@@ -1077,7 +1097,8 @@ async fn test_only_one_pending_next_response_event() {
 
 #[tokio::test]
 async fn test_next_response_met_on_agent_reply() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "10m", "30m", "5m").await;
@@ -1149,7 +1170,8 @@ async fn test_next_response_met_on_agent_reply() {
 
 #[tokio::test]
 async fn test_full_sla_lifecycle() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy
     let policy = create_test_sla_policy(&db, "Standard", "10m", "30m", "5m").await;
@@ -1244,7 +1266,8 @@ async fn test_full_sla_lifecycle() {
 
 #[tokio::test]
 async fn test_sla_breach_workflow() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create SLA policy with short deadlines
     let policy = create_test_sla_policy(&db, "Urgent", "1m", "2m", "1m").await;

@@ -10,11 +10,12 @@ use oxidesk::{
 };
 use sqlx::Row;
 
-async fn setup() -> (Database, EventBus, AvailabilityService) {
-    let db = setup_test_db().await;
+async fn setup() -> (TestDatabase, EventBus, AvailabilityService) {
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
     let event_bus = EventBus::new(100); // Capacity of 100 events
     let availability_service = AvailabilityService::new(db.clone(), event_bus.clone());
-    (db, event_bus, availability_service)
+    (test_db, event_bus, availability_service)
 }
 
 /// Helper to create a test user for agent
@@ -45,7 +46,8 @@ async fn create_test_user(db: &Database, user_id: &str, email: &str) -> User {
 
 #[tokio::test]
 async fn test_manual_availability_change_to_online() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and agent
     let user_id = "test-user-001";
@@ -77,12 +79,13 @@ async fn test_manual_availability_change_to_online() {
     assert_eq!(log.1, Some("offline".to_string()));
     assert_eq!(log.2, Some("online".to_string()));
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_manual_availability_change_to_away_manual() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and agent
     let user_id = "test-user-002";
@@ -110,12 +113,13 @@ async fn test_manual_availability_change_to_away_manual() {
     assert_eq!(log.1, Some("online".to_string()));
     assert_eq!(log.2, Some("away_manual".to_string()));
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_return_to_online_from_away() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and agent in away state
     let user_id = "test-user-003";
@@ -139,12 +143,13 @@ async fn test_return_to_online_from_away() {
     assert!(response.away_since.is_none(), "away_since should be cleared");
     assert!(response.last_activity_at.is_some(), "last_activity_at should be updated");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_automatic_away_transition() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and online agent with old activity timestamp
     let user_id = "test-user-004";
@@ -178,12 +183,13 @@ async fn test_automatic_away_transition() {
     assert_eq!(log.1, Some("online".to_string()));
     assert_eq!(log.2, Some("away".to_string()));
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_conversations_remain_assigned_on_away() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user, agent, and contact
     let user_id = "test-user-005";
@@ -222,12 +228,13 @@ async fn test_conversations_remain_assigned_on_away() {
     let assigned_count_after = get_assigned_conversation_count(&db, user_id).await;
     assert_eq!(assigned_count_after, 1, "Conversations should remain assigned when going away");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_max_idle_reassignment() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user, agent, and contact
     let user_id = "test-user-006";
@@ -271,12 +278,13 @@ async fn test_max_idle_reassignment() {
     let assigned_count_after = get_assigned_conversation_count(&db, user_id).await;
     assert_eq!(assigned_count_after, 0, "Conversations should be unassigned");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_conversations_return_to_team_inbox() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user, agent, and contact
     let user_id = "test-user-007";
@@ -319,12 +327,13 @@ async fn test_conversations_return_to_team_inbox() {
     let assigned_user_id: Option<String> = row.try_get(0).ok();
     assert!(assigned_user_id.is_none(), "Conversation should not be assigned to any user (back to team inbox)");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_agent_goes_offline_after_reassignment() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and agent in away state
     let user_id = "test-user-008";
@@ -353,12 +362,13 @@ async fn test_agent_goes_offline_after_reassignment() {
     assert_eq!(log.0, "availability_changed");
     assert_eq!(log.2, Some("offline".to_string()));
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_login_event_logging() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and agent
     let user_id = "test-user-009";
@@ -384,12 +394,13 @@ async fn test_login_event_logging() {
     let log = get_latest_activity_log(&db, &agent.id).await.unwrap();
     assert_eq!(log.0, "agent_login");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_logout_event_logging() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and agent
     let user_id = "test-user-010";
@@ -413,12 +424,13 @@ async fn test_logout_event_logging() {
     let log = get_latest_activity_log(&db, &agent.id).await.unwrap();
     assert_eq!(log.0, "agent_logout");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_availability_change_logging() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and agent
     let user_id = "test-user-011";
@@ -440,12 +452,13 @@ async fn test_availability_change_logging() {
     let log_count = get_activity_log_count(&db, &agent.id).await;
     assert_eq!(log_count, 2, "Should have 2 activity log entries");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_activity_tracking() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and agent
     let user_id = "test-user-012";
@@ -465,12 +478,13 @@ async fn test_activity_tracking() {
 
     assert!(agent_updated.last_activity_at.is_some(), "last_activity_at should be set");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_invalid_status_transition_rejection() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and agent
     let user_id = "test-user-013";
@@ -484,12 +498,13 @@ async fn test_invalid_status_transition_rejection() {
 
     assert!(result.is_err(), "Should reject manual setting of away_and_reassigning");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_activity_logs_pagination() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create test user and agent
     let user_id = "test-user-014";
@@ -526,12 +541,13 @@ async fn test_activity_logs_pagination() {
 
     assert_eq!(response_page2.logs.len(), 5);
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_config_value_loading() {
-    let (db, _event_bus, _availability_service) = setup().await;
+    let (test_db, _event_bus, _availability_service) = setup().await;
+    let db = test_db.db();
 
     // Verify seeded config values
     let inactivity_timeout = get_config_value(&db, "availability.inactivity_timeout_seconds").await;
@@ -547,12 +563,13 @@ async fn test_config_value_loading() {
     let updated_value = get_config_value(&db, "availability.inactivity_timeout_seconds").await;
     assert_eq!(updated_value, Some("600".to_string()));
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_only_online_agents_transition_to_away() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create multiple agents in different states
     let user_id_online = "test-user-015";
@@ -580,12 +597,13 @@ async fn test_only_online_agents_transition_to_away() {
     assert_eq!(affected.len(), 1);
     assert_eq!(affected[0], agent_online.id);
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_only_away_agents_transition_to_offline() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create agents in different states
     let user_id_away = "test-user-018";
@@ -613,12 +631,13 @@ async fn test_only_away_agents_transition_to_offline() {
         .expect("Agent not found");
     assert_eq!(agent_online_updated.availability_status, AgentAvailability::Online);
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_away_manual_agents_also_reassigned() {
-    let (db, _event_bus, availability_service) = setup().await;
+    let (test_db, _event_bus, availability_service) = setup().await;
+    let db = test_db.db();
 
     // Create away_manual agent with old away_since
     let user_id = "test-user-020";
@@ -665,5 +684,5 @@ async fn test_away_manual_agents_also_reassigned() {
         .expect("Agent not found");
     assert_eq!(agent_updated.availability_status, AgentAvailability::Offline);
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }

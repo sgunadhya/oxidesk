@@ -1431,13 +1431,14 @@ impl Database {
 
     pub async fn create_team(&self, team: &Team) -> ApiResult<()> {
         sqlx::query(
-            "INSERT INTO teams (id, name, description, sla_policy_id, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO teams (id, name, description, sla_policy_id, business_hours, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&team.id)
         .bind(&team.name)
         .bind(&team.description)
         .bind(&team.sla_policy_id)
+        .bind(&team.business_hours)
         .bind(&team.created_at)
         .bind(&team.updated_at)
         .execute(&self.pool)
@@ -1456,7 +1457,7 @@ impl Database {
 
     pub async fn get_team_by_id(&self, id: &str) -> ApiResult<Option<Team>> {
         let row = sqlx::query(
-            "SELECT id, name, description, sla_policy_id, created_at, updated_at
+            "SELECT id, name, description, sla_policy_id, business_hours, created_at, updated_at
              FROM teams WHERE id = ?",
         )
         .bind(id)
@@ -1469,6 +1470,7 @@ impl Database {
                 name: row.try_get("name")?,
                 description: row.try_get("description").ok(),
                 sla_policy_id: row.try_get("sla_policy_id").ok(),
+                business_hours: row.try_get("business_hours").ok(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             }))
@@ -1479,7 +1481,7 @@ impl Database {
 
     pub async fn list_teams(&self) -> ApiResult<Vec<Team>> {
         let rows = sqlx::query(
-            "SELECT id, name, description, sla_policy_id, created_at, updated_at
+            "SELECT id, name, description, sla_policy_id, business_hours, created_at, updated_at
              FROM teams ORDER BY name ASC",
         )
         .fetch_all(&self.pool)
@@ -1492,6 +1494,7 @@ impl Database {
                 name: row.try_get("name")?,
                 description: row.try_get("description").ok(),
                 sla_policy_id: row.try_get("sla_policy_id").ok(),
+                business_hours: row.try_get("business_hours").ok(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             });
@@ -1597,7 +1600,7 @@ impl Database {
 
     pub async fn get_user_teams(&self, user_id: &str) -> ApiResult<Vec<Team>> {
         let rows = sqlx::query(
-            "SELECT t.id, t.name, t.description, t.sla_policy_id, t.created_at, t.updated_at
+            "SELECT t.id, t.name, t.description, t.sla_policy_id, t.business_hours, t.created_at, t.updated_at
              FROM teams t
              INNER JOIN team_memberships tm ON t.id = tm.team_id
              WHERE tm.user_id = ?
@@ -1614,6 +1617,7 @@ impl Database {
                 name: row.try_get("name")?,
                 description: row.try_get("description").ok(),
                 sla_policy_id: row.try_get("sla_policy_id").ok(),
+                business_hours: row.try_get("business_hours").ok(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             });

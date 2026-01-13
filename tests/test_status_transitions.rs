@@ -7,7 +7,8 @@ use helpers::*;
 
 #[tokio::test]
 async fn test_agent_can_update_open_to_resolved() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
     let auth_user = create_test_auth_user(&db).await;
     let event_bus = EventBus::new(10); // Minimal event bus
 
@@ -53,7 +54,8 @@ async fn test_agent_can_update_open_to_resolved() {
 
 #[tokio::test]
 async fn test_resolved_at_timestamp_set_on_status_change() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
     let auth_user = create_test_auth_user(&db).await;
     let event_bus = EventBus::new(10);
 
@@ -96,7 +98,8 @@ async fn test_resolved_at_timestamp_set_on_status_change() {
 
 #[tokio::test]
 async fn test_invalid_status_transition_rejected() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
     let auth_user = create_test_auth_user(&db).await;
     let event_bus = EventBus::new(10);
 
@@ -131,7 +134,8 @@ async fn test_invalid_status_transition_rejected() {
 
 #[tokio::test]
 async fn test_automation_rules_evaluated_on_status_change() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
     let auth_user = create_test_auth_user(&db).await;
 
     // Create event bus with subscriber

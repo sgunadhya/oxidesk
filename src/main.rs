@@ -133,6 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start automation listener background task
     let automation_event_bus = event_bus.clone();
     let automation_sla_service = sla_service.clone();
+    let automation_db = db.clone();
     tokio::spawn(async move {
         let mut receiver = automation_event_bus.subscribe();
         tracing::info!("Automation listener started");
@@ -254,6 +255,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 assigned_by,
                                 timestamp
                             );
+
+                            // Auto-apply SLA if assigned to a team with a default SLA policy
+                            if let Some(team_id) = &assigned_team_id {
+                                // Check if conversation already has an applied SLA
+                                match automation_sla_service.get_applied_sla_by_conversation(&conversation_id).await {
+                                    Ok(None) => {
+                                        // No existing SLA, check if team has a default policy
+                                        if let Ok(Some(team)) = automation_db.get_team_by_id(team_id).await {
+                                            if let Some(policy_id) = team.sla_policy_id {
+                                                tracing::info!(
+                                                    "Auto-applying SLA policy {} to conversation {} (assigned to team {})",
+                                                    policy_id,
+                                                    conversation_id,
+                                                    team_id
+                                                );
+
+                                                match automation_sla_service.apply_sla(&conversation_id, &policy_id, &timestamp).await {
+                                                    Ok(_) => {
+                                                        tracing::info!(
+                                                            "Successfully auto-applied SLA policy {} to conversation {}",
+                                                            policy_id,
+                                                            conversation_id
+                                                        );
+                                                    }
+                                                    Err(e) => {
+                                                        tracing::error!(
+                                                            "Failed to auto-apply SLA policy {} to conversation {}: {}",
+                                                            policy_id,
+                                                            conversation_id,
+                                                            e
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Ok(Some(_)) => {
+                                        tracing::debug!(
+                                            "Conversation {} already has an applied SLA, skipping auto-application",
+                                            conversation_id
+                                        );
+                                    }
+                                    Err(e) => {
+                                        tracing::error!(
+                                            "Failed to check existing SLA for conversation {}: {}",
+                                            conversation_id,
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+
                             // TODO: Feature 009 will add automation rule evaluation
                             // TODO: Feature 012 will add webhook triggering
                         }
@@ -417,6 +470,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Start SLA breach detection background task
+    let breach_sla_service = sla_service.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+        tracing::info!("SLA breach detection started (every 60 seconds)");
+
+        loop {
+            interval.tick().await;
+
+            if let Err(e) = breach_sla_service.check_breaches().await {
+                tracing::error!("Failed to check SLA breaches: {}", e);
+            }
+        }
+    });
+
     // Build protected routes (require authentication)
     let protected = Router::new()
         .route("/api/auth/logout", post(api::auth::logout))
@@ -483,6 +551,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/sla/policies/:id", delete(api::sla::delete_sla_policy))
         .route("/api/sla/conversations/:conversation_id", get(api::sla::get_applied_sla_by_conversation))
         .route("/api/sla/applied", get(api::sla::list_applied_slas))
+        .route("/api/sla/apply", post(api::sla::apply_sla))
         .route("/api/sla/applied/:applied_sla_id/events", get(api::sla::get_sla_events))
         .route("/api/teams/:id/sla-policy", put(api::sla::assign_sla_policy_to_team))
         // Add activity tracking middleware (before auth middleware)

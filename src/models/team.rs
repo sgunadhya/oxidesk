@@ -6,6 +6,7 @@ pub struct Team {
     pub name: String,
     pub description: Option<String>,
     pub sla_policy_id: Option<String>,
+    pub business_hours: Option<String>, // JSON format: {"timezone": "America/New_York", "schedule": [...]}
     pub created_at: String,
     pub updated_at: String,
 }
@@ -18,9 +19,38 @@ impl Team {
             name,
             description,
             sla_policy_id: None,
+            business_hours: None,
             created_at: now.clone(),
             updated_at: now,
         }
+    }
+}
+
+/// Business hours configuration for a team
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BusinessHours {
+    pub timezone: String, // IANA timezone (e.g., "America/New_York")
+    pub schedule: Vec<DaySchedule>,
+}
+
+/// Schedule for a specific day of the week
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaySchedule {
+    pub day: String, // "Monday", "Tuesday", etc.
+    pub start: String, // "09:00"
+    pub end: String,   // "17:00"
+}
+
+impl BusinessHours {
+    /// Validate business hours JSON format
+    pub fn validate(json_str: &str) -> Result<BusinessHours, String> {
+        serde_json::from_str::<BusinessHours>(json_str)
+            .map_err(|e| format!("Invalid business hours format: {}", e))
+    }
+
+    /// Parse business hours from JSON string
+    pub fn parse(json_str: &str) -> Result<BusinessHours, String> {
+        Self::validate(json_str)
     }
 }
 

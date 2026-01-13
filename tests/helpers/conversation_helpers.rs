@@ -57,9 +57,16 @@ pub async fn create_test_conversation(
     // Generate UUID for the conversation
     let conv_id = Uuid::new_v4().to_string();
 
+    // Set resolved_at if status is resolved (required by CHECK constraint)
+    let resolved_at = if matches!(status, ConversationStatus::Resolved) {
+        Some(chrono::Utc::now().to_rfc3339())
+    } else {
+        None
+    };
+
     let query = r#"
-        INSERT INTO conversations (id, reference_number, status, inbox_id, contact_id, subject, created_at, updated_at)
-        VALUES (?, (SELECT COALESCE(MAX(reference_number), 99) + 1 FROM conversations), ?, ?, ?, ?, datetime('now'), datetime('now'))
+        INSERT INTO conversations (id, reference_number, status, inbox_id, contact_id, subject, resolved_at, created_at, updated_at)
+        VALUES (?, (SELECT COALESCE(MAX(reference_number), 99) + 1 FROM conversations), ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     "#;
 
     // Insert the conversation
@@ -69,6 +76,7 @@ pub async fn create_test_conversation(
         .bind(&inbox_id)
         .bind(&contact_id)
         .bind("Test conversation")
+        .bind(resolved_at)
         .execute(pool)
         .await
         .expect("Failed to insert test conversation");

@@ -129,6 +129,12 @@ pub struct ListAppliedSlasQuery {
     pub offset: i64,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ApplySlaRequest {
+    pub conversation_id: String,
+    pub sla_policy_id: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SlaEventResponse {
     pub id: String,
@@ -318,6 +324,32 @@ pub async fn list_applied_slas(
     };
 
     Ok(Json(response))
+}
+
+/// Apply SLA policy to a conversation
+/// POST /api/sla/apply
+pub async fn apply_sla(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthenticatedUser>,
+    Json(req): Json<ApplySlaRequest>,
+) -> ApiResult<(StatusCode, Json<AppliedSlaResponse>)> {
+    // Check for "sla:manage" permission
+    if !user.has_permission("sla:manage").await {
+        return Err(ApiError::Forbidden(
+            "User does not have permission to apply SLA policies".to_string(),
+        ));
+    }
+
+    // Use current time as base timestamp for deadline calculation
+    let base_timestamp = chrono::Utc::now().to_rfc3339();
+
+    // Apply the SLA policy
+    let applied_sla = state
+        .sla_service
+        .apply_sla(&req.conversation_id, &req.sla_policy_id, &base_timestamp)
+        .await?;
+
+    Ok((StatusCode::CREATED, Json(AppliedSlaResponse::from(applied_sla))))
 }
 
 // ========================================

@@ -6,7 +6,8 @@ use helpers::*;
 
 #[tokio::test]
 async fn test_conversation_created_with_open_status() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create test contact
     let contact = create_test_contact(&db, "customer@example.com").await;
@@ -28,7 +29,8 @@ async fn test_conversation_created_with_open_status() {
 
 #[tokio::test]
 async fn test_conversation_has_unique_uuid() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     let contact = create_test_contact(&db, "customer1@example.com").await;
     let inbox_id = "inbox-001".to_string();
@@ -59,7 +61,8 @@ async fn test_conversation_has_unique_uuid() {
 
 #[tokio::test]
 async fn test_conversation_reference_number_starts_at_100() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     let contact = create_test_contact(&db, "customer2@example.com").await;
     let inbox_id = "inbox-001".to_string();
@@ -97,7 +100,8 @@ async fn test_conversation_reference_number_starts_at_100() {
 
 #[tokio::test]
 async fn test_conversation_assigned_to_inbox() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     let contact = create_test_contact(&db, "customer3@example.com").await;
     let inbox_id = "inbox-001".to_string();
@@ -124,7 +128,8 @@ async fn test_conversation_assigned_to_inbox() {
 
 #[tokio::test]
 async fn test_conversation_linked_to_contact() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     let contact = create_test_contact(&db, "customer4@example.com").await;
     let inbox_id = "inbox-001".to_string();

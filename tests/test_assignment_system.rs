@@ -8,7 +8,8 @@ use helpers::*;
 
 #[tokio::test]
 async fn test_create_team_and_add_members() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create a team
     let team = Team::new(
@@ -51,7 +52,8 @@ async fn test_create_team_and_add_members() {
 
 #[tokio::test]
 async fn test_conversation_assignment_flow() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup: Create agent and conversation
     let agent = create_test_agent(&db, "agent@example.com", "Agent One").await;
@@ -113,7 +115,8 @@ async fn test_conversation_assignment_flow() {
 
 #[tokio::test]
 async fn test_team_assignment_and_inbox() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup
     let agent = create_test_agent(&db, "agent@example.com", "Agent One").await;
@@ -157,7 +160,8 @@ async fn test_team_assignment_and_inbox() {
 
 #[tokio::test]
 async fn test_auto_unassignment_on_away() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup: Create agent and two conversations (one open, one resolved)
     let agent = create_test_agent(&db, "agent@example.com", "Agent One").await;
@@ -221,7 +225,8 @@ async fn test_auto_unassignment_on_away() {
 
 #[tokio::test]
 async fn test_assignment_history_audit_trail() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup
     let agent1 = create_test_agent(&db, "agent1@example.com", "Agent One").await;
@@ -284,7 +289,8 @@ async fn test_assignment_history_audit_trail() {
 
 #[tokio::test]
 async fn test_conversation_participants() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Setup
     let agent = create_test_agent(&db, "agent@example.com", "Agent One").await;
@@ -320,7 +326,8 @@ async fn test_conversation_participants() {
 
 #[tokio::test]
 async fn test_agent_availability_states() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     let agent = create_test_agent(&db, "agent@example.com", "Agent One").await;
 

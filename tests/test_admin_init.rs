@@ -8,7 +8,8 @@ use oxidesk::{
 
 #[tokio::test]
 async fn test_admin_initialization_creates_user_with_uuid() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create admin user
     let email = validate_and_normalize_email("admin@example.com").unwrap();
@@ -32,12 +33,13 @@ async fn test_admin_initialization_creates_user_with_uuid() {
     let retrieved = db.get_user_by_id(&user.id).await.unwrap();
     assert!(retrieved.is_some());
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_admin_initialization_assigns_admin_role() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create admin user
     let email = validate_and_normalize_email("admin@example.com").unwrap();
@@ -62,12 +64,13 @@ async fn test_admin_initialization_assigns_admin_role() {
     assert_eq!(roles.len(), 1);
     assert_eq!(roles[0].name, "Admin");
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_admin_email_uniqueness_per_type() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create first admin agent
     let email = "admin@example.com";
@@ -92,13 +95,14 @@ async fn test_admin_email_uniqueness_per_type() {
 
     assert!(result.is_ok());
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 
 #[tokio::test]
 async fn test_admin_initialization_validates_password_complexity() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Try with weak password
     let weak_passwords = vec![
@@ -117,12 +121,13 @@ async fn test_admin_initialization_validates_password_complexity() {
     // Strong password should pass
     assert!(validate_password_complexity("SecureAdmin123!").is_ok());
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }
 
 #[tokio::test]
 async fn test_admin_initialization_idempotent() {
-    let db = setup_test_db().await;
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
 
     // Create admin user first time
     let email = validate_and_normalize_email("admin@example.com").unwrap();
@@ -142,5 +147,5 @@ async fn test_admin_initialization_idempotent() {
     let existing_user = existing.unwrap();
     assert_eq!(existing_user.email, email);
 
-    teardown_test_db(db).await;
+    teardown_test_db(test_db).await;
 }

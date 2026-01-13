@@ -17,15 +17,13 @@ pub async fn create_test_agent_with_status(
     let agent_id = uuid::Uuid::new_v4().to_string();
 
     sqlx::query(
-        "INSERT INTO agents (id, user_id, first_name, password_hash, availability_status, created_at, updated_at)
-         VALUES (?, ?, ?, 'test_hash', ?, ?, ?)"
+        "INSERT INTO agents (id, user_id, first_name, password_hash, availability_status)
+         VALUES (?, ?, ?, 'test_hash', ?)"
     )
     .bind(&agent_id)
     .bind(user_id)
     .bind(first_name)
     .bind(status.to_string())
-    .bind(&now)
-    .bind(&now)
     .execute(pool)
     .await
     .expect("Failed to create test agent");
