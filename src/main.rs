@@ -105,6 +105,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let connection_manager: Arc<dyn ConnectionManager> = Arc::new(InMemoryConnectionManager::new());
     tracing::info!("Connection manager initialized");
 
+    // Initialize rate limiter
+    let rate_limiter = oxidesk::services::AuthRateLimiter::new();
+    tracing::info!("Rate limiter initialized (5 attempts per 15 minutes)");
+
+    // Clone rate limiter for background task before moving into state
+    let cleanup_rate_limiter = rate_limiter.clone();
+
     // Create application state
     let state = AppState {
         db: db.clone(),
@@ -115,6 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         availability_service: availability_service.clone(),
         sla_service: sla_service.clone(),
         connection_manager,
+        rate_limiter,
     };
 
     // Start session cleanup background task
@@ -131,6 +139,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(e) => {
                     tracing::error!("Failed to cleanup expired sessions: {}", e);
+                }
+            }
+        }
+    });
+
+    // Start rate limiter cleanup background task
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(900)); // Run every 15 minutes
+        loop {
+            interval.tick().await;
+            cleanup_rate_limiter.cleanup().await;
+            tracing::debug!("Rate limiter cleanup completed");
+        }
+    });
+
+    // Start OIDC state cleanup background task
+    let oidc_cleanup_db = db.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(600)); // Run every 10 minutes
+        loop {
+            interval.tick().await;
+            match oidc_cleanup_db.cleanup_expired_oidc_states().await {
+                Ok(count) => {
+                    if count > 0 {
+                        tracing::debug!("Cleaned up {} expired OIDC states", count);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to cleanup expired OIDC states: {}", e);
                 }
             }
         }
@@ -608,6 +645,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protected = Router::new()
         .route("/api/auth/logout", post(api::auth::logout))
         .route("/api/auth/session", get(api::auth::get_session))
+        .route("/api/auth/events", get(api::auth::get_my_auth_events))
+        .route("/api/auth/events/recent", get(api::auth::get_recent_auth_events))
+        .route("/api/oidc-providers", get(api::oidc_providers::list_oidc_providers))
+        .route("/api/oidc-providers", post(api::oidc_providers::create_oidc_provider))
+        .route("/api/oidc-providers/:id", get(api::oidc_providers::get_oidc_provider))
+        .route("/api/oidc-providers/:id", patch(api::oidc_providers::update_oidc_provider))
+        .route("/api/oidc-providers/:id", delete(api::oidc_providers::delete_oidc_provider))
+        .route("/api/oidc-providers/:id/toggle", post(api::oidc_providers::toggle_oidc_provider))
         .route("/api/agents", get(api::agents::list_agents))
         .route("/api/agents", post(api::agents::create_agent))
         .route("/api/agents/:id", get(api::agents::get_agent))
@@ -740,6 +785,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/login", get(web::show_login_page))
         .route("/login", post(web::handle_login))
         .route("/api/auth/login", post(api::auth::login))
+        .route("/api/auth/oidc/providers", get(api::oidc_providers::list_enabled_oidc_providers))
+        .route("/api/auth/oidc/:provider_name/login", get(api::auth::oidc_login))
+        .route("/api/auth/oidc/callback", get(api::auth::oidc_callback))
         .merge(protected)
         .merge(web_protected)
         .merge(api::messages::routes())
@@ -861,6 +909,7 @@ async fn web_auth_middleware(
         user,
         agent,
         roles,
+        session,
         token,
     });
 
