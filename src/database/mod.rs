@@ -2174,26 +2174,52 @@ impl Database {
         user_id: &str,
         assigned_by: &str,
     ) -> ApiResult<()> {
-        let now = chrono::Utc::now().to_rfc3339();
+        // Get current conversation to check version (optimistic concurrency control)
+        let conversation = self
+            .get_conversation_by_id(conversation_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Conversation {} not found", conversation_id))
+            })?;
 
-        sqlx::query(
+        let now = chrono::Utc::now().to_rfc3339();
+        let current_version = conversation.version;
+        let new_version = current_version + 1;
+
+        // Update with version check for optimistic concurrency control
+        let result = sqlx::query(
             "UPDATE conversations
-             SET assigned_user_id = ?, assigned_at = ?, assigned_by = ?, updated_at = ?
-             WHERE id = ?",
+             SET assigned_user_id = ?, assigned_at = ?, assigned_by = ?, updated_at = ?, version = ?
+             WHERE id = ? AND version = ?",
         )
         .bind(user_id)
         .bind(&now)
         .bind(assigned_by)
         .bind(&now)
+        .bind(new_version)
         .bind(conversation_id)
+        .bind(current_version)
         .execute(&self.pool)
         .await?;
 
+        // Check if update succeeded (optimistic lock check)
+        if result.rows_affected() == 0 {
+            tracing::warn!(
+                "Assignment conflict detected for conversation {} - concurrent modification",
+                conversation_id
+            );
+            return Err(ApiError::Conflict(
+                "Assignment conflict - conversation was modified by another operation".to_string(),
+            ));
+        }
+
         tracing::info!(
-            "Conversation {} assigned to user {} by {}",
+            "Conversation {} assigned to user {} by {} (version {} -> {})",
             conversation_id,
             user_id,
-            assigned_by
+            assigned_by,
+            current_version,
+            new_version
         );
         Ok(())
     }
@@ -2204,26 +2230,52 @@ impl Database {
         team_id: &str,
         assigned_by: &str,
     ) -> ApiResult<()> {
-        let now = chrono::Utc::now().to_rfc3339();
+        // Get current conversation to check version (optimistic concurrency control)
+        let conversation = self
+            .get_conversation_by_id(conversation_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Conversation {} not found", conversation_id))
+            })?;
 
-        sqlx::query(
+        let now = chrono::Utc::now().to_rfc3339();
+        let current_version = conversation.version;
+        let new_version = current_version + 1;
+
+        // Update with version check for optimistic concurrency control
+        let result = sqlx::query(
             "UPDATE conversations
-             SET assigned_team_id = ?, assigned_at = ?, assigned_by = ?, updated_at = ?
-             WHERE id = ?",
+             SET assigned_team_id = ?, assigned_at = ?, assigned_by = ?, updated_at = ?, version = ?
+             WHERE id = ? AND version = ?",
         )
         .bind(team_id)
         .bind(&now)
         .bind(assigned_by)
         .bind(&now)
+        .bind(new_version)
         .bind(conversation_id)
+        .bind(current_version)
         .execute(&self.pool)
         .await?;
 
+        // Check if update succeeded (optimistic lock check)
+        if result.rows_affected() == 0 {
+            tracing::warn!(
+                "Assignment conflict detected for conversation {} - concurrent modification",
+                conversation_id
+            );
+            return Err(ApiError::Conflict(
+                "Assignment conflict - conversation was modified by another operation".to_string(),
+            ));
+        }
+
         tracing::info!(
-            "Conversation {} assigned to team {} by {}",
+            "Conversation {} assigned to team {} by {} (version {} -> {})",
             conversation_id,
             team_id,
-            assigned_by
+            assigned_by,
+            current_version,
+            new_version
         );
         Ok(())
     }
