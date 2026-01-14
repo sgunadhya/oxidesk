@@ -32,6 +32,7 @@ use regex::Regex;
 /// # Examples
 ///
 /// ```
+/// use oxidesk::services::user_service::parse_email_display_name;
 /// let (first, last, email) = parse_email_display_name("John Doe <john@example.com>");
 /// assert_eq!(first, Some("John".to_string()));
 /// assert_eq!(last, Some("Doe".to_string()));
@@ -101,7 +102,7 @@ pub fn parse_email_display_name(from_header: &str) -> (Option<String>, Option<St
 ///
 /// # Example
 ///
-/// ```
+/// ```rust,ignore
 /// let contact_id = create_contact_from_message(
 ///     &db,
 ///     "inbox-001",

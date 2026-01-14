@@ -31,6 +31,7 @@ const SPECIAL_CHARS: &[u8] = b"!@#$%^&*()_+-=[]{}|;:,.<>?";
 /// # Example
 ///
 /// ```
+/// use oxidesk::services::password_service::generate_random_password;
 /// let password = generate_random_password();
 /// assert_eq!(password.len(), 16);
 /// // Example output: "X7g!mPq2@nR8zK4L"

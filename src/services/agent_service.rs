@@ -351,5 +351,16 @@ pub async fn change_agent_password(
     // Update password
     db.update_agent_password(&agent.id, &password_hash).await?;
 
+    // Destroy all active sessions for this agent (security requirement)
+    // This forces the agent to re-authenticate with the new password
+    let session_count = db.delete_user_sessions(&user.id).await?;
+
+    tracing::info!(
+        "Password changed for agent {} (user_id: {}), destroyed {} sessions",
+        agent.id,
+        user.id,
+        session_count
+    );
+
     Ok(())
 }

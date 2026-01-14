@@ -33,9 +33,9 @@ impl Config {
             .map_err(|_| ConfigError::MissingAdminPassword)?;
 
         let session_duration_hours = env::var("SESSION_DURATION_HOURS")
-            .unwrap_or_else(|_| "24".to_string())
+            .unwrap_or_else(|_| "9".to_string())
             .parse()
-            .unwrap_or(24);
+            .unwrap_or(9);
 
         Ok(Config {
             database_url,
