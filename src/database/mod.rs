@@ -348,7 +348,11 @@ impl Database {
 
     pub async fn get_session_by_token(&self, token: &str) -> ApiResult<Option<Session>> {
         let row = sqlx::query(
-            "SELECT id, user_id, token, csrf_token, expires_at, created_at, last_accessed_at, auth_method, provider_name
+            "SELECT id, user_id, token, csrf_token,
+                    CAST(expires_at AS TEXT) as expires_at,
+                    CAST(created_at AS TEXT) as created_at,
+                    CAST(last_accessed_at AS TEXT) as last_accessed_at,
+                    auth_method, provider_name
              FROM sessions
              WHERE token = ?",
         )
@@ -361,8 +365,12 @@ impl Database {
             let auth_method = match auth_method_str.as_str() {
                 "password" => crate::models::AuthMethod::Password,
                 "oidc" => crate::models::AuthMethod::Oidc,
+                "apikey" => crate::models::AuthMethod::ApiKey,
                 _ => crate::models::AuthMethod::Password,
             };
+
+            // Handle NULL provider_name gracefully (NULL in DB becomes None)
+            let provider_name: Option<String> = row.try_get("provider_name").ok();
 
             Ok(Some(Session {
                 id: row.try_get("id")?,
@@ -373,7 +381,7 @@ impl Database {
                 created_at: row.try_get("created_at")?,
                 last_accessed_at: row.try_get("last_accessed_at")?,
                 auth_method,
-                provider_name: row.try_get("provider_name")?,
+                provider_name,
             }))
         } else {
             Ok(None)
