@@ -1,6 +1,6 @@
 use oxidesk::models::conversation::{ConversationStatus, UpdateStatusRequest};
-use oxidesk::EventBus;
 use oxidesk::services::conversation_service;
+use oxidesk::EventBus;
 
 mod helpers;
 use helpers::*;
@@ -37,10 +37,15 @@ async fn test_agent_can_update_open_to_resolved() {
         &conversation.id,
         update_request,
         Some(auth_user.user.id.clone()),
-        Some(&event_bus)
-    ).await;
+        Some(&event_bus),
+    )
+    .await;
 
-    assert!(result.is_ok(), "Failed to update status: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to update status: {:?}",
+        result.err()
+    );
 
     // Fetch updated conversation
     let updated = db
@@ -82,7 +87,7 @@ async fn test_resolved_at_timestamp_set_on_status_change() {
         &conversation.id,
         update_request,
         Some(auth_user.user.id.clone()),
-        Some(&event_bus)
+        Some(&event_bus),
     )
     .await
     .expect("Failed to update status");
@@ -114,21 +119,48 @@ async fn test_invalid_status_transition_rejected() {
     .await;
 
     // Test a valid cycle: Open -> Snoozed -> Open
-    
+
     let update_snooze = UpdateStatusRequest {
         status: ConversationStatus::Snoozed,
         snooze_duration: Some("1h".to_string()),
     };
-    
-    conversation_service::update_conversation_status(&db, &conversation.id, update_snooze, Some(auth_user.user.id.clone()), Some(&event_bus)).await.unwrap();
-    
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+
+    conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        update_snooze,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus),
+    )
+    .await
+    .unwrap();
+
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.status, ConversationStatus::Snoozed);
-    
-    let update_open = UpdateStatusRequest { status: ConversationStatus::Open, snooze_duration: None };
-    conversation_service::update_conversation_status(&db, &conversation.id, update_open, Some(auth_user.user.id.clone()), Some(&event_bus)).await.unwrap();
-    
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+
+    let update_open = UpdateStatusRequest {
+        status: ConversationStatus::Open,
+        snooze_duration: None,
+    };
+    conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        update_open,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus),
+    )
+    .await
+    .unwrap();
+
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.status, ConversationStatus::Open);
 }
 
@@ -163,19 +195,16 @@ async fn test_automation_rules_evaluated_on_status_change() {
         &conversation.id,
         update_request,
         Some(auth_user.user.id.clone()),
-        Some(&event_bus)
+        Some(&event_bus),
     )
     .await
     .expect("Failed to update status");
 
     // Verify event was published
-    let event = tokio::time::timeout(
-        tokio::time::Duration::from_secs(1),
-        receiver.recv()
-    )
-    .await
-    .expect("Timeout waiting for event")
-    .expect("Failed to receive event");
+    let event = tokio::time::timeout(tokio::time::Duration::from_secs(1), receiver.recv())
+        .await
+        .expect("Timeout waiting for event")
+        .expect("Failed to receive event");
 
     // Verify event details
     match event {
@@ -224,7 +253,7 @@ async fn test_resolved_to_closed_transition() {
         &conversation.id,
         resolve_request,
         Some(auth_user.user.id.clone()),
-        Some(&event_bus)
+        Some(&event_bus),
     )
     .await
     .expect("Failed to resolve conversation");
@@ -240,11 +269,15 @@ async fn test_resolved_to_closed_transition() {
         &conversation.id,
         close_request,
         Some(auth_user.user.id.clone()),
-        Some(&event_bus)
+        Some(&event_bus),
     )
     .await;
 
-    assert!(result.is_ok(), "Failed to close resolved conversation: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to close resolved conversation: {:?}",
+        result.err()
+    );
 
     let updated = db
         .get_conversation_by_id(&conversation.id)
@@ -284,12 +317,18 @@ async fn test_closed_at_timestamp_set() {
         &conversation.id,
         resolve_request,
         Some(auth_user.user.id.clone()),
-        Some(&event_bus)
+        Some(&event_bus),
     )
     .await
     .expect("Failed to resolve");
 
-    assert!(db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap().closed_at.is_none());
+    assert!(db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap()
+        .closed_at
+        .is_none());
 
     let close_request = UpdateStatusRequest {
         status: ConversationStatus::Closed,
@@ -301,7 +340,7 @@ async fn test_closed_at_timestamp_set() {
         &conversation.id,
         close_request,
         Some(auth_user.user.id.clone()),
-        Some(&event_bus)
+        Some(&event_bus),
     )
     .await
     .expect("Failed to close");
@@ -312,7 +351,10 @@ async fn test_closed_at_timestamp_set() {
         .expect("Failed to fetch conversation")
         .expect("Conversation not found");
 
-    assert!(updated.closed_at.is_some(), "closed_at should be set when conversation is closed");
+    assert!(
+        updated.closed_at.is_some(),
+        "closed_at should be set when conversation is closed"
+    );
 }
 
 // Feature 019: Test reopening clears resolved_at
@@ -344,12 +386,16 @@ async fn test_reopening_clears_resolved_at() {
         &conversation.id,
         resolve_request,
         Some(auth_user.user.id.clone()),
-        Some(&event_bus)
+        Some(&event_bus),
     )
     .await
     .expect("Failed to resolve");
 
-    let resolved = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let resolved = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(resolved.resolved_at.is_some(), "resolved_at should be set");
 
     // Reopen the conversation
@@ -363,7 +409,7 @@ async fn test_reopening_clears_resolved_at() {
         &conversation.id,
         reopen_request,
         Some(auth_user.user.id.clone()),
-        Some(&event_bus)
+        Some(&event_bus),
     )
     .await
     .expect("Failed to reopen");
@@ -375,6 +421,8 @@ async fn test_reopening_clears_resolved_at() {
         .expect("Conversation not found");
 
     assert_eq!(reopened.status, ConversationStatus::Open);
-    assert!(reopened.resolved_at.is_none(), "resolved_at should be cleared when reopening");
+    assert!(
+        reopened.resolved_at.is_none(),
+        "resolved_at should be cleared when reopening"
+    );
 }
-

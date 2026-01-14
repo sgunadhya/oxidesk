@@ -1,9 +1,9 @@
-use crate::models::{
-    AutomationRule, Conversation, RuleEvaluationLog, ConditionResult, ActionResult,
-};
 use crate::database::Database;
-use crate::services::condition_evaluator::ConditionEvaluator;
+use crate::models::{
+    ActionResult, AutomationRule, ConditionResult, Conversation, RuleEvaluationLog,
+};
 use crate::services::action_executor::ActionExecutor;
+use crate::services::condition_evaluator::ConditionEvaluator;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -103,16 +103,17 @@ impl AutomationService {
         // Evaluate and execute each rule
         for rule in sorted_rules {
             if let Err(e) = self
-                .evaluate_and_execute_rule(&rule, event_type, conversation, executed_by, cascade_depth)
+                .evaluate_and_execute_rule(
+                    &rule,
+                    event_type,
+                    conversation,
+                    executed_by,
+                    cascade_depth,
+                )
                 .await
             {
                 // Log error but continue with other rules
-                tracing::error!(
-                    "Error evaluating rule '{}' ({}): {}",
-                    rule.name,
-                    rule.id,
-                    e
-                );
+                tracing::error!("Error evaluating rule '{}' ({}): {}", rule.name, rule.id, e);
             }
         }
 
@@ -138,19 +139,18 @@ impl AutomationService {
         );
 
         // Evaluate condition
-        let (condition_result, condition_matched, condition_error) =
-            match self.condition_evaluator.evaluate(&rule.condition, conversation).await {
-                Ok(true) => (ConditionResult::True, true, None),
-                Ok(false) => (ConditionResult::False, false, None),
-                Err(e) => {
-                    tracing::error!(
-                        "Condition evaluation error for rule '{}': {}",
-                        rule.name,
-                        e
-                    );
-                    (ConditionResult::Error, false, Some(e.to_string()))
-                }
-            };
+        let (condition_result, condition_matched, condition_error) = match self
+            .condition_evaluator
+            .evaluate(&rule.condition, conversation)
+            .await
+        {
+            Ok(true) => (ConditionResult::True, true, None),
+            Ok(false) => (ConditionResult::False, false, None),
+            Err(e) => {
+                tracing::error!("Condition evaluation error for rule '{}': {}", rule.name, e);
+                (ConditionResult::Error, false, Some(e.to_string()))
+            }
+        };
 
         // Execute action if condition matched
         let (action_executed, action_result, action_error) = if condition_matched {
@@ -174,11 +174,7 @@ impl AutomationService {
                     (true, ActionResult::Success, None)
                 }
                 Err(e) => {
-                    tracing::error!(
-                        "Action execution error for rule '{}': {}",
-                        rule.name,
-                        e
-                    );
+                    tracing::error!("Action execution error for rule '{}': {}", rule.name, e);
                     (false, ActionResult::Error, Some(e.to_string()))
                 }
             }

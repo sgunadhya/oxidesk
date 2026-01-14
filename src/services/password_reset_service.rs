@@ -11,8 +11,8 @@ use crate::{
     database::Database,
     models::*,
     services::{
+        auth::{hash_password, validate_password_complexity},
         password_reset_email_service::{send_password_reset_email, SmtpConfig},
-        auth::{validate_password_complexity, hash_password},
     },
     utils::generate_reset_token,
 };
@@ -47,9 +47,7 @@ pub async fn request_password_reset(
             .parse()
             .unwrap_or(5);
 
-        let recent_requests = db
-            .count_recent_reset_requests(&user.id, 3600)
-            .await?;
+        let recent_requests = db.count_recent_reset_requests(&user.id, 3600).await?;
 
         if recent_requests >= rate_limit_window {
             return Err(ApiError::TooManyRequests(
@@ -74,8 +72,14 @@ pub async fn request_password_reset(
         // Spawn email sending in background to not block response
         let email_clone = email.clone();
         tokio::spawn(async move {
-            if let Err(e) = send_password_reset_email(&email_clone, &token_value, &smtp_config).await {
-                tracing::error!("Failed to send password reset email to {}: {}", email_clone, e);
+            if let Err(e) =
+                send_password_reset_email(&email_clone, &token_value, &smtp_config).await
+            {
+                tracing::error!(
+                    "Failed to send password reset email to {}: {}",
+                    email_clone,
+                    e
+                );
             }
         });
 
@@ -86,10 +90,7 @@ pub async fn request_password_reset(
         );
     } else {
         // User does not exist - still return success (email enumeration prevention)
-        tracing::info!(
-            "Password reset requested for non-existent email: {}",
-            email
-        );
+        tracing::info!("Password reset requested for non-existent email: {}", email);
     }
 
     // Always return the same generic message (email enumeration prevention)
@@ -105,10 +106,7 @@ pub async fn request_password_reset(
 /// - It exists in the database
 /// - It has not been used (used = false)
 /// - It has not expired (expires_at > now)
-pub async fn validate_reset_token(
-    db: &Database,
-    token: &str,
-) -> ApiResult<PasswordResetToken> {
+pub async fn validate_reset_token(db: &Database, token: &str) -> ApiResult<PasswordResetToken> {
     // Validate token format (32 alphanumeric characters)
     if token.len() != 32 || !token.chars().all(|c| c.is_alphanumeric()) {
         return Err(ApiError::BadRequest("Invalid token format".to_string()));
@@ -169,11 +167,9 @@ pub async fn reset_password(
     // Execute all password reset operations atomically in a transaction
     // This ensures that either all operations succeed or none do
     // Prevents inconsistent state (e.g., password changed but token still valid)
-    let session_count = db.reset_password_atomic(
-        &token_record.user_id,
-        &token_record.id,
-        &password_hash,
-    ).await?;
+    let session_count = db
+        .reset_password_atomic(&token_record.user_id, &token_record.id, &password_hash)
+        .await?;
 
     tracing::info!(
         "Password reset successful for user_id: {}, sessions_destroyed: {}",
@@ -189,7 +185,6 @@ pub async fn reset_password(
 
 #[cfg(test)]
 mod tests {
-
 
     #[test]
     fn test_validate_token_format_valid() {

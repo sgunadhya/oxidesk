@@ -63,9 +63,12 @@ impl From<sqlx::Error> for ApiError {
                 let message = db_err.message();
                 if message.contains("UNIQUE") || message.contains("unique") {
                     // Check for specific per-type email constraint violations (migration 058)
-                    if message.contains("idx_users_email_unique_agent") || message.contains("agent") {
+                    if message.contains("idx_users_email_unique_agent") || message.contains("agent")
+                    {
                         ApiError::Conflict("An agent with this email already exists".to_string())
-                    } else if message.contains("idx_users_email_unique_contact") || message.contains("contact") {
+                    } else if message.contains("idx_users_email_unique_contact")
+                        || message.contains("contact")
+                    {
                         ApiError::Conflict("A contact with this email already exists".to_string())
                     } else {
                         // Generic unique constraint violation

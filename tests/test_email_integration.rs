@@ -5,14 +5,13 @@
 /// - US2: Reply matching with reference numbers
 /// - US3: Sending agent replies via SMTP
 /// - Edge cases: malformed emails, attachment limits, duplicate processing
-
 mod helpers;
 
-use helpers::*;
 use helpers::conversation_helpers::create_test_conversation;
+use helpers::*;
 use oxidesk::database::Database;
 use oxidesk::models::{
-    ConversationStatus, CreateConversation, InboxEmailConfig, Message, User, UserType, Contact,
+    Contact, ConversationStatus, CreateConversation, InboxEmailConfig, Message, User, UserType,
 };
 use oxidesk::services::{AttachmentService, EmailParserService};
 use std::path::PathBuf;
@@ -243,9 +242,18 @@ async fn test_extract_reference_number() {
     let parser = EmailParserService::new();
 
     // Test various formats
-    assert_eq!(parser.extract_reference_number("Re: Support Request [#123]"), Some(123));
-    assert_eq!(parser.extract_reference_number("Re: Issue [REF#456]"), Some(456));
-    assert_eq!(parser.extract_reference_number("[#789] Important Issue"), Some(789));
+    assert_eq!(
+        parser.extract_reference_number("Re: Support Request [#123]"),
+        Some(123)
+    );
+    assert_eq!(
+        parser.extract_reference_number("Re: Issue [REF#456]"),
+        Some(456)
+    );
+    assert_eq!(
+        parser.extract_reference_number("[#789] Important Issue"),
+        Some(789)
+    );
     assert_eq!(parser.extract_reference_number("No reference here"), None);
 }
 
@@ -284,13 +292,12 @@ async fn test_create_conversation_from_new_email() {
     // but for this test we're using the pre-created contact
 
     // Get the contact's user_id (FK to users table for messages)
-    let user_id_for_message: String = sqlx::query_scalar(
-        "SELECT user_id FROM contacts WHERE id = ?"
-    )
-    .bind(&contact_id)
-    .fetch_one(db.pool())
-    .await
-    .unwrap();
+    let user_id_for_message: String =
+        sqlx::query_scalar("SELECT user_id FROM contacts WHERE id = ?")
+            .bind(&contact_id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
 
     let create_conv = CreateConversation {
         inbox_id: inbox_id.clone(),
@@ -301,13 +308,20 @@ async fn test_create_conversation_from_new_email() {
 
     // Create message - use user_id as author_id (FK to users table)
     let content = parsed.text_body.unwrap_or_default();
-    let message = Message::new_incoming(conversation.id.clone(), content.clone(), user_id_for_message);
+    let message = Message::new_incoming(
+        conversation.id.clone(),
+        content.clone(),
+        user_id_for_message,
+    );
     db.create_message(&message).await.unwrap();
 
     // Verify conversation created
     assert_eq!(conversation.inbox_id, inbox_id);
     assert_eq!(conversation.status, ConversationStatus::Open);
-    assert_eq!(conversation.subject, Some("New support request".to_string()));
+    assert_eq!(
+        conversation.subject,
+        Some("New support request".to_string())
+    );
 
     // Verify message created
     let (messages, _total) = db.list_messages(&conversation.id, 100, 0).await.unwrap();
@@ -330,7 +344,8 @@ async fn test_reply_matching_with_reference_number() {
         inbox_id.clone(),
         contact_id.clone(),
         ConversationStatus::Open,
-    ).await;
+    )
+    .await;
     let ref_number = conversation.reference_number;
 
     // Create initial message - use user_id as author_id
@@ -391,7 +406,8 @@ async fn test_reopen_closed_conversation_on_reply() {
         inbox_id.clone(),
         contact_id.clone(),
         ConversationStatus::Closed,
-    ).await;
+    )
+    .await;
 
     // Verify it's closed
     assert_eq!(conversation.status, ConversationStatus::Closed);
@@ -427,7 +443,8 @@ async fn test_duplicate_email_prevention() {
         inbox_id.clone(),
         contact_id.clone(),
         ConversationStatus::Open,
-    ).await;
+    )
+    .await;
     let message = Message::new_incoming(conversation.id.clone(), "Test".to_string(), user_id);
     db.create_message(&message).await.unwrap();
 
@@ -459,10 +476,8 @@ async fn test_attachment_size_validation() {
     let temp_dir = std::env::temp_dir().join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&temp_dir).unwrap();
 
-    let attachment_service = AttachmentService::new(
-        db.clone(),
-        temp_dir.to_str().unwrap().to_string(),
-    );
+    let attachment_service =
+        AttachmentService::new(db.clone(), temp_dir.to_str().unwrap().to_string());
 
     let message_id = Uuid::new_v4().to_string();
 
@@ -495,10 +510,8 @@ async fn test_attachment_content_type_validation() {
     let temp_dir = std::env::temp_dir().join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&temp_dir).unwrap();
 
-    let attachment_service = AttachmentService::new(
-        db.clone(),
-        temp_dir.to_str().unwrap().to_string(),
-    );
+    let attachment_service =
+        AttachmentService::new(db.clone(), temp_dir.to_str().unwrap().to_string());
 
     let message_id = Uuid::new_v4().to_string();
     let content = b"Executable content";
@@ -530,10 +543,8 @@ async fn test_attachment_storage_and_retrieval() {
     let temp_dir = std::env::temp_dir().join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&temp_dir).unwrap();
 
-    let attachment_service = AttachmentService::new(
-        db.clone(),
-        temp_dir.to_str().unwrap().to_string(),
-    );
+    let attachment_service =
+        AttachmentService::new(db.clone(), temp_dir.to_str().unwrap().to_string());
 
     // Create a conversation and message first (needed for foreign key)
     let conversation = create_test_conversation(
@@ -541,7 +552,8 @@ async fn test_attachment_storage_and_retrieval() {
         inbox_id.clone(),
         contact_id.clone(),
         ConversationStatus::Open,
-    ).await;
+    )
+    .await;
     let message = Message::new_incoming(conversation.id, "Test message".to_string(), user_id);
     let message_id = message.id.clone();
     db.create_message(&message).await.unwrap();
@@ -620,10 +632,8 @@ async fn test_multiple_attachments() {
     let temp_dir = std::env::temp_dir().join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&temp_dir).unwrap();
 
-    let attachment_service = AttachmentService::new(
-        db.clone(),
-        temp_dir.to_str().unwrap().to_string(),
-    );
+    let attachment_service =
+        AttachmentService::new(db.clone(), temp_dir.to_str().unwrap().to_string());
 
     // Create a conversation and message first (needed for foreign key)
     let conversation = create_test_conversation(
@@ -631,7 +641,8 @@ async fn test_multiple_attachments() {
         inbox_id.clone(),
         contact_id.clone(),
         ConversationStatus::Open,
-    ).await;
+    )
+    .await;
     let message = Message::new_incoming(conversation.id, "Test message".to_string(), user_id);
     let message_id = message.id.clone();
     db.create_message(&message).await.unwrap();
@@ -683,11 +694,7 @@ async fn test_email_config_crud() {
     assert!(config.enabled);
 
     // Read config
-    let retrieved = db
-        .get_inbox_email_config(&inbox_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let retrieved = db.get_inbox_email_config(&inbox_id).await.unwrap().unwrap();
     assert_eq!(retrieved.id, config.id);
 
     // Update config
@@ -737,11 +744,7 @@ async fn test_last_poll_time_update() {
     db.update_last_poll_time(&inbox_id).await.unwrap();
 
     // Verify updated
-    let updated = db
-        .get_inbox_email_config(&inbox_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let updated = db.get_inbox_email_config(&inbox_id).await.unwrap().unwrap();
     assert!(updated.last_poll_at.is_some());
 
     teardown_test_db(test_db).await;

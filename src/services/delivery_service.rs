@@ -1,9 +1,9 @@
+use crate::api::middleware::error::ApiResult;
+use crate::database::Database;
+use crate::models::{Message, MessageStatus};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use crate::models::{Message, MessageStatus};
-use crate::database::Database;
-use crate::api::middleware::error::ApiResult;
 
 /// Trait for message delivery providers
 /// Allows pluggable delivery mechanisms (email, SMS, webhook, etc.)
@@ -77,10 +77,7 @@ pub struct DeliveryService {
 impl DeliveryService {
     /// Create a new delivery service with a provider
     /// Spawns background worker to process deliveries
-    pub fn new(
-        db: Database,
-        provider: Arc<dyn MessageDeliveryProvider>,
-    ) -> Self {
+    pub fn new(db: Database, provider: Arc<dyn MessageDeliveryProvider>) -> Self {
         let (sender, receiver) = mpsc::channel::<DeliveryQueueMessage>(100);
 
         let service = Self {
@@ -90,11 +87,7 @@ impl DeliveryService {
         };
 
         // Spawn background worker
-        tokio::spawn(Self::delivery_worker(
-            db,
-            provider,
-            receiver,
-        ));
+        tokio::spawn(Self::delivery_worker(db, provider, receiver));
 
         service
     }
@@ -106,7 +99,9 @@ impl DeliveryService {
             .await
             .map_err(|e| {
                 tracing::error!("Failed to enqueue message for delivery: {}", e);
-                crate::api::middleware::error::ApiError::Internal("Failed to enqueue message".to_string())
+                crate::api::middleware::error::ApiError::Internal(
+                    "Failed to enqueue message".to_string(),
+                )
             })?;
 
         Ok(())
@@ -118,7 +113,10 @@ impl DeliveryService {
         provider: Arc<dyn MessageDeliveryProvider>,
         mut receiver: mpsc::Receiver<DeliveryQueueMessage>,
     ) {
-        tracing::info!("Delivery worker started with provider: {}", provider.provider_name());
+        tracing::info!(
+            "Delivery worker started with provider: {}",
+            provider.provider_name()
+        );
 
         while let Some(queue_msg) = receiver.recv().await {
             if let Err(e) = Self::process_delivery(&db, &provider, &queue_msg.message_id).await {
@@ -140,11 +138,10 @@ impl DeliveryService {
         message_id: &str,
     ) -> ApiResult<()> {
         // Fetch message from database
-        let message = db.get_message_by_id(message_id).await?
-            .ok_or_else(|| {
-                tracing::error!("Message not found for delivery: {}", message_id);
-                crate::api::middleware::error::ApiError::NotFound("Message not found".to_string())
-            })?;
+        let message = db.get_message_by_id(message_id).await?.ok_or_else(|| {
+            tracing::error!("Message not found for delivery: {}", message_id);
+            crate::api::middleware::error::ApiError::NotFound("Message not found".to_string())
+        })?;
 
         // Check if already delivered or immutable
         if message.is_immutable {
@@ -165,7 +162,8 @@ impl DeliveryService {
                     .format(&time::format_description::well_known::Rfc3339)
                     .unwrap();
 
-                db.update_message_status(message_id, MessageStatus::Sent, Some(&now)).await?;
+                db.update_message_status(message_id, MessageStatus::Sent, Some(&now))
+                    .await?;
 
                 tracing::info!(
                     "Message {} delivered successfully via {}",
@@ -176,16 +174,13 @@ impl DeliveryService {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!(
-                    "Delivery failed for message {}: {}",
-                    message_id,
-                    e
-                );
+                tracing::error!("Delivery failed for message {}: {}", message_id, e);
 
                 // Check retry count
                 if message.retry_count >= 3 {
                     // Max retries exceeded, mark as failed
-                    db.update_message_status(message_id, MessageStatus::Failed, None).await?;
+                    db.update_message_status(message_id, MessageStatus::Failed, None)
+                        .await?;
                     tracing::warn!("Message {} marked as failed after max retries", message_id);
                 } else {
                     // Schedule retry with exponential backoff

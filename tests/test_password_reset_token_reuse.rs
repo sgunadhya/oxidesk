@@ -2,9 +2,9 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent},
-    services::{hash_password, validate_and_normalize_email, password_reset_service},
     api::middleware::error::ApiError,
+    models::{Agent, User, UserType},
+    services::{hash_password, password_reset_service, validate_and_normalize_email},
 };
 
 #[tokio::test]
@@ -17,14 +17,24 @@ async fn test_token_cannot_be_reused_after_successful_reset() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Reuse Test 1".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Reuse Test 1".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = tokens[0].token.clone();
 
     // Use token once (should succeed)
@@ -38,7 +48,7 @@ async fn test_token_cannot_be_reused_after_successful_reset() {
     match result2.unwrap_err() {
         ApiError::BadRequest(msg) => {
             assert_eq!(msg, "Invalid or expired reset token");
-        },
+        }
         other => panic!("Expected BadRequest for reused token, got: {:?}", other),
     }
 
@@ -55,14 +65,24 @@ async fn test_token_marked_used_after_reset() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Reuse Test 2".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Reuse Test 2".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = tokens[0].token.clone();
 
     // Verify token is not used initially
@@ -70,11 +90,16 @@ async fn test_token_marked_used_after_reset() {
     assert!(!token_before.used, "Token should not be used before reset");
 
     // Use token
-    password_reset_service::reset_password(db, &token, "NewPass123!").await.unwrap();
+    password_reset_service::reset_password(db, &token, "NewPass123!")
+        .await
+        .unwrap();
 
     // Verify token is marked as used
     let token_after = db.get_password_reset_token(&token).await.unwrap().unwrap();
-    assert!(token_after.used, "Token should be marked as used after reset");
+    assert!(
+        token_after.used,
+        "Token should be marked as used after reset"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -89,22 +114,42 @@ async fn test_multiple_tokens_can_be_used_once_each() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Reuse Test 3".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Reuse Test 3".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset three times (each request invalidates previous tokens)
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens1 = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens1 = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token1 = tokens1[0].token.clone();
 
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens2 = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens2 = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token2 = tokens2.iter().find(|t| !t.used).unwrap().token.clone();
 
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens3 = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens3 = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token3 = tokens3.iter().find(|t| !t.used).unwrap().token.clone();
 
     // Token1 should be invalidated (marked as used when token2 was created)
@@ -136,26 +181,49 @@ async fn test_new_token_invalidates_previous_unused_tokens() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Reuse Test 4".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Reuse Test 4".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset (get first token)
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens1 = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens1 = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let first_token = tokens1[0].token.clone();
 
     // Verify first token is not used
-    let first_token_before = db.get_password_reset_token(&first_token).await.unwrap().unwrap();
+    let first_token_before = db
+        .get_password_reset_token(&first_token)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(!first_token_before.used, "First token should not be used");
 
     // Request another password reset (should invalidate first token)
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
 
     // First token should now be marked as used (invalidated)
-    let first_token_after = db.get_password_reset_token(&first_token).await.unwrap().unwrap();
-    assert!(first_token_after.used, "First token should be invalidated by new request");
+    let first_token_after = db
+        .get_password_reset_token(&first_token)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        first_token_after.used,
+        "First token should be invalidated by new request"
+    );
 
     // Try to use first token (should fail)
     let result = password_reset_service::reset_password(db, &first_token, "NewPass123!").await;
@@ -174,18 +242,30 @@ async fn test_token_reuse_returns_same_error_as_expired() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Reuse Test 5".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Reuse Test 5".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = tokens[0].token.clone();
 
     // Use token once
-    password_reset_service::reset_password(db, &token, "FirstPass123!").await.unwrap();
+    password_reset_service::reset_password(db, &token, "FirstPass123!")
+        .await
+        .unwrap();
 
     // Try to reuse token
     let result = password_reset_service::reset_password(db, &token, "SecondPass123!").await;
@@ -198,7 +278,7 @@ async fn test_token_reuse_returns_same_error_as_expired() {
                 msg, "Invalid or expired reset token",
                 "Should return generic error message"
             );
-        },
+        }
         other => panic!("Expected BadRequest, got: {:?}", other),
     }
 
@@ -215,14 +295,24 @@ async fn test_concurrent_use_of_same_token() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Concurrent Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Concurrent Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = tokens[0].token.clone();
 
     // Try to use token concurrently (simulate race condition)

@@ -5,8 +5,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageType {
-    Incoming,  // From customer to agent
-    Outgoing,  // From agent to customer
+    Incoming, // From customer to agent
+    Outgoing, // From agent to customer
 }
 
 impl MessageType {
@@ -38,10 +38,10 @@ impl std::fmt::Display for MessageType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageStatus {
-    Received,  // Incoming messages only (terminal, immutable)
-    Pending,   // Outgoing messages queued for delivery
-    Sent,      // Outgoing messages successfully delivered (terminal, immutable)
-    Failed,    // Outgoing messages that failed delivery
+    Received, // Incoming messages only (terminal, immutable)
+    Pending,  // Outgoing messages queued for delivery
+    Sent,     // Outgoing messages successfully delivered (terminal, immutable)
+    Failed,   // Outgoing messages that failed delivery
 }
 
 impl MessageStatus {
@@ -90,18 +90,14 @@ pub struct Message {
     pub author_id: String,
     pub is_immutable: bool,
     pub retry_count: i32,
-    pub created_at: String,  // ISO 8601 timestamp
-    pub sent_at: Option<String>,  // ISO 8601 timestamp
-    pub updated_at: String,  // ISO 8601 timestamp
+    pub created_at: String,      // ISO 8601 timestamp
+    pub sent_at: Option<String>, // ISO 8601 timestamp
+    pub updated_at: String,      // ISO 8601 timestamp
 }
 
 impl Message {
     /// Create a new incoming message
-    pub fn new_incoming(
-        conversation_id: String,
-        content: String,
-        author_id: String,
-    ) -> Self {
+    pub fn new_incoming(conversation_id: String, content: String, author_id: String) -> Self {
         let now = time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap();
@@ -113,7 +109,7 @@ impl Message {
             status: MessageStatus::Received,
             content,
             author_id,
-            is_immutable: true,  // Incoming messages are immediately immutable
+            is_immutable: true, // Incoming messages are immediately immutable
             retry_count: 0,
             created_at: now.clone(),
             sent_at: None,
@@ -122,11 +118,7 @@ impl Message {
     }
 
     /// Create a new outgoing message
-    pub fn new_outgoing(
-        conversation_id: String,
-        content: String,
-        author_id: String,
-    ) -> Self {
+    pub fn new_outgoing(conversation_id: String, content: String, author_id: String) -> Self {
         let now = time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap();
@@ -138,7 +130,7 @@ impl Message {
             status: MessageStatus::Pending,
             content,
             author_id,
-            is_immutable: false,  // Outgoing messages become immutable after sent
+            is_immutable: false, // Outgoing messages become immutable after sent
             retry_count: 0,
             created_at: now.clone(),
             sent_at: None,
@@ -153,7 +145,10 @@ impl Message {
             return Err("Message content cannot be empty".to_string());
         }
         if len > 10_000 {
-            return Err(format!("Message content too long: {} characters (max 10,000)", len));
+            return Err(format!(
+                "Message content too long: {} characters (max 10,000)",
+                len
+            ));
         }
         Ok(())
     }

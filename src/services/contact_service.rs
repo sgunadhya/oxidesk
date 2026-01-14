@@ -1,7 +1,8 @@
-use crate::api::middleware::{ApiResult, ApiError, AuthenticatedUser};
+use crate::api::middleware::{ApiError, ApiResult, AuthenticatedUser};
 use crate::database::Database;
 use crate::models::*;
 use crate::services::validate_and_normalize_email;
+use time;
 
 /// Create a new contact
 pub async fn create_contact(
@@ -20,8 +21,13 @@ pub async fn create_contact(
     let email = validate_and_normalize_email(&request.email)?;
 
     // Check if email already exists for contacts (per-type uniqueness)
-    if let Some(_) = db.get_user_by_email_and_type(&email, &UserType::Contact).await? {
-        return Err(ApiError::Conflict("Contact email already exists".to_string()));
+    if let Some(_) = db
+        .get_user_by_email_and_type(&email, &UserType::Contact)
+        .await?
+    {
+        return Err(ApiError::Conflict(
+            "Contact email already exists".to_string(),
+        ));
     }
 
     // Create user
@@ -57,10 +63,7 @@ pub async fn create_contact(
 }
 
 /// Get a contact by ID
-pub async fn get_contact(
-    db: &Database,
-    id: &str,
-) -> ApiResult<ContactResponse> {
+pub async fn get_contact(db: &Database, id: &str) -> ApiResult<ContactResponse> {
     // Get user
     let user = db
         .get_user_by_id(id)
@@ -93,11 +96,7 @@ pub async fn get_contact(
 }
 
 /// Delete a contact
-pub async fn delete(
-    db: &Database,
-    auth_user: &AuthenticatedUser,
-    id: &str,
-) -> ApiResult<()> {
+pub async fn delete(db: &Database, auth_user: &AuthenticatedUser, id: &str) -> ApiResult<()> {
     // Check permission (admin only)
     if !auth_user.is_admin() {
         return Err(ApiError::Forbidden(
@@ -218,4 +217,45 @@ pub async fn update_contact(
         created_at: user.created_at.clone(),
         updated_at: user.updated_at.clone(),
     })
+}
+
+/// Update contact details (email and name)
+pub async fn update_contact_details(
+    db: &Database,
+    _auth_user: &AuthenticatedUser,
+    id: &str,
+    full_name: &str,
+    email: &str,
+) -> ApiResult<()> {
+    // Validate contact exists
+    let contact = db
+        .get_contact_by_user_id(id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("Contact not found".to_string()))?;
+
+    // Update User Email
+    let now = time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap();
+
+    db.update_user_email(id, email, &now).await?;
+
+    // Update Contact Name
+    db.update_contact_name(&contact.id, full_name).await?;
+
+    Ok(())
+}
+
+/// Resolve internal Contact ID from User ID
+/// Used when frontend provides User ID (which acts as public Contact ID) but backend needs internal Contact ID for FKs
+pub async fn resolve_contact_id_from_user_id(db: &Database, user_id: &str) -> ApiResult<String> {
+    let id = user_id.trim();
+    tracing::info!("Resolving contact for user_id: '{}'", id);
+
+    let contact = db.get_contact_by_user_id(id).await?.ok_or_else(|| {
+        tracing::warn!("Contact resolution failed for user_id: '{}'", id);
+        ApiError::NotFound("Contact not found".to_string())
+    })?;
+
+    Ok(contact.id)
 }

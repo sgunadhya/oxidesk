@@ -2,7 +2,6 @@
 ///
 /// Handles parsing of incoming emails using mail-parser crate.
 /// Extracts headers, body content, and attachments.
-
 use crate::error::ApiResult;
 use mail_parser::{MessageParser, MimeHeaders};
 
@@ -64,21 +63,25 @@ impl EmailParserService {
 
     /// Parse raw email bytes into structured data
     pub fn parse_email(&self, raw_email: &[u8]) -> ApiResult<ParsedEmail> {
-        let message = MessageParser::default()
-            .parse(raw_email)
-            .ok_or_else(|| crate::error::ApiError::BadRequest("Failed to parse email".to_string()))?;
+        let message = MessageParser::default().parse(raw_email).ok_or_else(|| {
+            crate::error::ApiError::BadRequest("Failed to parse email".to_string())
+        })?;
 
         // Extract Message-ID (required)
         let message_id = message
             .message_id()
-            .ok_or_else(|| crate::error::ApiError::BadRequest("Email missing Message-ID header".to_string()))?
+            .ok_or_else(|| {
+                crate::error::ApiError::BadRequest("Email missing Message-ID header".to_string())
+            })?
             .to_string();
 
         // Extract From address (required)
         let from = message
             .from()
             .and_then(|addrs| addrs.first())
-            .ok_or_else(|| crate::error::ApiError::BadRequest("Email missing From header".to_string()))?;
+            .ok_or_else(|| {
+                crate::error::ApiError::BadRequest("Email missing From header".to_string())
+            })?;
 
         let from_address = from
             .address()
@@ -101,10 +104,7 @@ impl EmailParserService {
             Vec::new()
         };
 
-        let in_reply_to = message
-            .in_reply_to()
-            .as_text()
-            .map(|s| s.to_string());
+        let in_reply_to = message.in_reply_to().as_text().map(|s| s.to_string());
 
         // Extract attachments
         let mut attachments = Vec::new();
@@ -155,7 +155,11 @@ impl EmailParserService {
 
     /// Format subject with reference number
     /// Example: "Original Subject" -> "Re: Original Subject [#123]"
-    pub fn format_subject_with_reference(&self, original_subject: &str, reference_number: i32) -> String {
+    pub fn format_subject_with_reference(
+        &self,
+        original_subject: &str,
+        reference_number: i32,
+    ) -> String {
         let subject = original_subject.trim();
 
         // Remove existing "Re:" prefix if present
@@ -188,9 +192,18 @@ mod tests {
     fn test_extract_reference_number() {
         let parser = EmailParserService::new();
 
-        assert_eq!(parser.extract_reference_number("Support Request [#123]"), Some(123));
-        assert_eq!(parser.extract_reference_number("Re: Bug Report [REF#456]"), Some(456));
-        assert_eq!(parser.extract_reference_number("Re: Question [ref#789]"), Some(789));
+        assert_eq!(
+            parser.extract_reference_number("Support Request [#123]"),
+            Some(123)
+        );
+        assert_eq!(
+            parser.extract_reference_number("Re: Bug Report [REF#456]"),
+            Some(456)
+        );
+        assert_eq!(
+            parser.extract_reference_number("Re: Question [ref#789]"),
+            Some(789)
+        );
         assert_eq!(parser.extract_reference_number("No reference here"), None);
         assert_eq!(parser.extract_reference_number("Invalid [#abc]"), None);
     }

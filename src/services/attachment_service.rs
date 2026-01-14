@@ -2,7 +2,6 @@
 ///
 /// Handles storage and validation of email attachments.
 /// Saves attachments to disk and creates database records.
-
 use crate::database::Database;
 use crate::error::{ApiError, ApiResult};
 use crate::models::MessageAttachment;
@@ -91,9 +90,9 @@ impl AttachmentService {
         }
 
         // Write file to disk
-        fs::write(&file_path, &content)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to write attachment to disk: {}", e)))?;
+        fs::write(&file_path, &content).await.map_err(|e| {
+            ApiError::Internal(format!("Failed to write attachment to disk: {}", e))
+        })?;
 
         // Create database record
         let attachment = MessageAttachment {
@@ -110,7 +109,10 @@ impl AttachmentService {
     }
 
     /// Get all attachments for a message
-    pub async fn get_message_attachments(&self, message_id: &str) -> ApiResult<Vec<MessageAttachment>> {
+    pub async fn get_message_attachments(
+        &self,
+        message_id: &str,
+    ) -> ApiResult<Vec<MessageAttachment>> {
         self.db.get_message_attachments(message_id).await
     }
 
@@ -131,9 +133,9 @@ impl AttachmentService {
 
         // Delete file from disk
         if Path::new(&attachment.file_path).exists() {
-            fs::remove_file(&attachment.file_path)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to delete attachment from disk: {}", e)))?;
+            fs::remove_file(&attachment.file_path).await.map_err(|e| {
+                ApiError::Internal(format!("Failed to delete attachment from disk: {}", e))
+            })?;
         }
 
         // Note: Database record will be deleted via CASCADE when message is deleted
@@ -216,9 +218,18 @@ mod tests {
         let service = AttachmentService::new(db, "/tmp/attachments");
 
         assert_eq!(service.sanitize_filename("test.pdf"), "test.pdf");
-        assert_eq!(service.sanitize_filename("../../../etc/passwd"), ".._.._.._etc_passwd");
-        assert_eq!(service.sanitize_filename("test:file*.pdf"), "test_file_.pdf");
-        assert_eq!(service.sanitize_filename("test<file>.pdf"), "test_file_.pdf");
+        assert_eq!(
+            service.sanitize_filename("../../../etc/passwd"),
+            ".._.._.._etc_passwd"
+        );
+        assert_eq!(
+            service.sanitize_filename("test:file*.pdf"),
+            "test_file_.pdf"
+        );
+        assert_eq!(
+            service.sanitize_filename("test<file>.pdf"),
+            "test_file_.pdf"
+        );
     }
 
     #[tokio::test]

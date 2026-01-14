@@ -3,62 +3,93 @@
 {% block title %}Contacts - Oxidesk{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-        <h2 style="margin: 0;">Contacts</h2>
-        <a href="/contacts/new" class="btn btn-primary">+ Create Contact</a>
+<div class="py-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 flex justify-between items-center">
+        <h1 class="text-2xl font-semibold text-gray-900">Contacts</h1>
+        <a href="/contacts/new"
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            + Create Contact
+        </a>
     </div>
 
-    <div id="contacts-list">
-        {% if contacts.is_empty() %}
-        <p style="color: #666; text-align: center; padding: 2rem;">No contacts found</p>
-        {% else %}
-        <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr style="border-bottom: 2px solid #ddd;">
-                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Name</th>
-                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Email</th>
-                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Channels</th>
-                        <th style="text-align: left; padding: 0.75rem; font-weight: 600;">Created</th>
-                        <th style="text-align: right; padding: 0.75rem; font-weight: 600;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for contact in contacts %}
-                    <tr style="border-bottom: 1px solid #eee;" id="contact-row-{{ contact.id }}">
-                        <td style="padding: 0.75rem;">
-                            {% if contact.full_name.is_empty() %}
-                            <span style="color: #999; font-style: italic;">No name</span>
-                            {% else %}
-                            {{ contact.full_name }}
-                            {% endif %}
-                        </td>
-                        <td style="padding: 0.75rem;">{{ contact.email }}</td>
-                        <td style="padding: 0.75rem;">
-                            <span class="badge badge-secondary">{{ contact.channel_count }} channel(s)</span>
-                        </td>
-                        <td style="padding: 0.75rem; color: #666;">{{ contact.created_at }}</td>
-                        <td style="padding: 0.75rem; text-align: right;">
-                            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                                <a href="/contacts/{{ contact.id }}/edit" class="btn btn-secondary" style="padding: 0.5rem 1rem;">Edit</a>
-                                <button
-                                    class="btn btn-danger"
-                                    style="padding: 0.5rem 1rem;"
-                                    hx-delete="/contacts/{{ contact.id }}"
-                                    hx-target="#contact-row-{{ contact.id }}"
-                                    hx-swap="outerHTML swap:0.3s"
-                                    hx-confirm="Are you sure you want to delete contact {{ contact.full_name }} ({{ contact.email }})? This will also delete their user account and all associated channels.">
-                                    Delete
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 mt-6">
+        <div class="flex flex-col">
+            <div class="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                <div class="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
+                    <div class="shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
+                        {% if contacts.is_empty() %}
+                        <div class="text-center py-12">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900">No contacts</h3>
+                            <p class="mt-1 text-sm text-gray-500">Get started by creating a new contact.</p>
+                        </div>
+                        {% else %}
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Name</th>
+                                    <th scope="col"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Email</th>
+                                    <th scope="col"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Channels</th>
+                                    <th scope="col"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Created</th>
+                                    <th scope="col" class="relative px-6 py-3">
+                                        <span class="sr-only">Actions</span>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for contact in contacts %}
+                                <tr id="contact-row-{{ contact.id }}">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        <a href="/contacts/{{ contact.id }}"
+                                            class="text-indigo-600 hover:text-indigo-900">
+                                            {% if contact.full_name.is_empty() %}
+                                            <span class="text-gray-400 italic">No name</span>
+                                            {% else %}
+                                            {{ contact.full_name }}
+                                            {% endif %}
+                                        </a>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ contact.email }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <span
+                                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            {{ contact.channel_count }} channel(s)
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ contact.created_at
+                                        }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <a href="/contacts/{{ contact.id }}/edit"
+                                            class="text-indigo-600 hover:text-indigo-900 mr-4">Edit</a>
+                                        <button class="text-red-600 hover:text-red-900"
+                                            hx-delete="/contacts/{{ contact.id }}"
+                                            hx-target="#contact-row-{{ contact.id }}" hx-swap="outerHTML swap:0.3s"
+                                            hx-confirm="Are you sure you want to delete contact {{ contact.full_name }} ({{ contact.email }})?">
+                                            Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}

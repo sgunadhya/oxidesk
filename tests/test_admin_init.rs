@@ -2,8 +2,8 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent, UserRole},
-    services::{validate_password_complexity, validate_and_normalize_email, hash_password},
+    models::{Agent, User, UserRole, UserType},
+    services::{hash_password, validate_and_normalize_email, validate_password_complexity},
 };
 
 #[tokio::test]
@@ -78,7 +78,12 @@ async fn test_admin_email_uniqueness_per_type() {
     let password_hash = hash_password("SecureAdmin123!").unwrap();
 
     let user1 = User::new(normalized_email.clone(), UserType::Agent);
-    let agent1 = Agent::new(user1.id.clone(), "Admin".to_string(), None, password_hash.clone());
+    let agent1 = Agent::new(
+        user1.id.clone(),
+        "Admin".to_string(),
+        None,
+        password_hash.clone(),
+    );
 
     db.create_user(&user1).await.unwrap();
     db.create_agent(&agent1).await.unwrap();
@@ -98,7 +103,6 @@ async fn test_admin_email_uniqueness_per_type() {
     teardown_test_db(test_db).await;
 }
 
-
 #[tokio::test]
 async fn test_admin_initialization_validates_password_complexity() {
     let test_db = setup_test_db().await;
@@ -106,16 +110,20 @@ async fn test_admin_initialization_validates_password_complexity() {
 
     // Try with weak password
     let weak_passwords = vec![
-        "short",           // Too short
-        "nouppercase1!",   // No uppercase
-        "NOLOWERCASE1!",   // No lowercase
-        "NoDigits!!!",     // No digits
-        "NoSpecial123",    // No special char
+        "short",         // Too short
+        "nouppercase1!", // No uppercase
+        "NOLOWERCASE1!", // No lowercase
+        "NoDigits!!!",   // No digits
+        "NoSpecial123",  // No special char
     ];
 
     for weak_pass in weak_passwords {
         let result = validate_password_complexity(weak_pass);
-        assert!(result.is_err(), "Password '{}' should be rejected", weak_pass);
+        assert!(
+            result.is_err(),
+            "Password '{}' should be rejected",
+            weak_pass
+        );
     }
 
     // Strong password should pass
@@ -136,11 +144,19 @@ async fn test_admin_initialization_idempotent() {
     let user = User::new(email.clone(), UserType::Agent);
     db.create_user(&user).await.unwrap();
 
-    let agent = Agent::new(user.id.clone(), "Admin".to_string(), None, password_hash.clone());
+    let agent = Agent::new(
+        user.id.clone(),
+        "Admin".to_string(),
+        None,
+        password_hash.clone(),
+    );
     db.create_agent(&agent).await.unwrap();
 
     // Check if user exists
-    let existing = db.get_user_by_email_and_type(&email, &UserType::Agent).await.unwrap();
+    let existing = db
+        .get_user_by_email_and_type(&email, &UserType::Agent)
+        .await
+        .unwrap();
     assert!(existing.is_some());
 
     // Second attempt should detect existing user

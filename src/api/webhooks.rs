@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::{
     api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
-    models::{CreateWebhookRequest, UpdateWebhookRequest, DeliveryListResponse},
+    models::{CreateWebhookRequest, DeliveryListResponse, UpdateWebhookRequest},
     services::WebhookService,
 };
 

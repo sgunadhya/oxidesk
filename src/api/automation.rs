@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
-    models::{AutomationRule, RuleType, RuleCondition, RuleAction, RuleEvaluationLog},
+    models::{AutomationRule, RuleAction, RuleCondition, RuleEvaluationLog, RuleType},
 };
 
 // Request DTOs
@@ -191,7 +191,10 @@ pub async fn create_automation_rule(
         user.user.id
     );
 
-    Ok((StatusCode::CREATED, Json(AutomationRuleResponse::from(rule))))
+    Ok((
+        StatusCode::CREATED,
+        Json(AutomationRuleResponse::from(rule)),
+    ))
 }
 
 /// List automation rules

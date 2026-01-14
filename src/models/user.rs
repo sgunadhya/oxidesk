@@ -124,7 +124,7 @@ pub struct CreateAgentResponse {
     pub password: String, // Plaintext password - shown only once, never stored
     pub password_note: String, // Warning message about one-time display
     pub availability_status: String, // Always "offline" initially
-    pub enabled: bool, // Always true initially
+    pub enabled: bool,    // Always true initially
     pub role_id: String,
     pub created_at: String,
 }
@@ -246,7 +246,12 @@ impl User {
 }
 
 impl Agent {
-    pub fn new(user_id: String, first_name: String, last_name: Option<String>, password_hash: String) -> Self {
+    pub fn new(
+        user_id: String,
+        first_name: String,
+        last_name: Option<String>,
+        password_hash: String,
+    ) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             user_id,

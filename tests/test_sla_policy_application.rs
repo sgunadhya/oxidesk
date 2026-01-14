@@ -166,7 +166,11 @@ async fn test_apply_sla_creates_applied_sla_and_events() {
         .await
         .unwrap();
 
-    assert_eq!(events.len(), 2, "Should have first_response and resolution events");
+    assert_eq!(
+        events.len(),
+        2,
+        "Should have first_response and resolution events"
+    );
 
     // Verify event types
     let event_types: Vec<_> = events.iter().map(|e| e.event_type).collect();
@@ -212,7 +216,10 @@ async fn test_deadline_calculation_with_business_hours() {
         ]
     }"#;
 
-    let mut team = Team::new("Support Team".to_string(), Some("Team with business hours".to_string()));
+    let mut team = Team::new(
+        "Support Team".to_string(),
+        Some("Team with business hours".to_string()),
+    );
     team.sla_policy_id = Some(policy.id.clone());
     team.business_hours = Some(business_hours_json.to_string());
     db.create_team(&team).await.unwrap();
@@ -228,7 +235,9 @@ async fn test_deadline_calculation_with_business_hours() {
     .await;
 
     // Assign conversation to team
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system").await.unwrap();
+    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
+        .await
+        .unwrap();
 
     // Apply SLA during business hours (e.g., Monday 10:00 AM EST)
     let base_timestamp = "2024-01-08T15:00:00Z"; // Monday 10:00 AM EST (UTC-5)
@@ -283,7 +292,9 @@ async fn test_deadline_skips_weekend() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system").await.unwrap();
+    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
+        .await
+        .unwrap();
 
     // Friday 4:30 PM EST (21:30 UTC) + 1h should roll to Monday 10:30 AM EST
     let base_timestamp = "2024-01-12T21:30:00Z"; // Friday 4:30 PM EST
@@ -299,10 +310,15 @@ async fn test_deadline_skips_weekend() {
         .unwrap();
 
     // Parse the deadline
-    let deadline = chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
+    let deadline =
+        chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
 
     // Should be Monday (weekday 0 = Monday in chrono)
-    assert_eq!(deadline.weekday(), chrono::Weekday::Mon, "Deadline should skip weekend and land on Monday");
+    assert_eq!(
+        deadline.weekday(),
+        chrono::Weekday::Mon,
+        "Deadline should skip weekend and land on Monday"
+    );
 }
 
 /// T033: Test deadline skips evenings
@@ -340,7 +356,9 @@ async fn test_deadline_skips_evenings() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system").await.unwrap();
+    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
+        .await
+        .unwrap();
 
     // Monday 4:30 PM EST (21:30 UTC) + 2h should roll to Tuesday 11:30 AM EST
     let base_timestamp = "2024-01-08T21:30:00Z"; // Monday 4:30 PM EST
@@ -356,10 +374,15 @@ async fn test_deadline_skips_evenings() {
         .unwrap();
 
     // Parse the deadline
-    let deadline = chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
+    let deadline =
+        chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
 
     // Should be Tuesday (next business day)
-    assert_eq!(deadline.weekday(), chrono::Weekday::Tue, "Deadline should skip evening and land on next business day");
+    assert_eq!(
+        deadline.weekday(),
+        chrono::Weekday::Tue,
+        "Deadline should skip evening and land on next business day"
+    );
 }
 
 /// T034: Test deadline calculation without business hours (24/7 default)
@@ -385,7 +408,9 @@ async fn test_deadline_calculation_without_business_hours() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system").await.unwrap();
+    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
+        .await
+        .unwrap();
 
     // Use a timestamp that would normally skip to next business day
     let base_timestamp = "2024-01-12T21:30:00Z"; // Friday 4:30 PM EST
@@ -402,11 +427,15 @@ async fn test_deadline_calculation_without_business_hours() {
 
     // Parse timestamps
     let base = chrono::DateTime::parse_from_rfc3339(base_timestamp).unwrap();
-    let deadline = chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
+    let deadline =
+        chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
 
     // Should be exactly 2 hours later (no business hours skipping)
     let diff = (deadline - base).num_hours();
-    assert_eq!(diff, 2, "24/7 deadline should be exactly 2 hours later, not skipping weekends");
+    assert_eq!(
+        diff, 2,
+        "24/7 deadline should be exactly 2 hours later, not skipping weekends"
+    );
 }
 
 /// T035: Test business hours timezone handling
@@ -444,7 +473,9 @@ async fn test_business_hours_timezone_handling() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system").await.unwrap();
+    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
+        .await
+        .unwrap();
 
     // Use UTC timestamp that corresponds to EST business hours
     let base_timestamp = "2024-01-08T15:00:00Z"; // Monday 10:00 AM EST
@@ -459,7 +490,10 @@ async fn test_business_hours_timezone_handling() {
         .await;
 
     // Should succeed with proper timezone handling
-    assert!(result.is_ok(), "Should handle timezone conversion correctly");
+    assert!(
+        result.is_ok(),
+        "Should handle timezone conversion correctly"
+    );
 }
 
 // ========================================
@@ -592,12 +626,18 @@ async fn test_apply_sla_to_different_conversations_succeeds() {
     let result1 = sla_service
         .apply_sla(&conversation1.id, &policy.id, &base_timestamp)
         .await;
-    assert!(result1.is_ok(), "First conversation SLA application should succeed");
+    assert!(
+        result1.is_ok(),
+        "First conversation SLA application should succeed"
+    );
 
     let result2 = sla_service
         .apply_sla(&conversation2.id, &policy.id, &base_timestamp)
         .await;
-    assert!(result2.is_ok(), "Second conversation SLA application should succeed");
+    assert!(
+        result2.is_ok(),
+        "Second conversation SLA application should succeed"
+    );
 }
 
 /// T049: Test applying same policy twice to conversation is rejected
@@ -636,7 +676,10 @@ async fn test_apply_same_policy_twice_to_conversation_rejected() {
         .apply_sla(&conversation.id, &policy.id, &base_timestamp)
         .await;
 
-    assert!(result.is_err(), "Applying same policy twice should be rejected");
+    assert!(
+        result.is_err(),
+        "Applying same policy twice should be rejected"
+    );
 }
 
 /// T050: Test applying different policy to conversation is also rejected
@@ -677,7 +720,10 @@ async fn test_apply_different_policy_to_conversation_rejected() {
         .apply_sla(&conversation.id, &policy2.id, &base_timestamp)
         .await;
 
-    assert!(result.is_err(), "Applying different policy should also be rejected");
+    assert!(
+        result.is_err(),
+        "Applying different policy should also be rejected"
+    );
 
     // Verify error message
     match result {
@@ -726,15 +772,27 @@ async fn test_delete_sla_policy_cascades_to_applied_slas() {
         .unwrap();
 
     // Verify applied SLA exists
-    let applied_sla_before = db.get_applied_sla_by_conversation(&conversation.id).await.unwrap();
-    assert!(applied_sla_before.is_some(), "Applied SLA should exist before deletion");
+    let applied_sla_before = db
+        .get_applied_sla_by_conversation(&conversation.id)
+        .await
+        .unwrap();
+    assert!(
+        applied_sla_before.is_some(),
+        "Applied SLA should exist before deletion"
+    );
 
     // Delete the SLA policy
     sla_service.delete_policy(&policy.id).await.unwrap();
 
     // Verify applied SLA was CASCADE deleted
-    let applied_sla_after = db.get_applied_sla_by_conversation(&conversation.id).await.unwrap();
-    assert!(applied_sla_after.is_none(), "Applied SLA should be CASCADE deleted");
+    let applied_sla_after = db
+        .get_applied_sla_by_conversation(&conversation.id)
+        .await
+        .unwrap();
+    assert!(
+        applied_sla_after.is_none(),
+        "Applied SLA should be CASCADE deleted"
+    );
 }
 
 /// T057: Test deleting applied SLA cascades to SLA events (already works from 007)
@@ -767,18 +825,36 @@ async fn test_delete_applied_sla_cascades_to_sla_events() {
         .await
         .unwrap();
 
-    let applied_sla = db.get_applied_sla_by_conversation(&conversation.id).await.unwrap().unwrap();
+    let applied_sla = db
+        .get_applied_sla_by_conversation(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
 
     // Verify SLA events exist
-    let events_before = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
-    assert_eq!(events_before.len(), 2, "Should have 2 SLA events (first_response, resolution)");
+    let events_before = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        events_before.len(),
+        2,
+        "Should have 2 SLA events (first_response, resolution)"
+    );
 
     // Delete the SLA policy (which CASCADE deletes applied SLA)
     sla_service.delete_policy(&policy.id).await.unwrap();
 
     // Verify SLA events were CASCADE deleted
-    let events_after = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
-    assert_eq!(events_after.len(), 0, "SLA events should be CASCADE deleted");
+    let events_after = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        events_after.len(),
+        0,
+        "SLA events should be CASCADE deleted"
+    );
 }
 
 /// T058: Test CASCADE delete with multiple conversations
@@ -804,7 +880,7 @@ async fn test_cascade_delete_with_multiple_conversations() {
     for _i in 0..10 {
         let conversation = create_test_conversation(
             &db,
-            "inbox-001".to_string(),  // Use same inbox for all
+            "inbox-001".to_string(), // Use same inbox for all
             contact.id.clone(),
             ConversationStatus::Open,
         )
@@ -821,7 +897,11 @@ async fn test_cascade_delete_with_multiple_conversations() {
     // Verify all 10 applied SLAs exist
     for conv_id in &conversation_ids {
         let applied_sla = db.get_applied_sla_by_conversation(conv_id).await.unwrap();
-        assert!(applied_sla.is_some(), "Applied SLA should exist for conversation {}", conv_id);
+        assert!(
+            applied_sla.is_some(),
+            "Applied SLA should exist for conversation {}",
+            conv_id
+        );
     }
 
     // Delete the SLA policy
@@ -830,7 +910,11 @@ async fn test_cascade_delete_with_multiple_conversations() {
     // Verify all 10 applied SLAs were CASCADE deleted
     for conv_id in &conversation_ids {
         let applied_sla = db.get_applied_sla_by_conversation(conv_id).await.unwrap();
-        assert!(applied_sla.is_none(), "Applied SLA should be CASCADE deleted for conversation {}", conv_id);
+        assert!(
+            applied_sla.is_none(),
+            "Applied SLA should be CASCADE deleted for conversation {}",
+            conv_id
+        );
     }
 }
 
@@ -850,7 +934,10 @@ async fn test_delete_policy_with_no_applied_slas() {
 
     // Delete the policy - should succeed even with no applied SLAs
     let result = sla_service.delete_policy(&policy.id).await;
-    assert!(result.is_ok(), "Deleting policy with no applied SLAs should succeed");
+    assert!(
+        result.is_ok(),
+        "Deleting policy with no applied SLAs should succeed"
+    );
 
     // Verify policy is deleted
     let policy_after = sla_service.get_policy(&policy.id).await.unwrap();
@@ -887,7 +974,10 @@ async fn test_cascade_delete_is_transactional() {
         .unwrap();
 
     // Get event IDs before deletion
-    let events_before = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
+    let events_before = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
     let event_ids: Vec<String> = events_before.iter().map(|e| e.id.clone()).collect();
 
     // Delete the policy
@@ -929,7 +1019,7 @@ async fn test_sla_events_orphaned_check() {
     for _i in 0..5 {
         let conversation = create_test_conversation(
             &db,
-            "inbox-001".to_string(),  // Use same inbox for all
+            "inbox-001".to_string(), // Use same inbox for all
             contact.id.clone(),
             ConversationStatus::Open,
         )
@@ -948,8 +1038,16 @@ async fn test_sla_events_orphaned_check() {
 
     // Verify no orphaned events (all should be CASCADE deleted)
     for applied_sla_id in applied_sla_ids {
-        let events = db.get_sla_events_by_applied_sla(&applied_sla_id).await.unwrap();
-        assert_eq!(events.len(), 0, "No orphaned events should exist for applied_sla {}", applied_sla_id);
+        let events = db
+            .get_sla_events_by_applied_sla(&applied_sla_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            events.len(),
+            0,
+            "No orphaned events should exist for applied_sla {}",
+            applied_sla_id
+        );
     }
 }
 
@@ -983,7 +1081,9 @@ async fn test_full_sla_application_workflow() {
     let policy = create_test_sla_policy(&db, "Standard SLA", "2h", "24h", "4h").await;
 
     // Assign policy to team
-    db.update_team_sla_policy(&team.id, Some(&policy.id)).await.unwrap();
+    db.update_team_sla_policy(&team.id, Some(&policy.id))
+        .await
+        .unwrap();
 
     // Create conversation assigned to team
     let contact = create_test_contact(&db, "customer@example.com").await;
@@ -995,7 +1095,9 @@ async fn test_full_sla_application_workflow() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system").await.unwrap();
+    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
+        .await
+        .unwrap();
 
     // Apply SLA
     let sla_service = oxidesk::SlaService::new(
@@ -1020,11 +1122,15 @@ async fn test_full_sla_application_workflow() {
     assert!(!applied_sla.resolution_deadline_at.is_empty());
 
     // Verify SLA events were created
-    let events = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
+    let events = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
     assert_eq!(events.len(), 2);
 
     // Verify business hours were applied (deadlines should skip non-working hours)
-    let first_response_deadline = chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
+    let first_response_deadline =
+        chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
     let _base = chrono::DateTime::parse_from_rfc3339(base_timestamp).unwrap();
 
     // 2 hours during business hours should still be on Monday
@@ -1039,8 +1145,14 @@ async fn test_full_sla_application_workflow() {
     // Delete policy - should CASCADE delete applied SLA
     sla_service.delete_policy(&policy.id).await.unwrap();
 
-    let applied_sla_after = db.get_applied_sla_by_conversation(&conversation.id).await.unwrap();
-    assert!(applied_sla_after.is_none(), "Applied SLA should be CASCADE deleted");
+    let applied_sla_after = db
+        .get_applied_sla_by_conversation(&conversation.id)
+        .await
+        .unwrap();
+    assert!(
+        applied_sla_after.is_none(),
+        "Applied SLA should be CASCADE deleted"
+    );
 }
 
 /// T074: Business hours edge cases integration test
@@ -1081,7 +1193,9 @@ async fn test_business_hours_edge_cases() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system").await.unwrap();
+    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
+        .await
+        .unwrap();
 
     // Saturday 10:00 AM EST
     let saturday_timestamp = "2024-01-13T15:00:00Z";
@@ -1091,8 +1205,13 @@ async fn test_business_hours_edge_cases() {
         .unwrap();
 
     // Deadline should be on Monday (skipping weekend)
-    let deadline = chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
-    assert_eq!(deadline.weekday(), chrono::Weekday::Mon, "Deadline should skip to Monday");
+    let deadline =
+        chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
+    assert_eq!(
+        deadline.weekday(),
+        chrono::Weekday::Mon,
+        "Deadline should skip to Monday"
+    );
 
     // Test case 2: Invalid business hours JSON should fall back to 24/7
     let mut team2 = Team::new("Invalid BH Team".to_string(), None);
@@ -1110,7 +1229,9 @@ async fn test_business_hours_edge_cases() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation2.id, &team2.id, "system").await.unwrap();
+    db.assign_conversation_to_team(&conversation2.id, &team2.id, "system")
+        .await
+        .unwrap();
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
     let result = sla_service
@@ -1118,7 +1239,10 @@ async fn test_business_hours_edge_cases() {
         .await;
 
     // Should succeed with 24/7 fallback
-    assert!(result.is_ok(), "Should fall back to 24/7 calculation with invalid business hours");
+    assert!(
+        result.is_ok(),
+        "Should fall back to 24/7 calculation with invalid business hours"
+    );
 }
 
 /// T080: Final integration verification
@@ -1139,12 +1263,17 @@ async fn test_final_integration_verification() {
         ]
     }"#;
 
-    let mut team = Team::new("Production Team".to_string(), Some("Final verification".to_string()));
+    let mut team = Team::new(
+        "Production Team".to_string(),
+        Some("Final verification".to_string()),
+    );
     team.business_hours = Some(business_hours_json.to_string());
     db.create_team(&team).await.unwrap();
 
     let policy = create_test_sla_policy(&db, "Production SLA", "4h", "48h", "8h").await;
-    db.update_team_sla_policy(&team.id, Some(&policy.id)).await.unwrap();
+    db.update_team_sla_policy(&team.id, Some(&policy.id))
+        .await
+        .unwrap();
 
     let contact = create_test_contact(&db, "production@example.com").await;
     let conversation = create_test_conversation(
@@ -1155,7 +1284,9 @@ async fn test_final_integration_verification() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system").await.unwrap();
+    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
+        .await
+        .unwrap();
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
@@ -1177,13 +1308,15 @@ async fn test_final_integration_verification() {
     assert_eq!(applied_sla.status, AppliedSlaStatus::Pending);
 
     // Verify deadlines are properly calculated with business hours
-    let first_response_deadline = chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
-    let resolution_deadline = chrono::DateTime::parse_from_rfc3339(&applied_sla.resolution_deadline_at).unwrap();
+    let first_response_deadline =
+        chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
+    let resolution_deadline =
+        chrono::DateTime::parse_from_rfc3339(&applied_sla.resolution_deadline_at).unwrap();
 
     // First response (4h) should be Thursday morning
     assert!(
-        first_response_deadline.weekday() == chrono::Weekday::Wed ||
-        first_response_deadline.weekday() == chrono::Weekday::Thu,
+        first_response_deadline.weekday() == chrono::Weekday::Wed
+            || first_response_deadline.weekday() == chrono::Weekday::Thu,
         "First response deadline should be Wed or Thu"
     );
 
@@ -1191,11 +1324,20 @@ async fn test_final_integration_verification() {
     assert!(resolution_deadline > first_response_deadline);
 
     // Verify SLA events
-    let events = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
+    let events = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
     assert_eq!(events.len(), 2);
 
-    let first_response_event = events.iter().find(|e| e.event_type == SlaEventType::FirstResponse).unwrap();
-    let resolution_event = events.iter().find(|e| e.event_type == SlaEventType::Resolution).unwrap();
+    let first_response_event = events
+        .iter()
+        .find(|e| e.event_type == SlaEventType::FirstResponse)
+        .unwrap();
+    let resolution_event = events
+        .iter()
+        .find(|e| e.event_type == SlaEventType::Resolution)
+        .unwrap();
 
     assert_eq!(first_response_event.status, SlaEventStatus::Pending);
     assert_eq!(resolution_event.status, SlaEventStatus::Pending);
@@ -1208,9 +1350,15 @@ async fn test_final_integration_verification() {
 
     // Verify CASCADE deletion
     sla_service.delete_policy(&policy.id).await.unwrap();
-    let applied_sla_after = db.get_applied_sla_by_conversation(&conversation.id).await.unwrap();
+    let applied_sla_after = db
+        .get_applied_sla_by_conversation(&conversation.id)
+        .await
+        .unwrap();
     assert!(applied_sla_after.is_none());
 
-    let events_after = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
+    let events_after = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
     assert_eq!(events_after.len(), 0);
 }

@@ -1,5 +1,4 @@
 use axum::{
-
     extract::{Request, State},
     http::StatusCode,
     middleware::Next,
@@ -37,7 +36,8 @@ pub fn format_multi_permission_error(required_permissions: &[&str]) -> serde_jso
 /// Returns 403 Forbidden if user lacks all of the specified permissions
 pub async fn require_any_permission(
     permissions: &'static [&'static str],
-) -> impl Fn(Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send>> + Clone {
+) -> impl Fn(Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send>>
+       + Clone {
     move |req: Request, next: Next| {
         Box::pin(async move {
             // Extract authenticated user from request extensions

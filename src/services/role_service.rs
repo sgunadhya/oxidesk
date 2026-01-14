@@ -1,4 +1,4 @@
-use crate::api::middleware::{ApiResult, ApiError, AuthenticatedUser};
+use crate::api::middleware::{ApiError, ApiResult, AuthenticatedUser};
 use crate::database::Database;
 use crate::models::*;
 
@@ -23,10 +23,7 @@ pub async fn list_roles(db: &Database) -> ApiResult<Vec<RoleResponse>> {
 }
 
 /// Get a role by ID
-pub async fn get_role(
-    db: &Database,
-    id: &str,
-) -> ApiResult<RoleResponse> {
+pub async fn get_role(db: &Database, id: &str) -> ApiResult<RoleResponse> {
     let role = db
         .get_role_by_id(id)
         .await?
@@ -58,7 +55,9 @@ pub async fn create_role(
 
     // Validate name
     if request.name.trim().is_empty() {
-        return Err(ApiError::BadRequest("Role name cannot be empty".to_string()));
+        return Err(ApiError::BadRequest(
+            "Role name cannot be empty".to_string(),
+        ));
     }
 
     // Check if role name already exists
@@ -117,9 +116,7 @@ pub async fn update_role(
 
     // T060-T061: Prevent updating protected roles (Admin role)
     if role.is_protected {
-        return Err(ApiError::Forbidden(
-            "Cannot modify Admin role".to_string(),
-        ));
+        return Err(ApiError::Forbidden("Cannot modify Admin role".to_string()));
     }
 
     // Validate permissions format if provided
@@ -158,11 +155,7 @@ pub async fn update_role(
 }
 
 /// Delete a role (T062-T063: Add is_protected check)
-pub async fn delete(
-    db: &Database,
-    auth_user: &AuthenticatedUser,
-    id: &str,
-) -> ApiResult<()> {
+pub async fn delete(db: &Database, auth_user: &AuthenticatedUser, id: &str) -> ApiResult<()> {
     // Check permission (admin only)
     if !auth_user.is_admin() {
         return Err(ApiError::Forbidden(
@@ -178,17 +171,16 @@ pub async fn delete(
 
     // T062-T063: Prevent deleting protected roles (Admin role)
     if role.is_protected {
-        return Err(ApiError::Forbidden(
-            "Cannot modify Admin role".to_string(),
-        ));
+        return Err(ApiError::Forbidden("Cannot modify Admin role".to_string()));
     }
 
     // Check if role is assigned to any users
     let user_count = db.count_users_with_role(id).await?;
     if user_count > 0 {
-        return Err(ApiError::Conflict(
-            format!("Cannot delete role: {} agents currently assigned", user_count),
-        ));
+        return Err(ApiError::Conflict(format!(
+            "Cannot delete role: {} agents currently assigned",
+            user_count
+        )));
     }
 
     // Delete role

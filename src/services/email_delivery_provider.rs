@@ -2,13 +2,11 @@
 ///
 /// Implements MessageDeliveryProvider trait for sending agent replies via SMTP.
 /// Formats emails with reference numbers and sends using lettre.
-
 use crate::database::Database;
 use crate::models::Message;
 use crate::services::{EmailParserService, MessageDeliveryProvider};
 use lettre::{
-    message::header::ContentType,
-    transport::smtp::authentication::Credentials,
+    message::header::ContentType, transport::smtp::authentication::Credentials,
     Message as LettreMessage, SmtpTransport, Transport,
 };
 
@@ -62,11 +60,16 @@ impl EmailDeliveryProvider {
     }
 
     /// Format subject with reference number
-    fn format_subject_with_reference(&self, original_subject: Option<&str>, reference_number: i64) -> String {
+    fn format_subject_with_reference(
+        &self,
+        original_subject: Option<&str>,
+        reference_number: i64,
+    ) -> String {
         let subject = original_subject.unwrap_or("Support Request");
 
         // Use the parser's existing method
-        self.parser.format_subject_with_reference(subject, reference_number as i32)
+        self.parser
+            .format_subject_with_reference(subject, reference_number as i32)
     }
 }
 
@@ -91,7 +94,12 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
         let email_channel = contact_channels
             .into_iter()
             .find(|ch| !ch.email.is_empty())
-            .ok_or_else(|| format!("No email address found for contact {}", conversation.contact_id))?;
+            .ok_or_else(|| {
+                format!(
+                    "No email address found for contact {}",
+                    conversation.contact_id
+                )
+            })?;
 
         // Get inbox email configuration
         let email_config = self
@@ -99,7 +107,12 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
             .get_inbox_email_config(&conversation.inbox_id)
             .await
             .map_err(|e| format!("Failed to load inbox email config: {}", e))?
-            .ok_or_else(|| format!("No email configuration found for inbox {}", conversation.inbox_id))?;
+            .ok_or_else(|| {
+                format!(
+                    "No email configuration found for inbox {}",
+                    conversation.inbox_id
+                )
+            })?;
 
         // Get agent name if message is from agent
         let agent_name = self
@@ -117,13 +130,13 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
         );
 
         // Render email body
-        let (body, is_html) = self.render_email_body(
-            &message.content,
-            agent_name.as_deref(),
-        );
+        let (body, is_html) = self.render_email_body(&message.content, agent_name.as_deref());
 
         // Build email message
-        let from_address = format!("{} <{}>", email_config.display_name, email_config.email_address);
+        let from_address = format!(
+            "{} <{}>",
+            email_config.display_name, email_config.email_address
+        );
 
         let content_type = if is_html {
             ContentType::TEXT_HTML
@@ -205,7 +218,8 @@ mod tests {
         let db = Database::new_mock();
         let provider = EmailDeliveryProvider::new(db);
 
-        let (body, _is_html) = provider.render_email_body("Thanks for your inquiry!", Some("John Doe"));
+        let (body, _is_html) =
+            provider.render_email_body("Thanks for your inquiry!", Some("John Doe"));
         assert!(body.contains("Thanks for your inquiry!"));
         assert!(body.contains("John Doe"));
         assert!(body.contains("Support Team"));

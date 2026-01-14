@@ -1,9 +1,9 @@
-use sqlx::{any::AnyPoolOptions, AnyPool, Row};
-use time;
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
     models::*,
 };
+use sqlx::{any::AnyPoolOptions, AnyPool, Row};
+use time;
 
 pub struct Database {
     pool: AnyPool,
@@ -39,9 +39,7 @@ impl Database {
     }
 
     pub async fn run_migrations(&self) -> Result<(), sqlx::Error> {
-        sqlx::migrate!("migrations/sqlite")
-            .run(&self.pool)
-            .await?;
+        sqlx::migrate!("migrations/sqlite").run(&self.pool).await?;
         Ok(())
     }
 
@@ -131,6 +129,22 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+
+    pub async fn update_user_email(
+        &self,
+        id: &str,
+        email: &str,
+        updated_at: &str,
+    ) -> ApiResult<()> {
+        sqlx::query("UPDATE users SET email = ?, updated_at = ? WHERE id = ?")
+            .bind(email)
+            .bind(updated_at)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 
     // Agent operations
@@ -230,7 +244,9 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
-            let status_str: String = row.try_get("availability_status").unwrap_or_else(|_| "offline".to_string());
+            let status_str: String = row
+                .try_get("availability_status")
+                .unwrap_or_else(|_| "offline".to_string());
             let status = status_str.parse().unwrap_or(AgentAvailability::Offline);
 
             Ok(Some(Agent {
@@ -268,13 +284,16 @@ impl Database {
 
         if let Some(row) = row {
             let permissions_json: String = row.try_get("permissions")?;
-            let permissions: Vec<String> = serde_json::from_str(&permissions_json)
-                .unwrap_or_else(|_| Vec::new());
+            let permissions: Vec<String> =
+                serde_json::from_str(&permissions_json).unwrap_or_else(|_| Vec::new());
 
             Ok(Some(Role {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 permissions,
                 is_protected: row.try_get::<i32, _>("is_protected")? != 0,
                 created_at: row.try_get("created_at")?,
@@ -313,13 +332,16 @@ impl Database {
         let mut roles = Vec::new();
         for row in rows {
             let permissions_json: String = row.try_get("permissions")?;
-            let permissions: Vec<String> = serde_json::from_str(&permissions_json)
-                .unwrap_or_else(|_| Vec::new());
+            let permissions: Vec<String> =
+                serde_json::from_str(&permissions_json).unwrap_or_else(|_| Vec::new());
 
             roles.push(Role {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 permissions,
                 is_protected: row.try_get::<i32, _>("is_protected")? != 0,
                 created_at: row.try_get("created_at")?,
@@ -448,7 +470,9 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
             };
 
-            let status_str: String = row.try_get("availability_status").unwrap_or_else(|_| "offline".to_string());
+            let status_str: String = row
+                .try_get("availability_status")
+                .unwrap_or_else(|_| "offline".to_string());
             let status = status_str.parse().unwrap_or(AgentAvailability::Offline);
 
             let agent = Agent {
@@ -623,7 +647,8 @@ impl Database {
         .await?;
 
         // Create contact channel
-        let channel = ContactChannel::new(contact.id.clone(), inbox_id.to_string(), email.to_string());
+        let channel =
+            ContactChannel::new(contact.id.clone(), inbox_id.to_string(), email.to_string());
         sqlx::query(
             "INSERT INTO contact_channels (id, contact_id, inbox_id, email, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?)",
@@ -640,6 +665,51 @@ impl Database {
         tx.commit().await?;
 
         Ok(contact.id)
+    }
+
+    // Inbox operations
+    pub async fn create_inbox(&self, inbox: &Inbox) -> ApiResult<()> {
+        sqlx::query(
+            "INSERT INTO inboxes (id, name, channel_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(&inbox.id)
+        .bind(&inbox.name)
+        .bind(&inbox.channel_type)
+        .bind(&inbox.created_at)
+        .bind(&inbox.updated_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn list_inboxes(&self) -> ApiResult<Vec<Inbox>> {
+        let rows = sqlx::query(
+            "SELECT id, name, channel_type, created_at, updated_at FROM inboxes ORDER BY name",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut inboxes = Vec::new();
+        for row in rows {
+            inboxes.push(Inbox {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                channel_type: row.try_get("channel_type")?,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            });
+        }
+        Ok(inboxes)
+    }
+
+    pub async fn update_contact_name(&self, id: &str, first_name: &str) -> ApiResult<()> {
+        sqlx::query("UPDATE contacts SET first_name = ? WHERE id = ?")
+            .bind(first_name)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 
     pub async fn get_contact_channels(&self, contact_id: &str) -> ApiResult<Vec<ContactChannel>> {
@@ -722,7 +792,10 @@ impl Database {
     }
 
     // Conversation operations
-    pub async fn create_conversation(&self, create: &CreateConversation) -> ApiResult<Conversation> {
+    pub async fn create_conversation(
+        &self,
+        create: &CreateConversation,
+    ) -> ApiResult<Conversation> {
         // Handle Option<String> for subject
         let subject_value: Option<&str> = create.subject.as_deref();
 
@@ -803,7 +876,6 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
-
             let conversation = Conversation {
                 id: row.try_get("id")?,
                 reference_number: row.try_get("reference_number")?,
@@ -822,7 +894,11 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
                 tags: None,
-                priority: row.try_get::<Option<String>, _>("priority").ok().flatten().map(crate::models::Priority::from),
+                priority: row
+                    .try_get::<Option<String>, _>("priority")
+                    .ok()
+                    .flatten()
+                    .map(crate::models::Priority::from),
             };
             Ok(Some(conversation))
         } else {
@@ -830,7 +906,10 @@ impl Database {
         }
     }
 
-    pub async fn get_conversation_by_reference_number(&self, reference_number: i64) -> ApiResult<Option<Conversation>> {
+    pub async fn get_conversation_by_reference_number(
+        &self,
+        reference_number: i64,
+    ) -> ApiResult<Option<Conversation>> {
         let row = sqlx::query(
             "SELECT id, reference_number, status, inbox_id, contact_id, subject,
                     resolved_at, snoozed_until, created_at, updated_at, version
@@ -842,7 +921,6 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
-
             let conversation = Conversation {
                 id: row.try_get("id")?,
                 reference_number: row.try_get("reference_number")?,
@@ -861,7 +939,11 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
                 tags: None,
-                priority: row.try_get::<Option<String>, _>("priority").ok().flatten().map(crate::models::Priority::from),
+                priority: row
+                    .try_get::<Option<String>, _>("priority")
+                    .ok()
+                    .flatten()
+                    .map(crate::models::Priority::from),
             };
             Ok(Some(conversation))
         } else {
@@ -874,7 +956,7 @@ impl Database {
         id: &str,
         status: ConversationStatus,
         resolved_at: Option<String>,
-        closed_at: Option<String>,  // Feature 019
+        closed_at: Option<String>, // Feature 019
         snoozed_until: Option<String>,
     ) -> ApiResult<Conversation> {
         // Optimistic locking not strictly enforced here as previous version isn't passed,
@@ -895,19 +977,24 @@ impl Database {
         .await?;
 
         self.get_conversation_by_id(id).await?.ok_or_else(|| {
-              crate::api::middleware::ApiError::NotFound("Conversation not found after update".to_string())
+            crate::api::middleware::ApiError::NotFound(
+                "Conversation not found after update".to_string(),
+            )
         })
     }
-    
-    pub async fn get_conversation_by_reference(&self, ref_num: i64) -> ApiResult<Option<Conversation>> {
+
+    pub async fn get_conversation_by_reference(
+        &self,
+        ref_num: i64,
+    ) -> ApiResult<Option<Conversation>> {
         let row = sqlx::query("SELECT * FROM conversations WHERE reference_number = ?")
             .bind(ref_num)
             .fetch_optional(&self.pool)
             .await?;
 
         if let Some(row) = row {
-             use sqlx::Row;
-             let conversation = Conversation {
+            use sqlx::Row;
+            let conversation = Conversation {
                 id: row.try_get("id")?,
                 inbox_id: row.try_get("inbox_id")?,
                 contact_id: row.try_get("contact_id")?,
@@ -925,7 +1012,11 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
                 tags: None,
-                priority: row.try_get::<Option<String>, _>("priority").ok().flatten().map(crate::models::Priority::from),
+                priority: row
+                    .try_get::<Option<String>, _>("priority")
+                    .ok()
+                    .flatten()
+                    .map(crate::models::Priority::from),
             };
             Ok(Some(conversation))
         } else {
@@ -946,7 +1037,7 @@ impl Database {
             "SELECT id, reference_number, status, inbox_id, contact_id, subject,
                     resolved_at, snoozed_until, created_at, updated_at, version, priority
              FROM conversations
-             WHERE 1=1"
+             WHERE 1=1",
         );
 
         // Add filters
@@ -1002,7 +1093,11 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
                 tags: None,
-                priority: row.try_get::<Option<String>, _>("priority").ok().flatten().map(crate::models::Priority::from),
+                priority: row
+                    .try_get::<Option<String>, _>("priority")
+                    .ok()
+                    .flatten()
+                    .map(crate::models::Priority::from),
             };
             conversations.push(conversation);
         }
@@ -1061,7 +1156,7 @@ impl Database {
         sqlx::query(
             "UPDATE conversations
              SET priority = ?, updated_at = ?
-             WHERE id = ?"
+             WHERE id = ?",
         )
         .bind(priority.to_string())
         .bind(&now)
@@ -1083,10 +1178,7 @@ impl Database {
     }
 
     /// Clear conversation priority (set to null) - Feature 020
-    pub async fn clear_conversation_priority(
-        &self,
-        conversation_id: &str,
-    ) -> ApiResult<()> {
+    pub async fn clear_conversation_priority(&self, conversation_id: &str) -> ApiResult<()> {
         let now = time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap();
@@ -1094,7 +1186,7 @@ impl Database {
         sqlx::query(
             "UPDATE conversations
              SET priority = NULL, updated_at = ?
-             WHERE id = ?"
+             WHERE id = ?",
         )
         .bind(&now)
         .bind(conversation_id)
@@ -1105,10 +1197,7 @@ impl Database {
             ApiError::Internal(format!("Database error: {}", e))
         })?;
 
-        tracing::info!(
-            "Cleared priority for conversation {}",
-            conversation_id
-        );
+        tracing::info!("Cleared priority for conversation {}", conversation_id);
 
         Ok(())
     }
@@ -1135,7 +1224,7 @@ impl Database {
             sqlx::query(
                 "UPDATE conversations
                  SET status = ?, resolved_at = NULL, updated_at = ?
-                 WHERE id = ?"
+                 WHERE id = ?",
             )
             .bind(status.to_string())
             .bind(&now)
@@ -1150,7 +1239,7 @@ impl Database {
             sqlx::query(
                 "UPDATE conversations
                  SET status = ?, resolved_at = ?, updated_at = ?
-                 WHERE id = ?"
+                 WHERE id = ?",
             )
             .bind(status.to_string())
             .bind(&resolved_at)
@@ -1173,7 +1262,7 @@ impl Database {
         Ok(())
     }
 
-    // Legacy high-level update (deprecated by conversation_service, but keeping preventing break if used elsewhere? 
+    // Legacy high-level update (deprecated by conversation_service, but keeping preventing break if used elsewhere?
     // Actually, I should remove it or delegate to service, but database calling service is bad.
     // I will comment out update_conversation_status to avoid confusion/duplication if it's unused.)
     // Legacy high-level update (deprecated by conversation_service)
@@ -1286,13 +1375,16 @@ impl Database {
         let mut roles = Vec::new();
         for row in rows {
             let permissions_json: String = row.try_get("permissions")?;
-            let permissions: Vec<String> = serde_json::from_str(&permissions_json)
-                .unwrap_or_else(|_| Vec::new());
+            let permissions: Vec<String> =
+                serde_json::from_str(&permissions_json).unwrap_or_else(|_| Vec::new());
 
             roles.push(Role {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 permissions,
                 is_protected: row.try_get::<i32, _>("is_protected")? != 0,
                 created_at: row.try_get("created_at")?,
@@ -1315,13 +1407,16 @@ impl Database {
 
         if let Some(row) = row {
             let permissions_json: String = row.try_get("permissions")?;
-            let permissions: Vec<String> = serde_json::from_str(&permissions_json)
-                .unwrap_or_else(|_| Vec::new());
+            let permissions: Vec<String> =
+                serde_json::from_str(&permissions_json).unwrap_or_else(|_| Vec::new());
 
             Ok(Some(Role {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 permissions,
                 is_protected: row.try_get::<i32, _>("is_protected")? != 0,
                 created_at: row.try_get("created_at")?,
@@ -1334,8 +1429,8 @@ impl Database {
 
     pub async fn create_role(&self, role: &Role) -> ApiResult<()> {
         let description_value: Option<&str> = role.description.as_deref();
-        let permissions_json = serde_json::to_string(&role.permissions)
-            .unwrap_or_else(|_| "[]".to_string());
+        let permissions_json =
+            serde_json::to_string(&role.permissions).unwrap_or_else(|_| "[]".to_string());
 
         sqlx::query(
             "INSERT INTO roles (id, name, description, permissions, is_protected, created_at, updated_at)
@@ -1367,8 +1462,8 @@ impl Database {
 
         // Build dynamic UPDATE query based on which fields are provided
         if let Some(perms) = permissions {
-            let permissions_json = serde_json::to_string(perms)
-                .unwrap_or_else(|_| "[]".to_string());
+            let permissions_json =
+                serde_json::to_string(perms).unwrap_or_else(|_| "[]".to_string());
 
             if let Some(n) = name {
                 sqlx::query(
@@ -1450,7 +1545,10 @@ impl Database {
             permissions.push(Permission {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             });
@@ -1476,7 +1574,10 @@ impl Database {
             permissions.push(Permission {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             });
@@ -1485,7 +1586,10 @@ impl Database {
         Ok(permissions)
     }
 
-    pub async fn assign_permission_to_role(&self, role_permission: &RolePermission) -> ApiResult<()> {
+    pub async fn assign_permission_to_role(
+        &self,
+        role_permission: &RolePermission,
+    ) -> ApiResult<()> {
         sqlx::query(
             "INSERT INTO role_permissions (role_id, permission_id, created_at)
              VALUES (?, ?, ?)",
@@ -1514,7 +1618,11 @@ impl Database {
         Ok(())
     }
 
-    pub async fn update_agent_password(&self, agent_id: &str, password_hash: &str) -> ApiResult<()> {
+    pub async fn update_agent_password(
+        &self,
+        agent_id: &str,
+        password_hash: &str,
+    ) -> ApiResult<()> {
         sqlx::query(
             "UPDATE agents
              SET password_hash = ?
@@ -1538,7 +1646,11 @@ impl Database {
     }
 
     // Contact update operations
-    pub async fn update_contact(&self, contact_id: &str, first_name: &Option<String>) -> ApiResult<()> {
+    pub async fn update_contact(
+        &self,
+        contact_id: &str,
+        first_name: &Option<String>,
+    ) -> ApiResult<()> {
         let first_name_value: Option<&str> = first_name.as_deref();
 
         sqlx::query(
@@ -1613,9 +1725,7 @@ impl Database {
         };
 
         // Get total count
-        let count_row = sqlx::query(&count_query)
-            .fetch_one(&self.pool)
-            .await?;
+        let count_row = sqlx::query(&count_query).fetch_one(&self.pool).await?;
         let total_count: i64 = count_row.try_get("count")?;
 
         // Get users
@@ -1708,12 +1818,11 @@ impl Database {
         offset: i64,
     ) -> ApiResult<(Vec<Message>, i64)> {
         // Get total count
-        let count_row = sqlx::query(
-            "SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?",
-        )
-        .bind(conversation_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let count_row =
+            sqlx::query("SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?")
+                .bind(conversation_id)
+                .fetch_one(&self.pool)
+                .await?;
         let total_count: i64 = count_row.try_get("count")?;
 
         // Get messages
@@ -1831,12 +1940,10 @@ impl Database {
     }
 
     pub async fn count_messages(&self, conversation_id: &str) -> ApiResult<i64> {
-        let row = sqlx::query(
-            "SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?",
-        )
-        .bind(conversation_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let row = sqlx::query("SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?")
+            .bind(conversation_id)
+            .fetch_one(&self.pool)
+            .await?;
 
         let count: i64 = row.try_get("count")?;
         Ok(count)
@@ -2042,17 +2149,19 @@ impl Database {
     }
 
     /// Update team's SLA policy
-    pub async fn update_team_sla_policy(&self, team_id: &str, sla_policy_id: Option<&str>) -> ApiResult<()> {
+    pub async fn update_team_sla_policy(
+        &self,
+        team_id: &str,
+        sla_policy_id: Option<&str>,
+    ) -> ApiResult<()> {
         let now = chrono::Utc::now().to_rfc3339();
 
-        sqlx::query(
-            "UPDATE teams SET sla_policy_id = ?, updated_at = ? WHERE id = ?"
-        )
-        .bind(sla_policy_id)
-        .bind(now)
-        .bind(team_id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("UPDATE teams SET sla_policy_id = ?, updated_at = ? WHERE id = ?")
+            .bind(sla_policy_id)
+            .bind(now)
+            .bind(team_id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
@@ -2202,7 +2311,10 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_conversation_participants(&self, conversation_id: &str) -> ApiResult<Vec<User>> {
+    pub async fn get_conversation_participants(
+        &self,
+        conversation_id: &str,
+    ) -> ApiResult<Vec<User>> {
         let rows = sqlx::query(
             "SELECT u.id, u.email, u.user_type, u.created_at, u.updated_at
              FROM users u
@@ -2254,7 +2366,10 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_assignment_history(&self, conversation_id: &str) -> ApiResult<Vec<AssignmentHistory>> {
+    pub async fn get_assignment_history(
+        &self,
+        conversation_id: &str,
+    ) -> ApiResult<Vec<AssignmentHistory>> {
         let rows = sqlx::query(
             "SELECT id, conversation_id, assigned_user_id, assigned_team_id, assigned_by, assigned_at, unassigned_at
              FROM assignment_history
@@ -2310,7 +2425,10 @@ impl Database {
                 .parse()
                 .map_err(|e| ApiError::Internal(format!("Invalid availability status: {}", e)))
         } else {
-            Err(ApiError::NotFound(format!("Agent not found for user {}", user_id)))
+            Err(ApiError::NotFound(format!(
+                "Agent not found for user {}",
+                user_id
+            )))
         }
     }
 
@@ -2377,12 +2495,11 @@ impl Database {
         offset: i64,
     ) -> ApiResult<(Vec<Conversation>, i64)> {
         // Get total count
-        let count_row = sqlx::query(
-            "SELECT COUNT(*) as count FROM conversations WHERE assigned_team_id = ?",
-        )
-        .bind(team_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let count_row =
+            sqlx::query("SELECT COUNT(*) as count FROM conversations WHERE assigned_team_id = ?")
+                .bind(team_id)
+                .fetch_one(&self.pool)
+                .await?;
         let total: i64 = count_row.try_get("count")?;
 
         // Get conversations
@@ -2433,12 +2550,11 @@ impl Database {
         offset: i64,
     ) -> ApiResult<(Vec<Conversation>, i64)> {
         // Get total count
-        let count_row = sqlx::query(
-            "SELECT COUNT(*) as count FROM conversations WHERE assigned_user_id = ?",
-        )
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let count_row =
+            sqlx::query("SELECT COUNT(*) as count FROM conversations WHERE assigned_user_id = ?")
+                .bind(user_id)
+                .fetch_one(&self.pool)
+                .await?;
         let total: i64 = count_row.try_get("count")?;
 
         // Get conversations
@@ -2606,7 +2722,11 @@ impl Database {
     }
 
     /// List all tags with pagination
-    pub async fn list_tags(&self, limit: i64, offset: i64) -> ApiResult<(Vec<crate::models::Tag>, i64)> {
+    pub async fn list_tags(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<crate::models::Tag>, i64)> {
         // Get total count
         let count_row = sqlx::query("SELECT COUNT(*) as count FROM tags")
             .fetch_one(&self.pool)
@@ -2679,7 +2799,10 @@ impl Database {
     // ========== Conversation Tag Operations ==========
 
     /// Get all tags for a conversation
-    pub async fn get_conversation_tags(&self, conversation_id: &str) -> ApiResult<Vec<crate::models::Tag>> {
+    pub async fn get_conversation_tags(
+        &self,
+        conversation_id: &str,
+    ) -> ApiResult<Vec<crate::models::Tag>> {
         let rows = sqlx::query(
             "SELECT t.id, t.name, t.description, t.color, t.created_at, t.updated_at
              FROM tags t
@@ -2752,7 +2875,11 @@ impl Database {
     }
 
     /// Remove a tag from a conversation (idempotent)
-    pub async fn remove_conversation_tag(&self, conversation_id: &str, tag_id: &str) -> ApiResult<()> {
+    pub async fn remove_conversation_tag(
+        &self,
+        conversation_id: &str,
+        tag_id: &str,
+    ) -> ApiResult<()> {
         sqlx::query(
             "DELETE FROM conversation_tags
              WHERE conversation_id = ? AND tag_id = ?",
@@ -2762,7 +2889,11 @@ impl Database {
         .execute(&self.pool)
         .await?;
 
-        tracing::debug!("Tag {} removed from conversation {}", tag_id, conversation_id);
+        tracing::debug!(
+            "Tag {} removed from conversation {}",
+            tag_id,
+            conversation_id
+        );
         Ok(())
     }
 
@@ -2942,7 +3073,7 @@ impl Database {
                     contact_id: row.try_get("contact_id")?,
                     subject: row.try_get("subject").ok(),
                     resolved_at: row.try_get("resolved_at").ok(),
-                closed_at: row.try_get("closed_at").ok(),
+                    closed_at: row.try_get("closed_at").ok(),
                     snoozed_until: row.try_get("snoozed_until").ok(),
                     assigned_user_id: row.try_get("assigned_user_id").ok(),
                     assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -3006,7 +3137,7 @@ impl Database {
                     contact_id: row.try_get("contact_id")?,
                     subject: row.try_get("subject").ok(),
                     resolved_at: row.try_get("resolved_at").ok(),
-                closed_at: row.try_get("closed_at").ok(),
+                    closed_at: row.try_get("closed_at").ok(),
                     snoozed_until: row.try_get("snoozed_until").ok(),
                     assigned_user_id: row.try_get("assigned_user_id").ok(),
                     assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -3098,7 +3229,8 @@ impl Database {
         &self,
         inactivity_threshold_seconds: i64,
     ) -> ApiResult<Vec<Agent>> {
-        let threshold_time = chrono::Utc::now() - chrono::Duration::seconds(inactivity_threshold_seconds);
+        let threshold_time =
+            chrono::Utc::now() - chrono::Duration::seconds(inactivity_threshold_seconds);
         let threshold_str = threshold_time.to_rfc3339();
 
         let rows = sqlx::query(
@@ -3117,7 +3249,9 @@ impl Database {
         let agents = rows
             .into_iter()
             .map(|row| {
-                let status_str: String = row.try_get("availability_status").unwrap_or_else(|_| "offline".to_string());
+                let status_str: String = row
+                    .try_get("availability_status")
+                    .unwrap_or_else(|_| "offline".to_string());
                 let status = status_str.parse().unwrap_or(AgentAvailability::Offline);
 
                 Ok(Agent {
@@ -3148,7 +3282,8 @@ impl Database {
         &self,
         max_idle_threshold_seconds: i64,
     ) -> ApiResult<Vec<Agent>> {
-        let threshold_time = chrono::Utc::now() - chrono::Duration::seconds(max_idle_threshold_seconds);
+        let threshold_time =
+            chrono::Utc::now() - chrono::Duration::seconds(max_idle_threshold_seconds);
         let threshold_str = threshold_time.to_rfc3339();
 
         let rows = sqlx::query(
@@ -3168,7 +3303,9 @@ impl Database {
         let agents = rows
             .into_iter()
             .map(|row| {
-                let status_str: String = row.try_get("availability_status").unwrap_or_else(|_| "offline".to_string());
+                let status_str: String = row
+                    .try_get("availability_status")
+                    .unwrap_or_else(|_| "offline".to_string());
                 let status = status_str.parse().unwrap_or(AgentAvailability::Offline);
 
                 Ok(Agent {
@@ -3226,10 +3363,11 @@ impl Database {
         offset: i64,
     ) -> ApiResult<(Vec<AgentActivityLog>, i64)> {
         // Get total count
-        let count_row = sqlx::query("SELECT COUNT(*) as count FROM agent_activity_logs WHERE agent_id = ?")
-            .bind(agent_id)
-            .fetch_one(&self.pool)
-            .await?;
+        let count_row =
+            sqlx::query("SELECT COUNT(*) as count FROM agent_activity_logs WHERE agent_id = ?")
+                .bind(agent_id)
+                .fetch_one(&self.pool)
+                .await?;
         let total: i64 = count_row.try_get("count")?;
 
         // Get logs
@@ -3250,7 +3388,9 @@ impl Database {
             .into_iter()
             .map(|row| {
                 let event_type_str: String = row.try_get("event_type")?;
-                let event_type = event_type_str.parse().unwrap_or(ActivityEventType::AvailabilityChanged);
+                let event_type = event_type_str
+                    .parse()
+                    .unwrap_or(ActivityEventType::AvailabilityChanged);
 
                 Ok(AgentActivityLog {
                     id: row.try_get("id")?,
@@ -3286,7 +3426,12 @@ impl Database {
     }
 
     /// Set configuration value
-    pub async fn set_config_value(&self, key: &str, value: &str, description: Option<&str>) -> ApiResult<()> {
+    pub async fn set_config_value(
+        &self,
+        key: &str,
+        value: &str,
+        description: Option<&str>,
+    ) -> ApiResult<()> {
         let now = chrono::Utc::now().to_rfc3339();
 
         sqlx::query(
@@ -3345,7 +3490,10 @@ impl Database {
             Ok(Some(crate::models::SlaPolicy {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 first_response_time: row.try_get("first_response_time")?,
                 resolution_time: row.try_get("resolution_time")?,
                 next_response_time: row.try_get("next_response_time")?,
@@ -3358,7 +3506,10 @@ impl Database {
     }
 
     /// Get SLA policy by name
-    pub async fn get_sla_policy_by_name(&self, name: &str) -> ApiResult<Option<crate::models::SlaPolicy>> {
+    pub async fn get_sla_policy_by_name(
+        &self,
+        name: &str,
+    ) -> ApiResult<Option<crate::models::SlaPolicy>> {
         let row = sqlx::query(
             "SELECT id, name, description, first_response_time, resolution_time, next_response_time, created_at, updated_at
              FROM sla_policies WHERE name = ?"
@@ -3371,7 +3522,10 @@ impl Database {
             Ok(Some(crate::models::SlaPolicy {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 first_response_time: row.try_get("first_response_time")?,
                 resolution_time: row.try_get("resolution_time")?,
                 next_response_time: row.try_get("next_response_time")?,
@@ -3384,7 +3538,11 @@ impl Database {
     }
 
     /// List all SLA policies with pagination
-    pub async fn list_sla_policies(&self, limit: i64, offset: i64) -> ApiResult<(Vec<crate::models::SlaPolicy>, i64)> {
+    pub async fn list_sla_policies(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<crate::models::SlaPolicy>, i64)> {
         let rows = sqlx::query(
             "SELECT id, name, description, first_response_time, resolution_time, next_response_time, created_at, updated_at
              FROM sla_policies
@@ -3396,18 +3554,24 @@ impl Database {
         .fetch_all(&self.pool)
         .await?;
 
-        let policies: Vec<crate::models::SlaPolicy> = rows.iter().map(|row| {
-            Ok(crate::models::SlaPolicy {
-                id: row.try_get("id")?,
-                name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
-                first_response_time: row.try_get("first_response_time")?,
-                resolution_time: row.try_get("resolution_time")?,
-                next_response_time: row.try_get("next_response_time")?,
-                created_at: row.try_get("created_at")?,
-                updated_at: row.try_get("updated_at")?,
+        let policies: Vec<crate::models::SlaPolicy> = rows
+            .iter()
+            .map(|row| {
+                Ok(crate::models::SlaPolicy {
+                    id: row.try_get("id")?,
+                    name: row.try_get("name")?,
+                    description: row
+                        .try_get::<Option<String>, _>("description")
+                        .ok()
+                        .flatten(),
+                    first_response_time: row.try_get("first_response_time")?,
+                    resolution_time: row.try_get("resolution_time")?,
+                    next_response_time: row.try_get("next_response_time")?,
+                    created_at: row.try_get("created_at")?,
+                    updated_at: row.try_get("updated_at")?,
+                })
             })
-        }).collect::<ApiResult<Vec<_>>>()?;
+            .collect::<ApiResult<Vec<_>>>()?;
 
         let count_row = sqlx::query("SELECT COUNT(*) as count FROM sla_policies")
             .fetch_one(&self.pool)
@@ -3495,7 +3659,10 @@ impl Database {
     // ========================================
 
     /// Create a new applied SLA
-    pub async fn create_applied_sla(&self, applied_sla: &crate::models::AppliedSla) -> ApiResult<()> {
+    pub async fn create_applied_sla(
+        &self,
+        applied_sla: &crate::models::AppliedSla,
+    ) -> ApiResult<()> {
         sqlx::query(
             "INSERT INTO applied_slas (id, conversation_id, sla_policy_id, status, first_response_deadline_at, resolution_deadline_at, applied_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
@@ -3531,7 +3698,10 @@ impl Database {
                 conversation_id: row.try_get("conversation_id")?,
                 sla_policy_id: row.try_get("sla_policy_id")?,
                 status: status_str.parse().map_err(|e: String| {
-                    sqlx::Error::Decode(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
+                    sqlx::Error::Decode(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e,
+                    )))
                 })?,
                 first_response_deadline_at: row.try_get("first_response_deadline_at")?,
                 resolution_deadline_at: row.try_get("resolution_deadline_at")?,
@@ -3544,7 +3714,10 @@ impl Database {
     }
 
     /// Get applied SLA by conversation ID
-    pub async fn get_applied_sla_by_conversation(&self, conversation_id: &str) -> ApiResult<Option<crate::models::AppliedSla>> {
+    pub async fn get_applied_sla_by_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> ApiResult<Option<crate::models::AppliedSla>> {
         let row = sqlx::query(
             "SELECT id, conversation_id, sla_policy_id, status, first_response_deadline_at, resolution_deadline_at, applied_at, updated_at
              FROM applied_slas WHERE conversation_id = ?"
@@ -3560,7 +3733,10 @@ impl Database {
                 conversation_id: row.try_get("conversation_id")?,
                 sla_policy_id: row.try_get("sla_policy_id")?,
                 status: status_str.parse().map_err(|e: String| {
-                    sqlx::Error::Decode(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
+                    sqlx::Error::Decode(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e,
+                    )))
                 })?,
                 first_response_deadline_at: row.try_get("first_response_deadline_at")?,
                 resolution_deadline_at: row.try_get("resolution_deadline_at")?,
@@ -3573,7 +3749,10 @@ impl Database {
     }
 
     /// Get applied SLA by ID
-    pub async fn get_applied_sla_by_id(&self, id: &str) -> ApiResult<Option<crate::models::AppliedSla>> {
+    pub async fn get_applied_sla_by_id(
+        &self,
+        id: &str,
+    ) -> ApiResult<Option<crate::models::AppliedSla>> {
         let row = sqlx::query(
             "SELECT id, conversation_id, sla_policy_id, status, first_response_deadline_at, resolution_deadline_at, applied_at, updated_at
              FROM applied_slas WHERE id = ?"
@@ -3589,7 +3768,10 @@ impl Database {
                 conversation_id: row.try_get("conversation_id")?,
                 sla_policy_id: row.try_get("sla_policy_id")?,
                 status: status_str.parse().map_err(|e: String| {
-                    sqlx::Error::Decode(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
+                    sqlx::Error::Decode(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e,
+                    )))
                 })?,
                 first_response_deadline_at: row.try_get("first_response_deadline_at")?,
                 resolution_deadline_at: row.try_get("resolution_deadline_at")?,
@@ -3637,21 +3819,27 @@ impl Database {
                 .await?
         };
 
-        let applied_slas: Vec<crate::models::AppliedSla> = rows.iter().map(|row| {
-            let status_str: String = row.try_get("status")?;
-            Ok(crate::models::AppliedSla {
-                id: row.try_get("id")?,
-                conversation_id: row.try_get("conversation_id")?,
-                sla_policy_id: row.try_get("sla_policy_id")?,
-                status: status_str.parse().map_err(|e: String| {
-                    sqlx::Error::Decode(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
-                })?,
-                first_response_deadline_at: row.try_get("first_response_deadline_at")?,
-                resolution_deadline_at: row.try_get("resolution_deadline_at")?,
-                applied_at: row.try_get("applied_at")?,
-                updated_at: row.try_get("updated_at")?,
+        let applied_slas: Vec<crate::models::AppliedSla> = rows
+            .iter()
+            .map(|row| {
+                let status_str: String = row.try_get("status")?;
+                Ok(crate::models::AppliedSla {
+                    id: row.try_get("id")?,
+                    conversation_id: row.try_get("conversation_id")?,
+                    sla_policy_id: row.try_get("sla_policy_id")?,
+                    status: status_str.parse().map_err(|e: String| {
+                        sqlx::Error::Decode(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            e,
+                        )))
+                    })?,
+                    first_response_deadline_at: row.try_get("first_response_deadline_at")?,
+                    resolution_deadline_at: row.try_get("resolution_deadline_at")?,
+                    applied_at: row.try_get("applied_at")?,
+                    updated_at: row.try_get("updated_at")?,
+                })
             })
-        }).collect::<ApiResult<Vec<_>>>()?;
+            .collect::<ApiResult<Vec<_>>>()?;
 
         let count_row = if let Some(status) = status_filter {
             sqlx::query(count_query_str)
@@ -3659,9 +3847,7 @@ impl Database {
                 .fetch_one(&self.pool)
                 .await?
         } else {
-            sqlx::query(count_query_str)
-                .fetch_one(&self.pool)
-                .await?
+            sqlx::query(count_query_str).fetch_one(&self.pool).await?
         };
 
         let total: i64 = count_row.try_get("count")?;
@@ -3670,17 +3856,19 @@ impl Database {
     }
 
     /// Update applied SLA status
-    pub async fn update_applied_sla_status(&self, id: &str, status: crate::models::AppliedSlaStatus) -> ApiResult<()> {
+    pub async fn update_applied_sla_status(
+        &self,
+        id: &str,
+        status: crate::models::AppliedSlaStatus,
+    ) -> ApiResult<()> {
         let now = chrono::Utc::now().to_rfc3339();
 
-        sqlx::query(
-            "UPDATE applied_slas SET status = ?, updated_at = ? WHERE id = ?"
-        )
-        .bind(status.to_string())
-        .bind(now)
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("UPDATE applied_slas SET status = ?, updated_at = ? WHERE id = ?")
+            .bind(status.to_string())
+            .bind(now)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
@@ -3737,10 +3925,16 @@ impl Database {
                 id: row.try_get("id")?,
                 applied_sla_id: row.try_get("applied_sla_id")?,
                 event_type: event_type_str.parse().map_err(|e: String| {
-                    sqlx::Error::Decode(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
+                    sqlx::Error::Decode(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e,
+                    )))
                 })?,
                 status: status_str.parse().map_err(|e: String| {
-                    sqlx::Error::Decode(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
+                    sqlx::Error::Decode(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e,
+                    )))
                 })?,
                 deadline_at: row.try_get("deadline_at")?,
                 met_at: row.try_get("met_at")?,
@@ -3754,7 +3948,10 @@ impl Database {
     }
 
     /// Get all SLA events for an applied SLA
-    pub async fn get_sla_events_by_applied_sla(&self, applied_sla_id: &str) -> ApiResult<Vec<crate::models::SlaEvent>> {
+    pub async fn get_sla_events_by_applied_sla(
+        &self,
+        applied_sla_id: &str,
+    ) -> ApiResult<Vec<crate::models::SlaEvent>> {
         let rows = sqlx::query(
             "SELECT id, applied_sla_id, event_type, status, deadline_at, met_at, breached_at, created_at, updated_at
              FROM sla_events WHERE applied_sla_id = ? ORDER BY created_at ASC"
@@ -3781,9 +3978,11 @@ impl Database {
             let deadline_at: String = row.try_get("deadline_at")?;
             // For nullable columns, try_get may fail with NULL values in sqlx Any driver
             // Use a workaround to handle this
-            let met_at: Option<String> = row.try_get::<Option<String>, _>("met_at")
+            let met_at: Option<String> = row
+                .try_get::<Option<String>, _>("met_at")
                 .or_else(|_| Ok::<_, sqlx::Error>(None))?;
-            let breached_at: Option<String> = row.try_get::<Option<String>, _>("breached_at")
+            let breached_at: Option<String> = row
+                .try_get::<Option<String>, _>("breached_at")
                 .or_else(|_| Ok::<_, sqlx::Error>(None))?;
             let created_at: String = row.try_get("created_at")?;
             let updated_at: String = row.try_get("updated_at")?;
@@ -3826,15 +4025,25 @@ impl Database {
                 id: row.try_get("id")?,
                 applied_sla_id: row.try_get("applied_sla_id")?,
                 event_type: event_type_str.parse().map_err(|e: String| {
-                    sqlx::Error::Decode(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
+                    sqlx::Error::Decode(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e,
+                    )))
                 })?,
                 status: status_str.parse().map_err(|e: String| {
-                    sqlx::Error::Decode(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
+                    sqlx::Error::Decode(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e,
+                    )))
                 })?,
                 deadline_at: row.try_get("deadline_at")?,
                 // For nullable columns, try_get may fail with NULL values in sqlx Any driver
-                met_at: row.try_get::<Option<String>, _>("met_at").or_else(|_| Ok::<_, sqlx::Error>(None))?,
-                breached_at: row.try_get::<Option<String>, _>("breached_at").or_else(|_| Ok::<_, sqlx::Error>(None))?,
+                met_at: row
+                    .try_get::<Option<String>, _>("met_at")
+                    .or_else(|_| Ok::<_, sqlx::Error>(None))?,
+                breached_at: row
+                    .try_get::<Option<String>, _>("breached_at")
+                    .or_else(|_| Ok::<_, sqlx::Error>(None))?,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             }))
@@ -3844,7 +4053,9 @@ impl Database {
     }
 
     /// Get all pending SLA events past their deadline
-    pub async fn get_pending_events_past_deadline(&self) -> ApiResult<Vec<crate::models::SlaEvent>> {
+    pub async fn get_pending_events_past_deadline(
+        &self,
+    ) -> ApiResult<Vec<crate::models::SlaEvent>> {
         let now = chrono::Utc::now().to_rfc3339();
 
         let rows = sqlx::query(
@@ -3875,8 +4086,12 @@ impl Database {
                 status,
                 deadline_at: row.try_get("deadline_at")?,
                 // For nullable columns, try_get may fail with NULL values in sqlx Any driver
-                met_at: row.try_get::<Option<String>, _>("met_at").or_else(|_| Ok::<_, sqlx::Error>(None))?,
-                breached_at: row.try_get::<Option<String>, _>("breached_at").or_else(|_| Ok::<_, sqlx::Error>(None))?,
+                met_at: row
+                    .try_get::<Option<String>, _>("met_at")
+                    .or_else(|_| Ok::<_, sqlx::Error>(None))?,
+                breached_at: row
+                    .try_get::<Option<String>, _>("breached_at")
+                    .or_else(|_| Ok::<_, sqlx::Error>(None))?,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             });
@@ -3890,7 +4105,7 @@ impl Database {
         let now = chrono::Utc::now().to_rfc3339();
 
         sqlx::query(
-            "UPDATE sla_events SET status = 'met', met_at = ?, updated_at = ? WHERE id = ?"
+            "UPDATE sla_events SET status = 'met', met_at = ?, updated_at = ? WHERE id = ?",
         )
         .bind(met_at)
         .bind(now)
@@ -3902,7 +4117,11 @@ impl Database {
     }
 
     /// Mark SLA event as breached
-    pub async fn mark_sla_event_breached(&self, event_id: &str, breached_at: &str) -> ApiResult<()> {
+    pub async fn mark_sla_event_breached(
+        &self,
+        event_id: &str,
+        breached_at: &str,
+    ) -> ApiResult<()> {
         let now = chrono::Utc::now().to_rfc3339();
 
         sqlx::query(
@@ -3931,8 +4150,10 @@ impl Database {
 
     /// Create automation rule
     pub async fn create_automation_rule(&self, rule: &AutomationRule) -> ApiResult<()> {
-        let event_subscription_json = serde_json::to_string(&rule.event_subscription)
-            .map_err(|e| ApiError::Internal(format!("Failed to serialize event_subscription: {}", e)))?;
+        let event_subscription_json =
+            serde_json::to_string(&rule.event_subscription).map_err(|e| {
+                ApiError::Internal(format!("Failed to serialize event_subscription: {}", e))
+            })?;
         let condition_json = serde_json::to_string(&rule.condition)
             .map_err(|e| ApiError::Internal(format!("Failed to serialize condition: {}", e)))?;
         let action_json = serde_json::to_string(&rule.action)
@@ -3976,16 +4197,23 @@ impl Database {
 
         if let Some(row) = row {
             let rule_type_str: String = row.try_get("rule_type")?;
-            let rule_type = rule_type_str.parse::<RuleType>()
-                .map_err(|e| ApiError::Internal(format!("Failed to parse rule_type '{}': {}", rule_type_str, e)))?;
+            let rule_type = rule_type_str.parse::<RuleType>().map_err(|e| {
+                ApiError::Internal(format!(
+                    "Failed to parse rule_type '{}': {}",
+                    rule_type_str, e
+                ))
+            })?;
 
             let event_subscription_str: String = row.try_get("event_subscription")?;
             let event_subscription: Vec<String> = serde_json::from_str(&event_subscription_str)
-                .map_err(|e| ApiError::Internal(format!("Failed to deserialize event_subscription: {}", e)))?;
+                .map_err(|e| {
+                    ApiError::Internal(format!("Failed to deserialize event_subscription: {}", e))
+                })?;
 
             let condition_str: String = row.try_get("condition")?;
-            let condition: RuleCondition = serde_json::from_str(&condition_str)
-                .map_err(|e| ApiError::Internal(format!("Failed to deserialize condition: {}", e)))?;
+            let condition: RuleCondition = serde_json::from_str(&condition_str).map_err(|e| {
+                ApiError::Internal(format!("Failed to deserialize condition: {}", e))
+            })?;
 
             let action_str: String = row.try_get("action")?;
             let action: RuleAction = serde_json::from_str(&action_str)
@@ -3994,7 +4222,10 @@ impl Database {
             Ok(Some(AutomationRule {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 enabled: {
                     let enabled_int: i32 = row.try_get("enabled")?;
                     enabled_int != 0
@@ -4013,7 +4244,10 @@ impl Database {
     }
 
     /// Get automation rule by name
-    pub async fn get_automation_rule_by_name(&self, name: &str) -> ApiResult<Option<AutomationRule>> {
+    pub async fn get_automation_rule_by_name(
+        &self,
+        name: &str,
+    ) -> ApiResult<Option<AutomationRule>> {
         let row = sqlx::query(
             "SELECT id, name, description, CAST(enabled AS INTEGER) as enabled, rule_type, event_subscription, condition, action, priority, created_at, updated_at
              FROM automation_rules
@@ -4025,16 +4259,23 @@ impl Database {
 
         if let Some(row) = row {
             let rule_type_str: String = row.try_get("rule_type")?;
-            let rule_type = rule_type_str.parse::<RuleType>()
-                .map_err(|e| ApiError::Internal(format!("Failed to parse rule_type '{}': {}", rule_type_str, e)))?;
+            let rule_type = rule_type_str.parse::<RuleType>().map_err(|e| {
+                ApiError::Internal(format!(
+                    "Failed to parse rule_type '{}': {}",
+                    rule_type_str, e
+                ))
+            })?;
 
             let event_subscription_str: String = row.try_get("event_subscription")?;
             let event_subscription: Vec<String> = serde_json::from_str(&event_subscription_str)
-                .map_err(|e| ApiError::Internal(format!("Failed to deserialize event_subscription: {}", e)))?;
+                .map_err(|e| {
+                    ApiError::Internal(format!("Failed to deserialize event_subscription: {}", e))
+                })?;
 
             let condition_str: String = row.try_get("condition")?;
-            let condition: RuleCondition = serde_json::from_str(&condition_str)
-                .map_err(|e| ApiError::Internal(format!("Failed to deserialize condition: {}", e)))?;
+            let condition: RuleCondition = serde_json::from_str(&condition_str).map_err(|e| {
+                ApiError::Internal(format!("Failed to deserialize condition: {}", e))
+            })?;
 
             let action_str: String = row.try_get("action")?;
             let action: RuleAction = serde_json::from_str(&action_str)
@@ -4043,7 +4284,10 @@ impl Database {
             Ok(Some(AutomationRule {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 enabled: {
                     let enabled_int: i32 = row.try_get("enabled")?;
                     enabled_int != 0
@@ -4079,16 +4323,23 @@ impl Database {
         let mut rules = Vec::new();
         for row in rows {
             let rule_type_str: String = row.try_get("rule_type")?;
-            let rule_type = rule_type_str.parse::<RuleType>()
-                .map_err(|e| ApiError::Internal(format!("Failed to parse rule_type '{}': {}", rule_type_str, e)))?;
+            let rule_type = rule_type_str.parse::<RuleType>().map_err(|e| {
+                ApiError::Internal(format!(
+                    "Failed to parse rule_type '{}': {}",
+                    rule_type_str, e
+                ))
+            })?;
 
             let event_subscription_str: String = row.try_get("event_subscription")?;
             let event_subscription: Vec<String> = serde_json::from_str(&event_subscription_str)
-                .map_err(|e| ApiError::Internal(format!("Failed to deserialize event_subscription: {}", e)))?;
+                .map_err(|e| {
+                    ApiError::Internal(format!("Failed to deserialize event_subscription: {}", e))
+                })?;
 
             let condition_str: String = row.try_get("condition")?;
-            let condition: RuleCondition = serde_json::from_str(&condition_str)
-                .map_err(|e| ApiError::Internal(format!("Failed to deserialize condition: {}", e)))?;
+            let condition: RuleCondition = serde_json::from_str(&condition_str).map_err(|e| {
+                ApiError::Internal(format!("Failed to deserialize condition: {}", e))
+            })?;
 
             let action_str: String = row.try_get("action")?;
             let action: RuleAction = serde_json::from_str(&action_str)
@@ -4097,7 +4348,10 @@ impl Database {
             rules.push(AutomationRule {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
-                description: row.try_get::<Option<String>, _>("description").ok().flatten(),
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
                 enabled: {
                     let enabled_int: i32 = row.try_get("enabled")?;
                     enabled_int != 0
@@ -4116,7 +4370,10 @@ impl Database {
     }
 
     /// Get enabled rules that subscribe to a specific event
-    pub async fn get_enabled_rules_for_event(&self, event_type: &str) -> ApiResult<Vec<AutomationRule>> {
+    pub async fn get_enabled_rules_for_event(
+        &self,
+        event_type: &str,
+    ) -> ApiResult<Vec<AutomationRule>> {
         // Get all enabled rules
         let all_rules = self.get_automation_rules(true).await?;
 
@@ -4131,8 +4388,10 @@ impl Database {
 
     /// Update automation rule
     pub async fn update_automation_rule(&self, rule: &AutomationRule) -> ApiResult<()> {
-        let event_subscription_json = serde_json::to_string(&rule.event_subscription)
-            .map_err(|e| ApiError::Internal(format!("Failed to serialize event_subscription: {}", e)))?;
+        let event_subscription_json =
+            serde_json::to_string(&rule.event_subscription).map_err(|e| {
+                ApiError::Internal(format!("Failed to serialize event_subscription: {}", e))
+            })?;
         let condition_json = serde_json::to_string(&rule.condition)
             .map_err(|e| ApiError::Internal(format!("Failed to serialize condition: {}", e)))?;
         let action_json = serde_json::to_string(&rule.action)
@@ -4172,13 +4431,11 @@ impl Database {
     /// Enable automation rule
     pub async fn enable_automation_rule(&self, id: &str) -> ApiResult<()> {
         let updated_at = chrono::Utc::now().to_rfc3339();
-        sqlx::query(
-            "UPDATE automation_rules SET enabled = TRUE, updated_at = ? WHERE id = ?",
-        )
-        .bind(&updated_at)
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("UPDATE automation_rules SET enabled = TRUE, updated_at = ? WHERE id = ?")
+            .bind(&updated_at)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
@@ -4186,13 +4443,11 @@ impl Database {
     /// Disable automation rule
     pub async fn disable_automation_rule(&self, id: &str) -> ApiResult<()> {
         let updated_at = chrono::Utc::now().to_rfc3339();
-        sqlx::query(
-            "UPDATE automation_rules SET enabled = FALSE, updated_at = ? WHERE id = ?",
-        )
-        .bind(&updated_at)
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("UPDATE automation_rules SET enabled = FALSE, updated_at = ? WHERE id = ?")
+            .bind(&updated_at)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
@@ -4281,12 +4536,11 @@ impl Database {
         let mut logs = Vec::new();
         for row in rows {
             let condition_result_str: Option<String> = row.try_get("condition_result")?;
-            let condition_result = condition_result_str
-                .and_then(|s| s.parse::<ConditionResult>().ok());
+            let condition_result =
+                condition_result_str.and_then(|s| s.parse::<ConditionResult>().ok());
 
             let action_result_str: Option<String> = row.try_get("action_result")?;
-            let action_result = action_result_str
-                .and_then(|s| s.parse::<ActionResult>().ok());
+            let action_result = action_result_str.and_then(|s| s.parse::<ActionResult>().ok());
 
             let cascade_depth: i32 = row.try_get("cascade_depth")?;
 
@@ -4302,12 +4556,18 @@ impl Database {
                 rule_id: row.try_get("rule_id")?,
                 rule_name: row.try_get("rule_name")?,
                 event_type: row.try_get("event_type")?,
-                conversation_id: row.try_get::<Option<String>, _>("conversation_id").ok().flatten(),
+                conversation_id: row
+                    .try_get::<Option<String>, _>("conversation_id")
+                    .ok()
+                    .flatten(),
                 matched,
                 condition_result,
                 action_executed,
                 action_result,
-                error_message: row.try_get::<Option<String>, _>("error_message").ok().flatten(),
+                error_message: row
+                    .try_get::<Option<String>, _>("error_message")
+                    .ok()
+                    .flatten(),
                 evaluation_time_ms: row.try_get("evaluation_time_ms")?,
                 evaluated_at: row.try_get("evaluated_at")?,
                 cascade_depth: cascade_depth as u32,
@@ -4318,13 +4578,21 @@ impl Database {
     }
 
     /// Get evaluation logs for a specific rule
-    pub async fn get_evaluation_logs_by_rule(&self, rule_id: &str) -> ApiResult<Vec<RuleEvaluationLog>> {
-        self.get_rule_evaluation_logs(Some(rule_id), None, None, None, None).await
+    pub async fn get_evaluation_logs_by_rule(
+        &self,
+        rule_id: &str,
+    ) -> ApiResult<Vec<RuleEvaluationLog>> {
+        self.get_rule_evaluation_logs(Some(rule_id), None, None, None, None)
+            .await
     }
 
     /// Get evaluation logs for a specific conversation
-    pub async fn get_evaluation_logs_by_conversation(&self, conversation_id: &str) -> ApiResult<Vec<RuleEvaluationLog>> {
-        self.get_rule_evaluation_logs(None, Some(conversation_id), None, None, None).await
+    pub async fn get_evaluation_logs_by_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> ApiResult<Vec<RuleEvaluationLog>> {
+        self.get_rule_evaluation_logs(None, Some(conversation_id), None, None, None)
+            .await
     }
 
     /// Get evaluation logs for a specific rule
@@ -4590,11 +4858,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn user_has_macro_access(
-        &self,
-        macro_id: &str,
-        user_id: &str,
-    ) -> ApiResult<bool> {
+    pub async fn user_has_macro_access(&self, macro_id: &str, user_id: &str) -> ApiResult<bool> {
         let row = sqlx::query(
             "SELECT COUNT(*) as count
              FROM macro_access
@@ -4609,11 +4873,7 @@ impl Database {
         Ok(count > 0)
     }
 
-    pub async fn team_has_macro_access(
-        &self,
-        macro_id: &str,
-        team_id: &str,
-    ) -> ApiResult<bool> {
+    pub async fn team_has_macro_access(&self, macro_id: &str, team_id: &str) -> ApiResult<bool> {
         let row = sqlx::query(
             "SELECT COUNT(*) as count
              FROM macro_access
@@ -5220,7 +5480,10 @@ impl Database {
     // ========================================
 
     /// Create a new OIDC provider
-    pub async fn create_oidc_provider(&self, provider: &crate::models::OidcProvider) -> ApiResult<()> {
+    pub async fn create_oidc_provider(
+        &self,
+        provider: &crate::models::OidcProvider,
+    ) -> ApiResult<()> {
         let scopes_json = serde_json::to_string(&provider.scopes)
             .map_err(|e| ApiError::Internal(format!("Failed to serialize scopes: {}", e)))?;
 
@@ -5245,7 +5508,10 @@ impl Database {
     }
 
     /// Get OIDC provider by name
-    pub async fn get_oidc_provider_by_name(&self, name: &str) -> ApiResult<Option<crate::models::OidcProvider>> {
+    pub async fn get_oidc_provider_by_name(
+        &self,
+        name: &str,
+    ) -> ApiResult<Option<crate::models::OidcProvider>> {
         let row = sqlx::query(
             "SELECT id, name, issuer_url, client_id, client_secret, redirect_uri, scopes, enabled, created_at, updated_at
              FROM oidc_providers
@@ -5281,7 +5547,10 @@ impl Database {
     }
 
     /// List OIDC providers with optional enabled filter
-    pub async fn list_oidc_providers(&self, enabled_only: bool) -> ApiResult<Vec<crate::models::OidcProvider>> {
+    pub async fn list_oidc_providers(
+        &self,
+        enabled_only: bool,
+    ) -> ApiResult<Vec<crate::models::OidcProvider>> {
         let query = if enabled_only {
             sqlx::query(
                 "SELECT id, name, issuer_url, client_id, client_secret, redirect_uri, scopes, enabled, created_at, updated_at
@@ -5326,7 +5595,10 @@ impl Database {
     }
 
     /// Update an existing OIDC provider
-    pub async fn update_oidc_provider(&self, provider: &crate::models::OidcProvider) -> ApiResult<()> {
+    pub async fn update_oidc_provider(
+        &self,
+        provider: &crate::models::OidcProvider,
+    ) -> ApiResult<()> {
         let scopes_json = serde_json::to_string(&provider.scopes)
             .map_err(|e| ApiError::Internal(format!("Failed to serialize scopes: {}", e)))?;
 
@@ -5564,7 +5836,10 @@ impl Database {
     }
 
     /// Retrieve and delete OIDC state (one-time use for security)
-    pub async fn consume_oidc_state(&self, state: &str) -> ApiResult<Option<crate::models::OidcState>> {
+    pub async fn consume_oidc_state(
+        &self,
+        state: &str,
+    ) -> ApiResult<Option<crate::models::OidcState>> {
         let oidc_state = self.get_oidc_state(state).await?;
 
         if oidc_state.is_some() {
@@ -5579,7 +5854,7 @@ impl Database {
     async fn get_oidc_state(&self, state: &str) -> ApiResult<Option<crate::models::OidcState>> {
         let row = sqlx::query(
             "SELECT state, provider_name, nonce, pkce_verifier, created_at, expires_at
-             FROM oidc_states WHERE state = ?"
+             FROM oidc_states WHERE state = ?",
         )
         .bind(state)
         .fetch_optional(&self.pool)
@@ -5669,7 +5944,9 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
-            let status_str: String = row.try_get("availability_status").unwrap_or_else(|_| "offline".to_string());
+            let status_str: String = row
+                .try_get("availability_status")
+                .unwrap_or_else(|_| "offline".to_string());
             let status = status_str.parse().unwrap_or(AgentAvailability::Offline);
 
             Ok(Some(Agent {
@@ -5802,7 +6079,9 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
-            let status_str: String = row.try_get("availability_status").unwrap_or_else(|_| "offline".to_string());
+            let status_str: String = row
+                .try_get("availability_status")
+                .unwrap_or_else(|_| "offline".to_string());
             let status = status_str.parse().unwrap_or(AgentAvailability::Offline);
 
             Ok(Some(Agent {
@@ -5848,7 +6127,10 @@ impl Database {
     }
 
     /// Get password reset token by token value
-    pub async fn get_password_reset_token(&self, token: &str) -> ApiResult<Option<PasswordResetToken>> {
+    pub async fn get_password_reset_token(
+        &self,
+        token: &str,
+    ) -> ApiResult<Option<PasswordResetToken>> {
         let row = sqlx::query(
             "SELECT id, user_id, token, expires_at, used, created_at
              FROM password_reset_tokens
@@ -5875,7 +6157,11 @@ impl Database {
     /// Count recent password reset requests for a user (for rate limiting)
     /// Returns count of ALL tokens created in the last hour (used or unused)
     /// Rate limiting counts all requests to prevent abuse, regardless of token status
-    pub async fn count_recent_reset_requests(&self, user_id: &str, window_seconds: i64) -> ApiResult<i64> {
+    pub async fn count_recent_reset_requests(
+        &self,
+        user_id: &str,
+        window_seconds: i64,
+    ) -> ApiResult<i64> {
         let now = time::OffsetDateTime::now_utc();
         let window_start = now - time::Duration::seconds(window_seconds);
         let window_start_str = window_start
@@ -5938,7 +6224,11 @@ impl Database {
     }
 
     /// Update agent password hash by user_id (for password reset)
-    pub async fn update_agent_password_by_user_id(&self, user_id: &str, password_hash: &str) -> ApiResult<()> {
+    pub async fn update_agent_password_by_user_id(
+        &self,
+        user_id: &str,
+        password_hash: &str,
+    ) -> ApiResult<()> {
         sqlx::query(
             "UPDATE agents
              SET password_hash = ?
@@ -6017,10 +6307,13 @@ impl Database {
     }
 
     /// Get all password reset tokens for a user (for testing)
-    pub async fn get_all_password_reset_tokens_for_user(&self, user_id: &str) -> ApiResult<Vec<PasswordResetToken>> {
+    pub async fn get_all_password_reset_tokens_for_user(
+        &self,
+        user_id: &str,
+    ) -> ApiResult<Vec<PasswordResetToken>> {
         let rows = sqlx::query(
             "SELECT id, user_id, token, expires_at, used, created_at
-             FROM password_reset_tokens WHERE user_id = ? ORDER BY created_at DESC"
+             FROM password_reset_tokens WHERE user_id = ? ORDER BY created_at DESC",
         )
         .bind(user_id)
         .fetch_all(&self.pool)
@@ -6051,7 +6344,7 @@ impl Database {
                     CAST(created_at AS TEXT) as created_at,
                     CAST(last_accessed_at AS TEXT) as last_accessed_at,
                     auth_method, provider_name
-             FROM sessions WHERE user_id = ?"
+             FROM sessions WHERE user_id = ?",
         )
         .bind(user_id)
         .fetch_all(&self.pool)
@@ -6102,7 +6395,10 @@ impl Database {
             Ok(plaintext) => plaintext,
             Err(e) => {
                 // If decryption fails, assume it's plaintext (for backward compatibility)
-                tracing::warn!("Failed to decrypt password field: {}. Assuming plaintext.", e);
+                tracing::warn!(
+                    "Failed to decrypt password field: {}. Assuming plaintext.",
+                    e
+                );
                 encrypted.to_string()
             }
         }
@@ -6124,7 +6420,10 @@ impl Database {
     }
 
     /// Get inbox email configuration by inbox_id
-    pub async fn get_inbox_email_config(&self, inbox_id: &str) -> ApiResult<Option<InboxEmailConfig>> {
+    pub async fn get_inbox_email_config(
+        &self,
+        inbox_id: &str,
+    ) -> ApiResult<Option<InboxEmailConfig>> {
         let row = sqlx::query(
             "SELECT id, inbox_id, imap_host, imap_port, imap_username, imap_password, imap_use_tls, imap_folder,
                     smtp_host, smtp_port, smtp_username, smtp_password, smtp_use_tls,
@@ -6141,11 +6440,14 @@ impl Database {
 
         match row {
             Some(row) => {
-                let imap_use_tls: i64 = row.try_get("imap_use_tls")
-                    .map_err(|e| ApiError::Internal(format!("Failed to get imap_use_tls: {}", e)))?;
-                let smtp_use_tls: i64 = row.try_get("smtp_use_tls")
-                    .map_err(|e| ApiError::Internal(format!("Failed to get smtp_use_tls: {}", e)))?;
-                let enabled: i64 = row.try_get("enabled")
+                let imap_use_tls: i64 = row.try_get("imap_use_tls").map_err(|e| {
+                    ApiError::Internal(format!("Failed to get imap_use_tls: {}", e))
+                })?;
+                let smtp_use_tls: i64 = row.try_get("smtp_use_tls").map_err(|e| {
+                    ApiError::Internal(format!("Failed to get smtp_use_tls: {}", e))
+                })?;
+                let enabled: i64 = row
+                    .try_get("enabled")
                     .map_err(|e| ApiError::Internal(format!("Failed to get enabled: {}", e)))?;
 
                 // Decrypt passwords from database
@@ -6228,7 +6530,10 @@ impl Database {
     }
 
     /// Create inbox email configuration
-    pub async fn create_inbox_email_config(&self, config: &InboxEmailConfig) -> ApiResult<InboxEmailConfig> {
+    pub async fn create_inbox_email_config(
+        &self,
+        config: &InboxEmailConfig,
+    ) -> ApiResult<InboxEmailConfig> {
         // Encrypt passwords before storing
         let imap_password_encrypted = self.encrypt_password_field(&config.imap_password)?;
         let smtp_password_encrypted = self.encrypt_password_field(&config.smtp_password)?;
@@ -6278,7 +6583,9 @@ impl Database {
             .map_err(|e| ApiError::Internal(format!("Failed to format timestamp: {}", e)))?;
 
         // Get existing config
-        let existing = self.get_inbox_email_config_by_id(id).await?
+        let existing = self
+            .get_inbox_email_config_by_id(id)
+            .await?
             .ok_or_else(|| ApiError::NotFound("Inbox email config not found".to_string()))?;
 
         // Apply updates
@@ -6287,18 +6594,38 @@ impl Database {
             inbox_id: existing.inbox_id,
             imap_host: updates.imap_host.clone().unwrap_or(existing.imap_host),
             imap_port: updates.imap_port.unwrap_or(existing.imap_port),
-            imap_username: updates.imap_username.clone().unwrap_or(existing.imap_username),
-            imap_password: updates.imap_password.clone().unwrap_or(existing.imap_password),
+            imap_username: updates
+                .imap_username
+                .clone()
+                .unwrap_or(existing.imap_username),
+            imap_password: updates
+                .imap_password
+                .clone()
+                .unwrap_or(existing.imap_password),
             imap_use_tls: updates.imap_use_tls.unwrap_or(existing.imap_use_tls),
             imap_folder: updates.imap_folder.clone().unwrap_or(existing.imap_folder),
             smtp_host: updates.smtp_host.clone().unwrap_or(existing.smtp_host),
             smtp_port: updates.smtp_port.unwrap_or(existing.smtp_port),
-            smtp_username: updates.smtp_username.clone().unwrap_or(existing.smtp_username),
-            smtp_password: updates.smtp_password.clone().unwrap_or(existing.smtp_password),
+            smtp_username: updates
+                .smtp_username
+                .clone()
+                .unwrap_or(existing.smtp_username),
+            smtp_password: updates
+                .smtp_password
+                .clone()
+                .unwrap_or(existing.smtp_password),
             smtp_use_tls: updates.smtp_use_tls.unwrap_or(existing.smtp_use_tls),
-            email_address: updates.email_address.clone().unwrap_or(existing.email_address),
-            display_name: updates.display_name.clone().unwrap_or(existing.display_name),
-            poll_interval_seconds: updates.poll_interval_seconds.unwrap_or(existing.poll_interval_seconds),
+            email_address: updates
+                .email_address
+                .clone()
+                .unwrap_or(existing.email_address),
+            display_name: updates
+                .display_name
+                .clone()
+                .unwrap_or(existing.display_name),
+            poll_interval_seconds: updates
+                .poll_interval_seconds
+                .unwrap_or(existing.poll_interval_seconds),
             enabled: updates.enabled.unwrap_or(existing.enabled),
             last_poll_at: existing.last_poll_at,
             created_at: existing.created_at,
@@ -6410,7 +6737,10 @@ impl Database {
     }
 
     /// Create message attachment
-    pub async fn create_message_attachment(&self, attachment: &MessageAttachment) -> ApiResult<MessageAttachment> {
+    pub async fn create_message_attachment(
+        &self,
+        attachment: &MessageAttachment,
+    ) -> ApiResult<MessageAttachment> {
         sqlx::query(
             "INSERT INTO message_attachments (id, message_id, filename, content_type, file_size, file_path, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)"
@@ -6430,11 +6760,14 @@ impl Database {
     }
 
     /// Get all attachments for a message
-    pub async fn get_message_attachments(&self, message_id: &str) -> ApiResult<Vec<MessageAttachment>> {
+    pub async fn get_message_attachments(
+        &self,
+        message_id: &str,
+    ) -> ApiResult<Vec<MessageAttachment>> {
         let rows = sqlx::query(
             "SELECT id, message_id, filename, content_type, file_size, file_path,
                     CAST(created_at AS TEXT) as created_at
-             FROM message_attachments WHERE message_id = ? ORDER BY created_at"
+             FROM message_attachments WHERE message_id = ? ORDER BY created_at",
         )
         .bind(message_id)
         .fetch_all(&self.pool)
@@ -6458,12 +6791,15 @@ impl Database {
     }
 
     /// Log email processing result
-    pub async fn log_email_processing(&self, log: &EmailProcessingLog) -> ApiResult<EmailProcessingLog> {
+    pub async fn log_email_processing(
+        &self,
+        log: &EmailProcessingLog,
+    ) -> ApiResult<EmailProcessingLog> {
         sqlx::query(
             "INSERT INTO email_processing_log (
                 id, inbox_id, email_message_id, email_uid, from_address, subject,
                 processing_status, error_message, conversation_id, message_id, processed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&log.id)
         .bind(&log.inbox_id)
@@ -6484,7 +6820,11 @@ impl Database {
     }
 
     /// Check if an email has already been processed
-    pub async fn check_email_processed(&self, inbox_id: &str, email_message_id: &str) -> ApiResult<bool> {
+    pub async fn check_email_processed(
+        &self,
+        inbox_id: &str,
+        email_message_id: &str,
+    ) -> ApiResult<bool> {
         let row = sqlx::query("SELECT COUNT(*) as count FROM email_processing_log WHERE inbox_id = ? AND email_message_id = ?")
             .bind(inbox_id)
             .bind(email_message_id)
@@ -6502,7 +6842,9 @@ impl Database {
             .bind(id)
             .execute(&self.pool)
             .await
-            .map_err(|e| ApiError::Internal(format!("Failed to delete inbox email config: {}", e)))?;
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to delete inbox email config: {}", e))
+            })?;
 
         Ok(())
     }

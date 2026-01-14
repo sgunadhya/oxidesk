@@ -1,11 +1,11 @@
+use crate::{
+    api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
+    models::*,
+};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     Json,
-};
-use crate::{
-    api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
-    models::*,
 };
 
 /// List all OIDC providers (admin only)
@@ -102,7 +102,8 @@ pub async fn update_oidc_provider(
         .ok_or_else(|| ApiError::NotFound("OIDC provider not found".to_string()))?;
 
     // Update fields
-    provider.update_from_request(request)
+    provider
+        .update_from_request(request)
         .map_err(|e| ApiError::BadRequest(e))?;
 
     // Save updates

@@ -2,9 +2,7 @@ mod helpers;
 
 use chrono::Utc;
 use helpers::*;
-use oxidesk::{
-    models::*,
-};
+use oxidesk::models::*;
 
 // ========================================
 // Phase 3: User Story 1 - SLA Application Tests
@@ -19,13 +17,24 @@ async fn test_apply_sla_on_team_assignment() {
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
 
     // Create team and assign SLA policy
-    let team = Team::new("Support Team".to_string(), Some("Main support team".to_string()));
+    let team = Team::new(
+        "Support Team".to_string(),
+        Some("Main support team".to_string()),
+    );
     db.create_team(&team).await.unwrap();
-    db.update_team_sla_policy(&team.id, Some(&policy.id)).await.unwrap();
+    db.update_team_sla_policy(&team.id, Some(&policy.id))
+        .await
+        .unwrap();
 
     // Create conversation using helper
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Use current time in RFC3339 format as base timestamp
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -65,7 +74,13 @@ async fn test_first_response_deadline_calculation() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Use current time in RFC3339 format as base timestamp
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -86,17 +101,23 @@ async fn test_first_response_deadline_calculation() {
 
     // Calculate expected deadline
     let expected_deadline = calculate_deadline(
-        chrono::DateTime::parse_from_rfc3339(&base_timestamp).unwrap().with_timezone(&Utc),
+        chrono::DateTime::parse_from_rfc3339(&base_timestamp)
+            .unwrap()
+            .with_timezone(&Utc),
         "2h",
     );
 
-    let actual_deadline = chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at)
-        .unwrap()
-        .with_timezone(&Utc);
+    let actual_deadline =
+        chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at)
+            .unwrap()
+            .with_timezone(&Utc);
 
     // Allow 1 second tolerance for timing differences
     let diff = (expected_deadline - actual_deadline).num_seconds().abs();
-    assert!(diff <= 1, "First response deadline should be conversation created_at + 2h");
+    assert!(
+        diff <= 1,
+        "First response deadline should be conversation created_at + 2h"
+    );
 }
 
 #[tokio::test]
@@ -109,7 +130,13 @@ async fn test_resolution_deadline_calculation() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Use current time in RFC3339 format as base timestamp
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -130,7 +157,9 @@ async fn test_resolution_deadline_calculation() {
 
     // Calculate expected deadline
     let expected_deadline = calculate_deadline(
-        chrono::DateTime::parse_from_rfc3339(&base_timestamp).unwrap().with_timezone(&Utc),
+        chrono::DateTime::parse_from_rfc3339(&base_timestamp)
+            .unwrap()
+            .with_timezone(&Utc),
         "24h",
     );
 
@@ -140,7 +169,10 @@ async fn test_resolution_deadline_calculation() {
 
     // Allow 1 second tolerance
     let diff = (expected_deadline - actual_deadline).num_seconds().abs();
-    assert!(diff <= 1, "Resolution deadline should be conversation created_at + 24h");
+    assert!(
+        diff <= 1,
+        "Resolution deadline should be conversation created_at + 24h"
+    );
 }
 
 #[tokio::test]
@@ -153,7 +185,13 @@ async fn test_sla_events_created_as_pending() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Use current time in RFC3339 format as base timestamp
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -185,7 +223,10 @@ async fn test_sla_events_created_as_pending() {
         .expect("First response event should exist");
 
     assert_eq!(first_response_event.status, SlaEventStatus::Pending);
-    assert_eq!(first_response_event.deadline_at, applied_sla.first_response_deadline_at);
+    assert_eq!(
+        first_response_event.deadline_at,
+        applied_sla.first_response_deadline_at
+    );
     assert!(first_response_event.met_at.is_none());
     assert!(first_response_event.breached_at.is_none());
 
@@ -196,7 +237,10 @@ async fn test_sla_events_created_as_pending() {
         .expect("Resolution event should exist");
 
     assert_eq!(resolution_event.status, SlaEventStatus::Pending);
-    assert_eq!(resolution_event.deadline_at, applied_sla.resolution_deadline_at);
+    assert_eq!(
+        resolution_event.deadline_at,
+        applied_sla.resolution_deadline_at
+    );
     assert!(resolution_event.met_at.is_none());
     assert!(resolution_event.breached_at.is_none());
 }
@@ -207,7 +251,10 @@ async fn test_no_sla_if_team_has_no_policy() {
     let db = test_db.db();
 
     // Create team without SLA policy
-    let team = Team::new("Support Team".to_string(), Some("Main support team".to_string()));
+    let team = Team::new(
+        "Support Team".to_string(),
+        Some("Main support team".to_string()),
+    );
     db.create_team(&team).await.unwrap();
 
     // Verify team has no SLA policy
@@ -216,14 +263,23 @@ async fn test_no_sla_if_team_has_no_policy() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Assign conversation to team (this would normally trigger SLA application)
     // But since team has no SLA policy, no SLA should be applied
 
     // Verify no applied SLA exists
     let applied_sla = get_applied_sla(&db, &conversation.id).await;
-    assert!(applied_sla.is_none(), "No SLA should be applied when team has no policy");
+    assert!(
+        applied_sla.is_none(),
+        "No SLA should be applied when team has no policy"
+    );
 }
 
 // ========================================
@@ -240,7 +296,13 @@ async fn test_first_response_met_on_agent_message() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Use current time in RFC3339 format as base timestamp
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -278,8 +340,14 @@ async fn test_first_response_met_on_agent_message() {
 
     // Verify event is marked as met
     assert_eq!(first_response_event.status, oxidesk::SlaEventStatus::Met);
-    assert!(first_response_event.met_at.is_some(), "met_at should be set");
-    assert!(first_response_event.breached_at.is_none(), "breached_at should not be set");
+    assert!(
+        first_response_event.met_at.is_some(),
+        "met_at should be set"
+    );
+    assert!(
+        first_response_event.breached_at.is_none(),
+        "breached_at should not be set"
+    );
 }
 
 #[tokio::test]
@@ -292,7 +360,13 @@ async fn test_first_response_met_timestamp_recorded() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Use current time in RFC3339 format as base timestamp
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -332,9 +406,10 @@ async fn test_first_response_met_timestamp_recorded() {
 
     // Verify met_at timestamp
     assert!(first_response_event.met_at.is_some());
-    let met_at = chrono::DateTime::parse_from_rfc3339(&first_response_event.met_at.clone().unwrap())
-        .unwrap()
-        .with_timezone(&Utc);
+    let met_at =
+        chrono::DateTime::parse_from_rfc3339(&first_response_event.met_at.clone().unwrap())
+            .unwrap()
+            .with_timezone(&Utc);
     let expected_met_at = chrono::DateTime::parse_from_rfc3339(&message_timestamp)
         .unwrap()
         .with_timezone(&Utc);
@@ -354,7 +429,13 @@ async fn test_applied_sla_remains_pending_after_first_response() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Use current time in RFC3339 format as base timestamp
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -372,7 +453,10 @@ async fn test_applied_sla_remains_pending_after_first_response() {
 
     // Get applied SLA before first response
     let applied_sla_before = get_applied_sla(&db, &conversation.id).await.unwrap();
-    assert_eq!(applied_sla_before.status, oxidesk::AppliedSlaStatus::Pending);
+    assert_eq!(
+        applied_sla_before.status,
+        oxidesk::AppliedSlaStatus::Pending
+    );
 
     // Create agent user
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -405,7 +489,13 @@ async fn test_first_response_breach_detected() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Apply SLA with a timestamp in the past
     let past_timestamp = (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339();
@@ -434,9 +524,18 @@ async fn test_first_response_breach_detected() {
         .expect("First response event should exist");
 
     // Verify event is marked as breached
-    assert_eq!(first_response_event.status, oxidesk::SlaEventStatus::Breached);
-    assert!(first_response_event.breached_at.is_some(), "breached_at should be set");
-    assert!(first_response_event.met_at.is_none(), "met_at should not be set");
+    assert_eq!(
+        first_response_event.status,
+        oxidesk::SlaEventStatus::Breached
+    );
+    assert!(
+        first_response_event.breached_at.is_some(),
+        "breached_at should be set"
+    );
+    assert!(
+        first_response_event.met_at.is_none(),
+        "met_at should not be set"
+    );
 }
 
 #[tokio::test]
@@ -449,7 +548,13 @@ async fn test_first_response_breached_at_timestamp() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Apply SLA with timestamp in the past
     let past_timestamp = (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339();
@@ -490,8 +595,12 @@ async fn test_first_response_breached_at_timestamp() {
     let breached_at = first_response_event_after.breached_at.as_ref().unwrap();
 
     // breached_at should be close to the deadline (allowing some processing time)
-    let deadline_time = chrono::DateTime::parse_from_rfc3339(&deadline).unwrap().with_timezone(&Utc);
-    let breached_time = chrono::DateTime::parse_from_rfc3339(breached_at).unwrap().with_timezone(&Utc);
+    let deadline_time = chrono::DateTime::parse_from_rfc3339(&deadline)
+        .unwrap()
+        .with_timezone(&Utc);
+    let breached_time = chrono::DateTime::parse_from_rfc3339(breached_at)
+        .unwrap()
+        .with_timezone(&Utc);
 
     // Allow up to 2 seconds difference for processing
     let diff = (breached_time - deadline_time).num_seconds().abs();
@@ -508,7 +617,13 @@ async fn test_resolution_breach_detected() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Apply SLA with timestamp in the past
     let past_timestamp = (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339();
@@ -551,7 +666,13 @@ async fn test_resolution_breach_updates_applied_sla_status() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Apply SLA with timestamp in the past
     let past_timestamp = (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339();
@@ -568,14 +689,20 @@ async fn test_resolution_breach_updates_applied_sla_status() {
 
     // Verify applied SLA starts as pending
     let applied_sla_before = get_applied_sla(&db, &conversation.id).await.unwrap();
-    assert_eq!(applied_sla_before.status, oxidesk::AppliedSlaStatus::Pending);
+    assert_eq!(
+        applied_sla_before.status,
+        oxidesk::AppliedSlaStatus::Pending
+    );
 
     // Check for breaches
     sla_service.check_breaches().await.unwrap();
 
     // Verify applied SLA is now breached
     let applied_sla_after = get_applied_sla(&db, &conversation.id).await.unwrap();
-    assert_eq!(applied_sla_after.status, oxidesk::AppliedSlaStatus::Breached);
+    assert_eq!(
+        applied_sla_after.status,
+        oxidesk::AppliedSlaStatus::Breached
+    );
 }
 
 #[tokio::test]
@@ -588,7 +715,13 @@ async fn test_multiple_breaches_on_same_sla() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Apply SLA with timestamp well in the past
     let past_timestamp = (chrono::Utc::now() - chrono::Duration::minutes(10)).to_rfc3339();
@@ -613,12 +746,14 @@ async fn test_multiple_breaches_on_same_sla() {
     let events = get_sla_events(&db, &applied_sla.id).await;
 
     // Verify both first response and resolution are breached
-    let first_response_breached = events
-        .iter()
-        .any(|e| e.event_type == oxidesk::SlaEventType::FirstResponse && e.status == oxidesk::SlaEventStatus::Breached);
-    let resolution_breached = events
-        .iter()
-        .any(|e| e.event_type == oxidesk::SlaEventType::Resolution && e.status == oxidesk::SlaEventStatus::Breached);
+    let first_response_breached = events.iter().any(|e| {
+        e.event_type == oxidesk::SlaEventType::FirstResponse
+            && e.status == oxidesk::SlaEventStatus::Breached
+    });
+    let resolution_breached = events.iter().any(|e| {
+        e.event_type == oxidesk::SlaEventType::Resolution
+            && e.status == oxidesk::SlaEventStatus::Breached
+    });
 
     assert!(first_response_breached, "First response should be breached");
     assert!(resolution_breached, "Resolution should be breached");
@@ -634,7 +769,13 @@ async fn test_agent_reply_after_breach_stays_breached() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Apply SLA with timestamp in the past
     let past_timestamp = (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339();
@@ -661,7 +802,10 @@ async fn test_agent_reply_after_breach_stays_breached() {
         .iter()
         .find(|e| e.event_type == oxidesk::SlaEventType::FirstResponse)
         .expect("First response event should exist");
-    assert_eq!(fr_event_after_breach.status, oxidesk::SlaEventStatus::Breached);
+    assert_eq!(
+        fr_event_after_breach.status,
+        oxidesk::SlaEventStatus::Breached
+    );
 
     // Now agent replies (after breach)
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -678,8 +822,11 @@ async fn test_agent_reply_after_breach_stays_breached() {
         .find(|e| e.event_type == oxidesk::SlaEventType::FirstResponse)
         .expect("First response event should exist");
 
-    assert_eq!(fr_event_after_reply.status, oxidesk::SlaEventStatus::Breached,
-        "Event should stay breached even after agent reply");
+    assert_eq!(
+        fr_event_after_reply.status,
+        oxidesk::SlaEventStatus::Breached,
+        "Event should stay breached even after agent reply"
+    );
     assert!(fr_event_after_reply.breached_at.is_some());
     assert!(fr_event_after_reply.met_at.is_none());
 }
@@ -698,7 +845,13 @@ async fn test_resolution_met_on_conversation_resolved() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Create agent for first response
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -755,7 +908,13 @@ async fn test_resolution_met_timestamp_recorded() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Create agent
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -801,8 +960,12 @@ async fn test_resolution_met_timestamp_recorded() {
     let met_at = resolution_event.met_at.as_ref().unwrap();
 
     // Verify met_at is close to the resolution timestamp
-    let met_time = chrono::DateTime::parse_from_rfc3339(met_at).unwrap().with_timezone(&Utc);
-    let resolution_time = chrono::DateTime::parse_from_rfc3339(&resolution_timestamp).unwrap().with_timezone(&Utc);
+    let met_time = chrono::DateTime::parse_from_rfc3339(met_at)
+        .unwrap()
+        .with_timezone(&Utc);
+    let resolution_time = chrono::DateTime::parse_from_rfc3339(&resolution_timestamp)
+        .unwrap()
+        .with_timezone(&Utc);
 
     // Allow up to 2 seconds difference for processing
     let diff = (met_time - resolution_time).num_seconds().abs();
@@ -819,7 +982,13 @@ async fn test_applied_sla_status_met_when_all_events_met() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Create agent
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -838,7 +1007,10 @@ async fn test_applied_sla_status_met_when_all_events_met() {
 
     // Verify applied SLA starts as pending
     let applied_sla_before = get_applied_sla(&db, &conversation.id).await.unwrap();
-    assert_eq!(applied_sla_before.status, oxidesk::AppliedSlaStatus::Pending);
+    assert_eq!(
+        applied_sla_before.status,
+        oxidesk::AppliedSlaStatus::Pending
+    );
 
     // Handle first response
     let first_response_timestamp = chrono::Utc::now().to_rfc3339();
@@ -849,7 +1021,10 @@ async fn test_applied_sla_status_met_when_all_events_met() {
 
     // Applied SLA should still be pending (only first response met, resolution still pending)
     let applied_sla_after_first = get_applied_sla(&db, &conversation.id).await.unwrap();
-    assert_eq!(applied_sla_after_first.status, oxidesk::AppliedSlaStatus::Pending);
+    assert_eq!(
+        applied_sla_after_first.status,
+        oxidesk::AppliedSlaStatus::Pending
+    );
 
     // Resolve conversation
     let resolution_timestamp = chrono::Utc::now().to_rfc3339();
@@ -860,7 +1035,10 @@ async fn test_applied_sla_status_met_when_all_events_met() {
 
     // Now applied SLA should be met (both events met)
     let applied_sla_after_resolution = get_applied_sla(&db, &conversation.id).await.unwrap();
-    assert_eq!(applied_sla_after_resolution.status, oxidesk::AppliedSlaStatus::Met);
+    assert_eq!(
+        applied_sla_after_resolution.status,
+        oxidesk::AppliedSlaStatus::Met
+    );
 
     // Verify both events are met
     let events = get_sla_events(&db, &applied_sla_after_resolution.id).await;
@@ -891,7 +1069,13 @@ async fn test_next_response_event_created_on_contact_reply() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Create agent
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -951,7 +1135,13 @@ async fn test_next_response_deadline_calculation() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Create agent
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -1003,7 +1193,10 @@ async fn test_next_response_deadline_calculation() {
     let diff = (deadline_time - expected_deadline).num_seconds().abs();
 
     // Allow up to 2 seconds difference for processing
-    assert!(diff <= 2, "Deadline should be 5 minutes after contact message");
+    assert!(
+        diff <= 2,
+        "Deadline should be 5 minutes after contact message"
+    );
 }
 
 #[tokio::test]
@@ -1016,7 +1209,13 @@ async fn test_only_one_pending_next_response_event() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Create agent
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -1057,7 +1256,10 @@ async fn test_only_one_pending_next_response_event() {
         .filter(|e| e.event_type == oxidesk::SlaEventType::NextResponse)
         .collect();
     assert_eq!(next_response_events_1.len(), 1);
-    assert_eq!(next_response_events_1[0].status, oxidesk::SlaEventStatus::Pending);
+    assert_eq!(
+        next_response_events_1[0].status,
+        oxidesk::SlaEventStatus::Pending
+    );
 
     // Agent replies (should mark the next_response event as met)
     let agent_message_2 = chrono::Utc::now().to_rfc3339();
@@ -1085,7 +1287,10 @@ async fn test_only_one_pending_next_response_event() {
         .iter()
         .filter(|e| e.status == oxidesk::SlaEventStatus::Pending)
         .count();
-    assert_eq!(pending_count, 1, "Only one next_response event should be pending");
+    assert_eq!(
+        pending_count, 1,
+        "Only one next_response event should be pending"
+    );
 
     let met_count = next_response_events_2
         .iter()
@@ -1104,7 +1309,13 @@ async fn test_next_response_met_on_agent_reply() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Create agent
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -1144,7 +1355,10 @@ async fn test_next_response_met_on_agent_reply() {
         .iter()
         .find(|e| e.event_type == oxidesk::SlaEventType::NextResponse)
         .expect("Next response event should exist");
-    assert_eq!(next_response_event_before.status, oxidesk::SlaEventStatus::Pending);
+    assert_eq!(
+        next_response_event_before.status,
+        oxidesk::SlaEventStatus::Pending
+    );
 
     // Agent replies (should mark next_response as met)
     let agent_message_2 = chrono::Utc::now().to_rfc3339();
@@ -1157,9 +1371,15 @@ async fn test_next_response_met_on_agent_reply() {
     let events_after = get_sla_events(&db, &applied_sla.id).await;
     let next_response_event_after = events_after
         .iter()
-        .find(|e| e.event_type == oxidesk::SlaEventType::NextResponse && e.id == next_response_event_before.id)
+        .find(|e| {
+            e.event_type == oxidesk::SlaEventType::NextResponse
+                && e.id == next_response_event_before.id
+        })
         .expect("Next response event should still exist");
-    assert_eq!(next_response_event_after.status, oxidesk::SlaEventStatus::Met);
+    assert_eq!(
+        next_response_event_after.status,
+        oxidesk::SlaEventStatus::Met
+    );
     assert!(next_response_event_after.met_at.is_some());
 }
 
@@ -1177,7 +1397,13 @@ async fn test_full_sla_lifecycle() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     // Create agent
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -1273,7 +1499,13 @@ async fn test_sla_breach_workflow() {
 
     // Create conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
-    let conversation = create_test_conversation(&db, "inbox-001".to_string(), contact.id.clone(), ConversationStatus::Open).await;
+    let conversation = create_test_conversation(
+        &db,
+        "inbox-001".to_string(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
@@ -1301,7 +1533,10 @@ async fn test_sla_breach_workflow() {
         .iter()
         .find(|e| e.event_type == oxidesk::SlaEventType::FirstResponse)
         .unwrap();
-    assert_eq!(first_response_event.status, oxidesk::SlaEventStatus::Breached);
+    assert_eq!(
+        first_response_event.status,
+        oxidesk::SlaEventStatus::Breached
+    );
     assert!(first_response_event.breached_at.is_some());
 
     let resolution_event = events
@@ -1313,7 +1548,10 @@ async fn test_sla_breach_workflow() {
 
     // Verify applied SLA status is Breached
     let applied_sla_after_breach = get_applied_sla(&db, &conversation.id).await.unwrap();
-    assert_eq!(applied_sla_after_breach.status, oxidesk::AppliedSlaStatus::Breached);
+    assert_eq!(
+        applied_sla_after_breach.status,
+        oxidesk::AppliedSlaStatus::Breached
+    );
 
     // Step 3: Agent tries to respond (should not change breached status)
     let agent = create_test_agent(&db, "agent@example.com", "Agent").await;
@@ -1329,10 +1567,16 @@ async fn test_sla_breach_workflow() {
         .iter()
         .find(|e| e.event_type == oxidesk::SlaEventType::FirstResponse)
         .unwrap();
-    assert_eq!(first_response_after.status, oxidesk::SlaEventStatus::Breached);
+    assert_eq!(
+        first_response_after.status,
+        oxidesk::SlaEventStatus::Breached
+    );
     assert!(first_response_after.met_at.is_none());
 
     // Verify applied SLA status stays Breached
     let applied_sla_final = get_applied_sla(&db, &conversation.id).await.unwrap();
-    assert_eq!(applied_sla_final.status, oxidesk::AppliedSlaStatus::Breached);
+    assert_eq!(
+        applied_sla_final.status,
+        oxidesk::AppliedSlaStatus::Breached
+    );
 }

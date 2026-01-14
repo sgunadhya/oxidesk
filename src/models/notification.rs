@@ -41,7 +41,7 @@ pub struct UserNotification {
     pub user_id: String,
     #[serde(rename = "type")]
     pub notification_type: NotificationType,
-    pub created_at: String,  // ISO 8601 timestamp
+    pub created_at: String, // ISO 8601 timestamp
     pub is_read: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conversation_id: Option<String>,
@@ -53,11 +53,7 @@ pub struct UserNotification {
 
 impl UserNotification {
     /// Create a new assignment notification
-    pub fn new_assignment(
-        user_id: String,
-        conversation_id: String,
-        actor_id: String,
-    ) -> Self {
+    pub fn new_assignment(user_id: String, conversation_id: String, actor_id: String) -> Self {
         let now = time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap();
@@ -188,7 +184,7 @@ mod tests {
                 .format(&time::format_description::well_known::Rfc3339)
                 .unwrap(),
             is_read: false,
-            conversation_id: None,  // Missing required field
+            conversation_id: None, // Missing required field
             message_id: None,
             actor_id: Some("actor_789".to_string()),
         };
@@ -212,7 +208,7 @@ mod tests {
                 .unwrap(),
             is_read: false,
             conversation_id: Some("conv_456".to_string()),
-            message_id: None,  // Missing required field
+            message_id: None, // Missing required field
             actor_id: Some("actor_789".to_string()),
         };
 
@@ -236,7 +232,7 @@ mod tests {
             is_read: false,
             conversation_id: Some("conv_456".to_string()),
             message_id: Some("msg_789".to_string()),
-            actor_id: None,  // Missing required field
+            actor_id: None, // Missing required field
         };
 
         let result = notification.validate();
@@ -257,7 +253,7 @@ mod tests {
                 .format(&time::format_description::well_known::Rfc3339)
                 .unwrap(),
             is_read: false,
-            conversation_id: None,  // Missing required field
+            conversation_id: None, // Missing required field
             message_id: Some("msg_789".to_string()),
             actor_id: Some("actor_012".to_string()),
         };

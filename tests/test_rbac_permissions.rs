@@ -21,11 +21,17 @@ fn test_has_permission_single_role() {
     let roles = vec![role];
 
     // Should have granted permissions
-    assert!(PermissionService::has_permission(&roles, "conversations:read_assigned"));
+    assert!(PermissionService::has_permission(
+        &roles,
+        "conversations:read_assigned"
+    ));
     assert!(PermissionService::has_permission(&roles, "messages:write"));
 
     // Should not have other permissions
-    assert!(!PermissionService::has_permission(&roles, "conversations:read_all"));
+    assert!(!PermissionService::has_permission(
+        &roles,
+        "conversations:read_all"
+    ));
     assert!(!PermissionService::has_permission(&roles, "roles:manage"));
 }
 
@@ -60,10 +66,19 @@ fn test_has_permission_multiple_roles_union() {
     let roles = vec![support_role, manager_role];
 
     // Should have permissions from BOTH roles (union)
-    assert!(PermissionService::has_permission(&roles, "conversations:read_assigned"));
+    assert!(PermissionService::has_permission(
+        &roles,
+        "conversations:read_assigned"
+    ));
     assert!(PermissionService::has_permission(&roles, "messages:write"));
-    assert!(PermissionService::has_permission(&roles, "conversations:read_all"));
-    assert!(PermissionService::has_permission(&roles, "conversations:update_team_assignee"));
+    assert!(PermissionService::has_permission(
+        &roles,
+        "conversations:read_all"
+    ));
+    assert!(PermissionService::has_permission(
+        &roles,
+        "conversations:update_team_assignee"
+    ));
 
     // Should not have permissions from neither role
     assert!(!PermissionService::has_permission(&roles, "roles:manage"));
@@ -131,9 +146,18 @@ fn test_empty_roles() {
     let roles = vec![];
 
     // No roles = no permissions
-    assert!(!PermissionService::has_permission(&roles, "conversations:read_assigned"));
-    assert!(!PermissionService::has_any_permission(&roles, &["conversations:read_all"]));
-    assert!(!PermissionService::has_all_permissions(&roles, &["messages:write"]));
+    assert!(!PermissionService::has_permission(
+        &roles,
+        "conversations:read_assigned"
+    ));
+    assert!(!PermissionService::has_any_permission(
+        &roles,
+        &["conversations:read_all"]
+    ));
+    assert!(!PermissionService::has_all_permissions(
+        &roles,
+        &["messages:write"]
+    ));
 }
 
 #[test]
@@ -151,5 +175,8 @@ fn test_role_with_empty_permissions() {
     let roles = vec![role];
 
     // No permissions in role
-    assert!(!PermissionService::has_permission(&roles, "conversations:read_assigned"));
+    assert!(!PermissionService::has_permission(
+        &roles,
+        "conversations:read_assigned"
+    ));
 }

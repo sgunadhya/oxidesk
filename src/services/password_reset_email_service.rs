@@ -1,9 +1,8 @@
 /// Email service for sending password reset emails
 /// Feature: 017-password-reset
 use lettre::{
-    message::header::ContentType,
-    transport::smtp::authentication::Credentials,
-    Message, SmtpTransport, Transport,
+    message::header::ContentType, transport::smtp::authentication::Credentials, Message,
+    SmtpTransport, Transport,
 };
 use std::env;
 use thiserror::Error;
@@ -52,8 +51,8 @@ impl SmtpConfig {
         let from_email = env::var("SMTP_FROM_EMAIL")
             .map_err(|_| EmailError::ConfigError("SMTP_FROM_EMAIL not set".to_string()))?;
 
-        let from_name = env::var("SMTP_FROM_NAME")
-            .unwrap_or_else(|_| "Oxidesk Support".to_string());
+        let from_name =
+            env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Oxidesk Support".to_string());
 
         let reset_base_url = env::var("RESET_PASSWORD_BASE_URL")
             .unwrap_or_else(|_| "http://localhost:3000".to_string());
@@ -85,7 +84,10 @@ pub async fn send_password_reset_email(
     reset_token: &str,
     config: &SmtpConfig,
 ) -> Result<(), EmailError> {
-    let reset_link = format!("{}/reset-password?token={}", config.reset_base_url, reset_token);
+    let reset_link = format!(
+        "{}/reset-password?token={}",
+        config.reset_base_url, reset_token
+    );
 
     // Try to load HTML template, fallback to plain text if not found
     let email_body = match std::fs::read_to_string("templates/password_reset_email.html") {
@@ -112,19 +114,18 @@ pub async fn send_password_reset_email(
         ContentType::TEXT_PLAIN
     };
 
-    let email = Message::builder()
-        .from(
-            from_address
+    let email =
+        Message::builder()
+            .from(from_address.parse().map_err(|e| {
+                EmailError::MessageBuildError(format!("Invalid from address: {}", e))
+            })?)
+            .to(to_email
                 .parse()
-                .map_err(|e| EmailError::MessageBuildError(format!("Invalid from address: {}", e)))?,
-        )
-        .to(to_email
-            .parse()
-            .map_err(|e| EmailError::MessageBuildError(format!("Invalid to address: {}", e)))?)
-        .subject("Password Reset Request")
-        .header(content_type)
-        .body(email_body)
-        .map_err(|e| EmailError::MessageBuildError(e.to_string()))?;
+                .map_err(|e| EmailError::MessageBuildError(format!("Invalid to address: {}", e)))?)
+            .subject("Password Reset Request")
+            .header(content_type)
+            .body(email_body)
+            .map_err(|e| EmailError::MessageBuildError(e.to_string()))?;
 
     let creds = Credentials::new(config.username.clone(), config.password.clone());
 
@@ -135,17 +136,12 @@ pub async fn send_password_reset_email(
         .build();
 
     // Send the email asynchronously
-    tokio::task::spawn_blocking(move || {
-        mailer.send(&email)
-    })
-    .await
-    .map_err(|e| EmailError::SendError(format!("Task join error: {}", e)))?
-    .map_err(|e| EmailError::SendError(format!("SMTP send error: {}", e)))?;
+    tokio::task::spawn_blocking(move || mailer.send(&email))
+        .await
+        .map_err(|e| EmailError::SendError(format!("Task join error: {}", e)))?
+        .map_err(|e| EmailError::SendError(format!("SMTP send error: {}", e)))?;
 
-    tracing::info!(
-        "Password reset email sent successfully to {}",
-        to_email
-    );
+    tracing::info!("Password reset email sent successfully to {}", to_email);
 
     Ok(())
 }

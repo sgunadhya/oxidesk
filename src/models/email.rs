@@ -12,7 +12,7 @@ pub struct InboxEmailConfig {
     pub imap_host: String,
     pub imap_port: i32,
     pub imap_username: String,
-    pub imap_password: String,  // Encrypted at rest using AES-256-GCM
+    pub imap_password: String, // Encrypted at rest using AES-256-GCM
     pub imap_use_tls: bool,
     pub imap_folder: String,
 
@@ -20,7 +20,7 @@ pub struct InboxEmailConfig {
     pub smtp_host: String,
     pub smtp_port: i32,
     pub smtp_username: String,
-    pub smtp_password: String,  // Encrypted at rest using AES-256-GCM
+    pub smtp_password: String, // Encrypted at rest using AES-256-GCM
     pub smtp_use_tls: bool,
 
     // Email identity
@@ -30,11 +30,11 @@ pub struct InboxEmailConfig {
     // Polling configuration
     pub poll_interval_seconds: i32,
     pub enabled: bool,
-    pub last_poll_at: Option<String>,  // ISO8601
+    pub last_poll_at: Option<String>, // ISO8601
 
     // Timestamps
-    pub created_at: String,  // ISO8601
-    pub updated_at: String,  // ISO8601
+    pub created_at: String, // ISO8601
+    pub updated_at: String, // ISO8601
 }
 
 impl InboxEmailConfig {
@@ -85,10 +85,10 @@ pub struct MessageAttachment {
     pub id: String,
     pub message_id: String,
     pub filename: String,
-    pub content_type: Option<String>,  // MIME type
-    pub file_size: i64,  // bytes
-    pub file_path: String,  // absolute path on disk
-    pub created_at: String,  // ISO8601
+    pub content_type: Option<String>, // MIME type
+    pub file_size: i64,               // bytes
+    pub file_path: String,            // absolute path on disk
+    pub created_at: String,           // ISO8601
 }
 
 impl MessageAttachment {
@@ -150,14 +150,14 @@ pub struct EmailProcessingLog {
 
     // Email identifiers
     pub email_message_id: String,  // RFC 5322 Message-ID
-    pub email_uid: Option<String>,  // IMAP UID
+    pub email_uid: Option<String>, // IMAP UID
 
     // Email metadata
     pub from_address: String,
     pub subject: Option<String>,
 
     // Processing result
-    pub processing_status: String,  // Will be converted to/from ProcessingStatus enum
+    pub processing_status: String, // Will be converted to/from ProcessingStatus enum
     pub error_message: Option<String>,
 
     // Created entities
@@ -165,7 +165,7 @@ pub struct EmailProcessingLog {
     pub message_id: Option<String>,
 
     // Timestamp
-    pub processed_at: String,  // ISO8601
+    pub processed_at: String, // ISO8601
 }
 
 impl EmailProcessingLog {

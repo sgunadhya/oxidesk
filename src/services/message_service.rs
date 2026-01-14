@@ -1,9 +1,9 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
-    models::{Message, IncomingMessageRequest, SendMessageRequest, UserNotification},
-    services::{DeliveryService, NotificationService, connection_manager::ConnectionManager},
     events::{EventBus, SystemEvent},
+    models::{IncomingMessageRequest, Message, SendMessageRequest, UserNotification},
+    services::{connection_manager::ConnectionManager, DeliveryService, NotificationService},
 };
 use std::sync::Arc;
 
@@ -70,27 +70,28 @@ impl MessageService {
         request: IncomingMessageRequest,
     ) -> ApiResult<Message> {
         // Validate content
-        Message::validate_content(&request.content)
-            .map_err(|e| ApiError::BadRequest(e))?;
+        Message::validate_content(&request.content).map_err(|e| ApiError::BadRequest(e))?;
 
         // Verify conversation exists
-        let _conversation = self.db
+        let _conversation = self
+            .db
             .get_conversation_by_id(&request.conversation_id)
             .await?
             .ok_or_else(|| {
-                ApiError::NotFound(format!("Conversation {} not found", request.conversation_id))
+                ApiError::NotFound(format!(
+                    "Conversation {} not found",
+                    request.conversation_id
+                ))
             })?;
 
         // Contact ID must be resolved by this point (Feature 016)
-        let contact_id = request.contact_id
+        let contact_id = request
+            .contact_id
             .ok_or_else(|| ApiError::BadRequest("contact_id is required".to_string()))?;
 
         // Create incoming message
-        let message = Message::new_incoming(
-            request.conversation_id.clone(),
-            request.content,
-            contact_id,
-        );
+        let message =
+            Message::new_incoming(request.conversation_id.clone(), request.content, contact_id);
 
         // Save to database
         self.db.create_message(&message).await?;
@@ -133,11 +134,11 @@ impl MessageService {
         request: SendMessageRequest,
     ) -> ApiResult<Message> {
         // Validate content
-        Message::validate_content(&request.content)
-            .map_err(|e| ApiError::BadRequest(e))?;
+        Message::validate_content(&request.content).map_err(|e| ApiError::BadRequest(e))?;
 
         // Verify conversation exists
-        let _conversation = self.db
+        let _conversation = self
+            .db
             .get_conversation_by_id(&conversation_id)
             .await?
             .ok_or_else(|| {
@@ -148,11 +149,8 @@ impl MessageService {
         // TODO: Add conversation access validation (agent assigned to conversation)
 
         // Create outgoing message
-        let message = Message::new_outgoing(
-            conversation_id.clone(),
-            request.content,
-            agent_id.clone(),
-        );
+        let message =
+            Message::new_outgoing(conversation_id.clone(), request.content, agent_id.clone());
 
         // Save to database
         self.db.create_message(&message).await?;
@@ -215,7 +213,9 @@ impl MessageService {
                         if let Err(e) = NotificationService::send_realtime_notification(
                             &notification_clone,
                             &connection_manager,
-                        ).await {
+                        )
+                        .await
+                        {
                             tracing::debug!("Failed to send real-time notification: {}", e);
                         }
                     });
@@ -242,7 +242,9 @@ impl MessageService {
         per_page: i64,
     ) -> ApiResult<(Vec<Message>, i64)> {
         let offset = (page - 1) * per_page;
-        self.db.list_messages(conversation_id, per_page, offset).await
+        self.db
+            .list_messages(conversation_id, per_page, offset)
+            .await
     }
 
     /// Check if a message is immutable (prevents updates to sent/received messages)
@@ -278,7 +280,9 @@ impl MessageService {
             None
         };
 
-        self.db.update_message_status(message_id, new_status, sent_at).await?;
+        self.db
+            .update_message_status(message_id, new_status, sent_at)
+            .await?;
 
         Ok(())
     }
@@ -297,7 +301,6 @@ impl Clone for MessageService {
 
 #[cfg(test)]
 mod tests {
-
 
     #[test]
     fn test_message_service_creation() {

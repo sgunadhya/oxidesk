@@ -1,0 +1,25 @@
+<tr id="agent-{{ agent.id }}">
+    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+        {{ agent.first_name }}
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+        {{ agent.email }}
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+        {% for role in agent.roles %}
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            {{ role }}
+        </span>
+        {% endfor %}
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+        {{ agent.created_at }}
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+        <a href="#" class="text-indigo-600 hover:text-indigo-900 mr-4">Edit</a>
+        <button hx-delete="/agents/{{ agent.id }}" hx-confirm="Are you sure you want to delete this agent?"
+            hx-target="#agent-{{ agent.id }}" class="text-red-600 hover:text-red-900">
+            Delete
+        </button>
+    </td>
+</tr>

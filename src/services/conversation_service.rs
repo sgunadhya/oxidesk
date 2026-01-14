@@ -1,9 +1,9 @@
-use crate::api::middleware::{ApiResult, ApiError, AuthenticatedUser};
+use crate::api::middleware::{ApiError, ApiResult, AuthenticatedUser};
 use crate::database::Database;
+use crate::events::EventBus;
 use crate::models::conversation::*;
 use crate::models::user::UserType;
 use crate::services::state_machine::{execute_transition, TransitionContext};
-use crate::events::EventBus;
 
 /// Update conversation status with validation and event publishing
 pub async fn update_conversation_status(
@@ -29,9 +29,8 @@ pub async fn update_conversation_status(
     };
 
     // Execute transition (validates and publishes events)
-    let _result = execute_transition(context, event_bus).map_err(|e| {
-        ApiError::BadRequest(format!("Invalid transition: {}", e))
-    })?;
+    let _result = execute_transition(context, event_bus)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid transition: {}", e)))?;
 
     tracing::info!(
         "Updating conversation {} status from {:?} to {:?}",
@@ -50,15 +49,15 @@ pub async fn update_conversation_status(
     // - Clear when reopening (transitioning TO Open from any status)
     let resolved_at = match update_request.status {
         ConversationStatus::Resolved => Some(now.clone()),
-        ConversationStatus::Open => None,  // Clear resolved_at when reopening
-        _ => current.resolved_at.clone(),  // Preserve existing value for other statuses
+        ConversationStatus::Open => None, // Clear resolved_at when reopening
+        _ => current.resolved_at.clone(), // Preserve existing value for other statuses
     };
 
     // Feature 019: Set closed_at when transitioning TO Closed
     let closed_at = if update_request.status == ConversationStatus::Closed {
         Some(now.clone())
     } else {
-        current.closed_at.clone()  // Preserve existing value
+        current.closed_at.clone() // Preserve existing value
     };
 
     let snoozed_until = if update_request.status == ConversationStatus::Snoozed {
@@ -76,7 +75,13 @@ pub async fn update_conversation_status(
 
     // Update the conversation in database
     let updated = db
-        .update_conversation_fields(conversation_id, update_request.status, resolved_at, closed_at, snoozed_until)
+        .update_conversation_fields(
+            conversation_id,
+            update_request.status,
+            resolved_at,
+            closed_at,
+            snoozed_until,
+        )
         .await?;
 
     tracing::info!(
@@ -94,7 +99,9 @@ fn calculate_snooze_until(duration: &str) -> ApiResult<String> {
     let duration = duration.trim();
 
     if duration.is_empty() {
-        return Err(ApiError::BadRequest("Snooze duration cannot be empty".to_string()));
+        return Err(ApiError::BadRequest(
+            "Snooze duration cannot be empty".to_string(),
+        ));
     }
 
     // Parse the duration
@@ -108,13 +115,14 @@ fn calculate_snooze_until(duration: &str) -> ApiResult<String> {
         (stripped, 'w')
     } else {
         return Err(ApiError::BadRequest(
-            "Invalid snooze duration format. Use format like '1h', '30m', '2d', or '1w'".to_string(),
+            "Invalid snooze duration format. Use format like '1h', '30m', '2d', or '1w'"
+                .to_string(),
         ));
     };
 
-    let value: i64 = value.parse().map_err(|_| {
-        ApiError::BadRequest("Invalid snooze duration value".to_string())
-    })?;
+    let value: i64 = value
+        .parse()
+        .map_err(|_| ApiError::BadRequest("Invalid snooze duration value".to_string()))?;
 
     if value <= 0 {
         return Err(ApiError::BadRequest(
@@ -149,8 +157,7 @@ pub async fn create_conversation(
     sla_service: Option<&crate::services::SlaService>,
 ) -> ApiResult<Conversation> {
     // Check permission
-    let has_permission = auth_user.is_admin()
-        || auth_user.roles.iter().any(|r| r.name == "Agent");
+    let has_permission = auth_user.is_admin() || auth_user.roles.iter().any(|r| r.name == "Agent");
 
     if !has_permission {
         return Err(ApiError::Forbidden(
@@ -189,7 +196,10 @@ pub async fn create_conversation(
                         team_id
                     );
 
-                    match sla_svc.apply_sla(&conversation.id, &policy_id, &base_timestamp).await {
+                    match sla_svc
+                        .apply_sla(&conversation.id, &policy_id, &base_timestamp)
+                        .await
+                    {
                         Ok(_) => {
                             tracing::info!(
                                 "Successfully auto-applied SLA policy {} to conversation {}",
@@ -216,10 +226,7 @@ pub async fn create_conversation(
 }
 
 /// Get conversation by ID
-pub async fn get_conversation(
-    db: &Database,
-    conversation_id: &str,
-) -> ApiResult<Conversation> {
+pub async fn get_conversation(db: &Database, conversation_id: &str) -> ApiResult<Conversation> {
     db.get_conversation_by_id(conversation_id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Conversation not found".to_string()))
@@ -258,13 +265,17 @@ pub async fn list_conversations(
 
     // Get conversations
     let conversations = db
-        .list_conversations(per_page, offset, status, inbox_id.clone(), contact_id.clone())
+        .list_conversations(
+            per_page,
+            offset,
+            status,
+            inbox_id.clone(),
+            contact_id.clone(),
+        )
         .await?;
 
     // Get total count
-    let total_count = db
-        .count_conversations(status, inbox_id, contact_id)
-        .await?;
+    let total_count = db.count_conversations(status, inbox_id, contact_id).await?;
 
     let total_pages = (total_count + per_page - 1) / per_page;
 
@@ -336,4 +347,35 @@ mod tests {
         let result = calculate_snooze_until("");
         assert!(result.is_err());
     }
+}
+
+/// Assign conversation to an agent
+pub async fn assign_conversation(
+    db: &Database,
+    conversation_id: &str,
+    agent_id: &str,
+    assigned_by: &str,
+) -> ApiResult<()> {
+    // Validate agent exists
+    let agent = db
+        .get_user_by_id(agent_id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
+
+    // Check if user is actually an agent
+    // (Optional: enforce role check)
+
+    let now = time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap();
+
+    db.assign_conversation_to_user(conversation_id, agent_id, assigned_by)
+        .await?;
+
+    tracing::info!(
+        "Assigned conversation {} to agent {}",
+        conversation_id,
+        agent_id
+    );
+    Ok(())
 }

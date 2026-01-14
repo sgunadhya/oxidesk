@@ -1,13 +1,11 @@
+use crate::{
+    api::middleware::error::ApiError, database::Database, models::*,
+    services::connection_manager::ConnectionManager,
+};
 use axum::{
     extract::{Request, State},
     middleware::Next,
     response::Response,
-};
-use crate::{
-    api::middleware::error::ApiError,
-    database::Database,
-    models::*,
-    services::connection_manager::ConnectionManager,
 };
 use std::sync::Arc;
 
@@ -157,7 +155,12 @@ fn compute_permissions(roles: &[Role]) -> Vec<String> {
 /// Check if user has required permission
 pub async fn require_permission(
     permission: &'static str,
-) -> impl Fn(Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, ApiError>> + Send>> + Clone {
+) -> impl Fn(
+    Request,
+    Next,
+)
+    -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, ApiError>> + Send>>
+       + Clone {
     move |request: Request, next: Next| {
         Box::pin(async move {
             let auth_user = request

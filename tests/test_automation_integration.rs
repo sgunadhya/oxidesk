@@ -3,10 +3,10 @@ mod helpers;
 use helpers::*;
 use oxidesk::{
     models::{
-        AutomationRule, RuleType, RuleCondition, RuleAction, ActionType, ComparisonOperator,
-        ConversationStatus, Priority,
+        ActionType, AutomationRule, ComparisonOperator, ConversationStatus, Priority, RuleAction,
+        RuleCondition, RuleType,
     },
-    services::automation_service::{AutomationService, AutomationConfig},
+    services::automation_service::{AutomationConfig, AutomationService},
 };
 use serde_json::json;
 use std::collections::HashMap;
@@ -52,10 +52,8 @@ async fn test_event_triggered_rule_execution() {
     // Action: Add "Bug" tag and trigger automation
     conversation.tags = Some(vec!["Bug".to_string()]);
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     service
         .handle_conversation_event("conversation.tags_changed", &conversation, "test-user")
@@ -63,11 +61,18 @@ async fn test_event_triggered_rule_execution() {
         .unwrap();
 
     // Verify: Priority was set to "High"
-    let updated_conversation = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated_conversation = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated_conversation.priority, Some(Priority::High));
 
     // Verify: Evaluation log was created
-    let logs = db.get_rule_evaluation_logs_by_rule(&rule.id, 10, 0).await.unwrap();
+    let logs = db
+        .get_rule_evaluation_logs_by_rule(&rule.id, 10, 0)
+        .await
+        .unwrap();
     assert_eq!(logs.len(), 1);
     assert_eq!(logs[0].rule_id, rule.id);
     assert_eq!(logs[0].event_type, "conversation.tags_changed");
@@ -102,10 +107,8 @@ async fn test_conditional_rule_evaluation() {
 
     db.create_automation_rule(&rule).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Test Case 1: Condition matches (priority is "Urgent")
     let contact1 = create_test_contact(db, "user1@example.com").await;
@@ -117,7 +120,9 @@ async fn test_conditional_rule_evaluation() {
     )
     .await;
     conversation1.priority = Some(Priority::High);
-    db.set_conversation_priority(&conversation1.id, &Priority::High).await.unwrap();
+    db.set_conversation_priority(&conversation1.id, &Priority::High)
+        .await
+        .unwrap();
 
     service
         .handle_conversation_event("conversation.priority_changed", &conversation1, "test-user")
@@ -125,7 +130,10 @@ async fn test_conditional_rule_evaluation() {
         .unwrap();
 
     // Verify: Action was executed
-    let logs1 = db.get_evaluation_logs_by_conversation(&conversation1.id).await.unwrap();
+    let logs1 = db
+        .get_evaluation_logs_by_conversation(&conversation1.id)
+        .await
+        .unwrap();
     assert_eq!(logs1.len(), 1);
     assert!(logs1[0].action_executed);
 
@@ -139,7 +147,9 @@ async fn test_conditional_rule_evaluation() {
     )
     .await;
     conversation2.priority = Some(Priority::Low);
-    db.set_conversation_priority(&conversation2.id, &Priority::Low).await.unwrap();
+    db.set_conversation_priority(&conversation2.id, &Priority::Low)
+        .await
+        .unwrap();
 
     service
         .handle_conversation_event("conversation.priority_changed", &conversation2, "test-user")
@@ -147,7 +157,10 @@ async fn test_conditional_rule_evaluation() {
         .unwrap();
 
     // Verify: Action was NOT executed (condition false)
-    let logs2 = db.get_evaluation_logs_by_conversation(&conversation2.id).await.unwrap();
+    let logs2 = db
+        .get_evaluation_logs_by_conversation(&conversation2.id)
+        .await
+        .unwrap();
     assert_eq!(logs2.len(), 1);
     assert!(!logs2[0].action_executed);
 
@@ -179,10 +192,8 @@ async fn test_enabled_disabled_rule_control() {
 
     db.create_automation_rule(&rule).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Test Case 1: Rule is enabled
     let contact1 = create_test_contact(db, "user1@example.com").await;
@@ -199,7 +210,11 @@ async fn test_enabled_disabled_rule_control() {
         .await
         .unwrap();
 
-    let updated1 = db.get_conversation_by_id(&conversation1.id).await.unwrap().unwrap();
+    let updated1 = db
+        .get_conversation_by_id(&conversation1.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated1.priority, Some(Priority::Medium));
 
     // Action: Disable the rule
@@ -221,7 +236,11 @@ async fn test_enabled_disabled_rule_control() {
         .unwrap();
 
     // Verify: Action was NOT executed (rule disabled)
-    let updated2 = db.get_conversation_by_id(&conversation2.id).await.unwrap().unwrap();
+    let updated2 = db
+        .get_conversation_by_id(&conversation2.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated2.priority, None);
 
     // Action: Re-enable the rule
@@ -243,7 +262,11 @@ async fn test_enabled_disabled_rule_control() {
         .unwrap();
 
     // Verify: Action was executed (rule re-enabled)
-    let updated3 = db.get_conversation_by_id(&conversation3.id).await.unwrap().unwrap();
+    let updated3 = db
+        .get_conversation_by_id(&conversation3.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated3.priority, Some(Priority::Medium));
 
     teardown_test_db(test_db).await;
@@ -306,10 +329,8 @@ async fn test_rule_type_and_event_subscription() {
     db.create_automation_rule(&rule2).await.unwrap();
     db.create_automation_rule(&rule3).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Test: Trigger "tags_changed" event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -327,16 +348,29 @@ async fn test_rule_type_and_event_subscription() {
         .unwrap();
 
     // Verify: Only rule1 was evaluated (subscribed to tags_changed)
-    let logs1 = db.get_rule_evaluation_logs_by_rule(&rule1.id, 10, 0).await.unwrap();
-    let logs2 = db.get_rule_evaluation_logs_by_rule(&rule2.id, 10, 0).await.unwrap();
-    let logs3 = db.get_rule_evaluation_logs_by_rule(&rule3.id, 10, 0).await.unwrap();
+    let logs1 = db
+        .get_rule_evaluation_logs_by_rule(&rule1.id, 10, 0)
+        .await
+        .unwrap();
+    let logs2 = db
+        .get_rule_evaluation_logs_by_rule(&rule2.id, 10, 0)
+        .await
+        .unwrap();
+    let logs3 = db
+        .get_rule_evaluation_logs_by_rule(&rule3.id, 10, 0)
+        .await
+        .unwrap();
 
     assert_eq!(logs1.len(), 1, "Rule1 should have been evaluated");
     assert_eq!(logs2.len(), 0, "Rule2 should NOT have been evaluated");
     assert_eq!(logs3.len(), 0, "Rule3 should NOT have been evaluated");
 
     // Verify: Priority set by rule1
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.priority, Some(Priority::High));
 
     teardown_test_db(test_db).await;
@@ -394,10 +428,8 @@ async fn test_complex_workflow_with_multiple_rules() {
     db.create_automation_rule(&rule1).await.unwrap();
     db.create_automation_rule(&rule2).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Action: Create conversation and add Bug tag
     let contact = create_test_contact(db, "user@example.com").await;
@@ -417,7 +449,11 @@ async fn test_complex_workflow_with_multiple_rules() {
         .unwrap();
 
     // Verify: Priority was set
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.priority, Some(Priority::High));
 
     // Step 2: Trigger priority_changed event (triggers rule2)
@@ -428,13 +464,26 @@ async fn test_complex_workflow_with_multiple_rules() {
         .unwrap();
 
     // Verify: Conversation was assigned
-    let final_conversation = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
-    assert_eq!(final_conversation.assigned_user_id, Some(agent.user_id.clone()));
+    let final_conversation = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        final_conversation.assigned_user_id,
+        Some(agent.user_id.clone())
+    );
     assert_eq!(final_conversation.priority, Some(Priority::High));
 
     // Verify: Both rules have evaluation logs
-    let logs1 = db.get_rule_evaluation_logs_by_rule(&rule1.id, 10, 0).await.unwrap();
-    let logs2 = db.get_rule_evaluation_logs_by_rule(&rule2.id, 10, 0).await.unwrap();
+    let logs1 = db
+        .get_rule_evaluation_logs_by_rule(&rule1.id, 10, 0)
+        .await
+        .unwrap();
+    let logs2 = db
+        .get_rule_evaluation_logs_by_rule(&rule2.id, 10, 0)
+        .await
+        .unwrap();
     assert_eq!(logs1.len(), 1);
     assert_eq!(logs2.len(), 1);
     assert!(logs1[0].action_executed);

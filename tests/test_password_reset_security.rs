@@ -2,8 +2,8 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent},
-    services::{hash_password, validate_and_normalize_email, password_reset_service},
+    models::{Agent, User, UserType},
+    services::{hash_password, password_reset_service, validate_and_normalize_email},
 };
 use std::time::Instant;
 
@@ -17,7 +17,12 @@ async fn test_email_enumeration_prevention_same_message() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(existing_email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Existing User".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Existing User".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -28,7 +33,8 @@ async fn test_email_enumeration_prevention_same_message() {
     let response1 = result1.unwrap();
 
     // Request password reset for non-existent email
-    let result2 = password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
+    let result2 =
+        password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
     assert!(result2.is_ok());
     let response2 = result2.unwrap();
 
@@ -57,19 +63,28 @@ async fn test_email_enumeration_prevention_consistent_timing() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(existing_email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Timed User".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Timed User".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Measure time for existing email
     let start1 = Instant::now();
-    password_reset_service::request_password_reset(db, &existing_email).await.unwrap();
+    password_reset_service::request_password_reset(db, &existing_email)
+        .await
+        .unwrap();
     let duration1 = start1.elapsed();
 
     // Measure time for non-existent email
     let start2 = Instant::now();
-    password_reset_service::request_password_reset(db, "nonexistent@example.com").await.unwrap();
+    password_reset_service::request_password_reset(db, "nonexistent@example.com")
+        .await
+        .unwrap();
     let duration2 = start2.elapsed();
 
     // Timing should be similar (within reasonable tolerance)
@@ -111,7 +126,12 @@ async fn test_email_enumeration_prevention_case_insensitive() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Case Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Case Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -161,7 +181,11 @@ async fn test_no_error_details_leaked_for_invalid_emails() {
         let result = password_reset_service::request_password_reset(db, email).await;
 
         // Should always succeed with generic message
-        assert!(result.is_ok(), "Should not leak information about email: {}", email);
+        assert!(
+            result.is_ok(),
+            "Should not leak information about email: {}",
+            email
+        );
 
         let response = result.unwrap();
         assert_eq!(
@@ -185,17 +209,29 @@ async fn test_http_200_for_both_existing_and_nonexistent() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(existing_email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "HTTP 200 Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "HTTP 200 Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Both requests should succeed (HTTP 200 equivalent - Ok result)
     let result1 = password_reset_service::request_password_reset(db, &existing_email).await;
-    assert!(result1.is_ok(), "Existing email should return Ok (HTTP 200)");
+    assert!(
+        result1.is_ok(),
+        "Existing email should return Ok (HTTP 200)"
+    );
 
-    let result2 = password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
-    assert!(result2.is_ok(), "Non-existent email should also return Ok (HTTP 200)");
+    let result2 =
+        password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
+    assert!(
+        result2.is_ok(),
+        "Non-existent email should also return Ok (HTTP 200)"
+    );
 
     teardown_test_db(test_db).await;
 }

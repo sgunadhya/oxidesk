@@ -42,9 +42,7 @@ pub async fn receive_incoming_message(
 
     let message_service = MessageService::new(state.db.clone());
 
-    let message = message_service
-        .create_incoming_message(request)
-        .await?;
+    let message = message_service.create_incoming_message(request).await?;
 
     Ok((StatusCode::CREATED, Json(message)))
 }
@@ -64,11 +62,7 @@ pub async fn send_message(
     );
 
     let message = message_service
-        .send_message(
-            conversation_id,
-            auth_user.user.id,
-            request,
-        )
+        .send_message(conversation_id, auth_user.user.id, request)
         .await?;
 
     Ok((StatusCode::CREATED, Json(message)))
@@ -132,9 +126,18 @@ pub async fn list_messages(
 pub fn routes() -> Router<AppState> {
     Router::new()
         // Webhook endpoint (no auth required - external systems)
-        .route("/api/webhooks/messages/incoming", post(receive_incoming_message))
+        .route(
+            "/api/webhooks/messages/incoming",
+            post(receive_incoming_message),
+        )
         // Protected endpoints (require authentication)
         .route("/api/messages/:id", get(get_message))
-        .route("/api/conversations/:conversation_id/messages", get(list_messages))
-        .route("/api/conversations/:conversation_id/messages", post(send_message))
+        .route(
+            "/api/conversations/:conversation_id/messages",
+            get(list_messages),
+        )
+        .route(
+            "/api/conversations/:conversation_id/messages",
+            post(send_message),
+        )
 }

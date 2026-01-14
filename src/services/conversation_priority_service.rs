@@ -1,8 +1,8 @@
 // Feature 020: Conversation Priority Management
 use crate::api::middleware::{ApiError, ApiResult};
 use crate::database::Database;
-use crate::models::Conversation;
 use crate::events::{EventBus, SystemEvent};
+use crate::models::Conversation;
 
 /// Service for managing conversation priorities
 pub struct ConversationPriorityService<'a> {
@@ -49,10 +49,13 @@ impl<'a> ConversationPriorityService<'a> {
         event_bus: Option<&EventBus>,
     ) -> ApiResult<Conversation> {
         // Get current conversation to check existing priority
-        let current = self.db
+        let current = self
+            .db
             .get_conversation_by_id(conversation_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Conversation {} not found", conversation_id)))?;
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Conversation {} not found", conversation_id))
+            })?;
 
         let previous_priority = current.priority.clone();
 
@@ -61,17 +64,25 @@ impl<'a> ConversationPriorityService<'a> {
 
         // Update priority in database
         if let Some(priority) = &new_priority {
-            self.db.set_conversation_priority(conversation_id, priority).await?;
+            self.db
+                .set_conversation_priority(conversation_id, priority)
+                .await?;
         } else {
             // Remove priority (set to null)
             self.db.clear_conversation_priority(conversation_id).await?;
         }
 
         // Get updated conversation
-        let updated = self.db
+        let updated = self
+            .db
             .get_conversation_by_id(conversation_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Conversation {} not found after update", conversation_id)))?;
+            .ok_or_else(|| {
+                ApiError::NotFound(format!(
+                    "Conversation {} not found after update",
+                    conversation_id
+                ))
+            })?;
 
         // Trigger automation rules only if priority actually changed
         if priority_changed {
@@ -108,7 +119,6 @@ impl<'a> ConversationPriorityService<'a> {
 
 #[cfg(test)]
 mod tests {
-
 
     #[test]
     fn test_validate_priority_values() {

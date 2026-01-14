@@ -3,10 +3,10 @@ mod helpers;
 use helpers::*;
 use oxidesk::{
     models::{
-        AutomationRule, RuleType, RuleCondition, RuleAction, ActionType, ComparisonOperator,
-        ConversationStatus, Priority,
+        ActionType, AutomationRule, ComparisonOperator, ConversationStatus, Priority, RuleAction,
+        RuleCondition, RuleType,
     },
-    services::automation_service::{AutomationService, AutomationConfig},
+    services::automation_service::{AutomationConfig, AutomationService},
 };
 use serde_json::json;
 use std::collections::HashMap;
@@ -75,10 +75,8 @@ async fn test_multiple_rules_priority_order() {
     db.create_automation_rule(&rule2).await.unwrap();
     db.create_automation_rule(&rule3).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -96,13 +94,26 @@ async fn test_multiple_rules_priority_order() {
         .unwrap();
 
     // Verify: Highest priority rule (rule1) should win (executes last)
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.priority, Some(Priority::High));
 
     // Verify: All three rules were evaluated
-    let logs1 = db.get_rule_evaluation_logs_by_rule(&rule1.id, 10, 0).await.unwrap();
-    let logs2 = db.get_rule_evaluation_logs_by_rule(&rule2.id, 10, 0).await.unwrap();
-    let logs3 = db.get_rule_evaluation_logs_by_rule(&rule3.id, 10, 0).await.unwrap();
+    let logs1 = db
+        .get_rule_evaluation_logs_by_rule(&rule1.id, 10, 0)
+        .await
+        .unwrap();
+    let logs2 = db
+        .get_rule_evaluation_logs_by_rule(&rule2.id, 10, 0)
+        .await
+        .unwrap();
+    let logs3 = db
+        .get_rule_evaluation_logs_by_rule(&rule3.id, 10, 0)
+        .await
+        .unwrap();
     assert_eq!(logs1.len(), 1);
     assert_eq!(logs2.len(), 1);
     assert_eq!(logs3.len(), 1);
@@ -194,11 +205,17 @@ async fn test_circular_rule_cascade_depth_limit() {
         .unwrap();
 
     // Verify: Cascade stopped at depth 2 (tag D should not be added)
-    let logs = db.get_evaluation_logs_by_conversation(&conversation.id).await.unwrap();
+    let logs = db
+        .get_evaluation_logs_by_conversation(&conversation.id)
+        .await
+        .unwrap();
 
     // Check that cascade depth limit was respected
     let max_depth = logs.iter().map(|l| l.cascade_depth).max().unwrap_or(0);
-    assert!(max_depth <= 2, "Cascade depth should not exceed configured limit");
+    assert!(
+        max_depth <= 2,
+        "Cascade depth should not exceed configured limit"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -227,10 +244,8 @@ async fn test_condition_evaluation_error_graceful_failure() {
 
     db.create_automation_rule(&rule).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -251,7 +266,10 @@ async fn test_condition_evaluation_error_graceful_failure() {
     assert!(result.is_ok() || result.is_err()); // Either behavior is acceptable
 
     // Verify: Evaluation log was created
-    let logs = db.get_rule_evaluation_logs_by_rule(&rule.id, 10, 0).await.unwrap();
+    let logs = db
+        .get_rule_evaluation_logs_by_rule(&rule.id, 10, 0)
+        .await
+        .unwrap();
 
     // Either no logs (rule filtered out) or logs show error handling
     if !logs.is_empty() {
@@ -289,10 +307,8 @@ async fn test_action_execution_error_no_crash() {
 
     db.create_automation_rule(&rule).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -313,7 +329,10 @@ async fn test_action_execution_error_no_crash() {
     assert!(result.is_ok() || result.is_err());
 
     // Verify: Evaluation log shows the error
-    let logs = db.get_rule_evaluation_logs_by_rule(&rule.id, 10, 0).await.unwrap();
+    let logs = db
+        .get_rule_evaluation_logs_by_rule(&rule.id, 10, 0)
+        .await
+        .unwrap();
     assert_eq!(logs.len(), 1);
     assert!(logs[0].matched); // Condition matched
     assert!(!logs[0].action_executed); // Action failed to execute
@@ -346,10 +365,8 @@ async fn test_rule_modification_during_evaluation() {
 
     db.create_automation_rule(&rule).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -399,10 +416,8 @@ async fn test_rule_deletion_during_evaluation() {
 
     db.create_automation_rule(&rule).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -626,7 +641,10 @@ async fn test_cascading_actions() {
         .unwrap();
 
     // Verify: Rule A executed
-    let logs_a = db.get_rule_evaluation_logs_by_rule(&rule_a.id, 10, 0).await.unwrap();
+    let logs_a = db
+        .get_rule_evaluation_logs_by_rule(&rule_a.id, 10, 0)
+        .await
+        .unwrap();
     assert_eq!(logs_a.len(), 1);
     assert!(logs_a[0].action_executed);
 
@@ -660,10 +678,8 @@ async fn test_event_with_no_matching_rules() {
 
     db.create_automation_rule(&rule).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Test: Trigger different event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -683,7 +699,10 @@ async fn test_event_with_no_matching_rules() {
     assert!(result.is_ok());
 
     // Verify: No evaluation logs for this event
-    let logs = db.get_rule_evaluation_logs_by_rule(&rule.id, 10, 0).await.unwrap();
+    let logs = db
+        .get_rule_evaluation_logs_by_rule(&rule.id, 10, 0)
+        .await
+        .unwrap();
     assert_eq!(logs.len(), 0);
 
     teardown_test_db(test_db).await;
@@ -715,10 +734,8 @@ async fn test_simultaneous_events_concurrent_processing() {
 
     db.create_automation_rule(&rule).await.unwrap();
 
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Test: Create multiple conversations and trigger events
     // Process them sequentially to avoid Send trait issues
@@ -741,7 +758,10 @@ async fn test_simultaneous_events_concurrent_processing() {
     }
 
     // Verify: All 5 evaluations logged
-    let logs = db.get_rule_evaluation_logs_by_rule(&rule.id, 10, 0).await.unwrap();
+    let logs = db
+        .get_rule_evaluation_logs_by_rule(&rule.id, 10, 0)
+        .await
+        .unwrap();
     assert_eq!(logs.len(), 5);
 
     teardown_test_db(test_db).await;

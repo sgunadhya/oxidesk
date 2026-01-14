@@ -5,15 +5,12 @@ use axum::{
 };
 use serde::Deserialize;
 
+use crate::api::middleware::auth::{AppState, AuthenticatedUser};
 use crate::api::middleware::error::ApiError;
-use crate::api::middleware::auth::{AuthenticatedUser, AppState};
 use crate::models::{
-    ApiKeyListItem, ApiKeyListResponse, ApiKeyResponse, GenerateApiKeyRequest,
-    PaginationMetadata,
+    ApiKeyListItem, ApiKeyListResponse, ApiKeyResponse, GenerateApiKeyRequest, PaginationMetadata,
 };
-use crate::services::api_key_service::{
-    generate_api_key, generate_api_secret, hash_api_secret,
-};
+use crate::services::api_key_service::{generate_api_key, generate_api_secret, hash_api_secret};
 
 /// Query parameters for API key listing
 #[derive(Debug, Deserialize)]

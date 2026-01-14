@@ -1,7 +1,4 @@
-use crate::{
-    database::Database,
-    models::WebhookDelivery,
-};
+use crate::{database::Database, models::WebhookDelivery};
 use reqwest::Client;
 use std::time::Duration;
 use tracing::{error, info, warn};
@@ -53,7 +50,10 @@ impl WebhookDeliveryService {
                 let status = response.status();
                 let status_code = status.as_u16();
 
-                info!("Webhook delivery to {} returned status {}", url, status_code);
+                info!(
+                    "Webhook delivery to {} returned status {}",
+                    url, status_code
+                );
 
                 // Check if delivery was successful (2xx status codes)
                 if status.is_success() {
@@ -238,7 +238,11 @@ mod tests {
         let service = WebhookDeliveryService::new(db);
 
         // Verify HTTP client is configured
-        assert!(service.http_client.get("http://example.com").build().is_ok());
+        assert!(service
+            .http_client
+            .get("http://example.com")
+            .build()
+            .is_ok());
     }
 
     #[test]

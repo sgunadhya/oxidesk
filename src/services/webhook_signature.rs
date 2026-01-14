@@ -21,8 +21,8 @@ type HmacSha256 = Hmac<Sha256>;
 /// assert!(signature.starts_with("sha256="));
 /// ```
 pub fn sign_payload(payload: &str, secret: &str) -> String {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC can take key of any size");
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
 
     mac.update(payload.as_bytes());
 

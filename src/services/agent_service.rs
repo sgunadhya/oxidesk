@@ -1,7 +1,10 @@
-use crate::api::middleware::{ApiResult, ApiError, AuthenticatedUser};
+use crate::api::middleware::{ApiError, ApiResult, AuthenticatedUser};
 use crate::database::Database;
 use crate::models::*;
-use crate::services::{validate_and_normalize_email, hash_password, generate_random_password, validate_password_complexity};
+use crate::services::{
+    generate_random_password, hash_password, validate_and_normalize_email,
+    validate_password_complexity,
+};
 
 /// Default Agent role ID (seeded in migration 002)
 const DEFAULT_AGENT_ROLE_ID: &str = "00000000-0000-0000-0000-000000000002";
@@ -26,8 +29,13 @@ pub async fn create_agent(
     let email = validate_and_normalize_email(&request.email)?;
 
     // Check if email already exists for agents (per-type uniqueness)
-    if let Some(_) = db.get_user_by_email_and_type(&email, &UserType::Agent).await? {
-        return Err(ApiError::Conflict("Email already exists for this user type".to_string()));
+    if let Some(_) = db
+        .get_user_by_email_and_type(&email, &UserType::Agent)
+        .await?
+    {
+        return Err(ApiError::Conflict(
+            "Email already exists for this user type".to_string(),
+        ));
     }
 
     // Generate random password (16 characters with mixed complexity)
@@ -38,24 +46,32 @@ pub async fn create_agent(
     let role_id = request.role_id.as_deref().unwrap_or(DEFAULT_AGENT_ROLE_ID);
 
     // Verify role exists
-    let role = db.get_role_by_id(role_id).await?
+    let role = db
+        .get_role_by_id(role_id)
+        .await?
         .ok_or_else(|| ApiError::BadRequest(format!("Role not found: {}", role_id)))?;
 
     // Create agent with role in transaction
-    let (agent_id, user_id) = db.create_agent_with_role(
-        &email,
-        &request.first_name,
-        request.last_name.as_deref(),
-        &password_hash,
-        role_id,
-    ).await?;
+    let (agent_id, user_id) = db
+        .create_agent_with_role(
+            &email,
+            &request.first_name,
+            request.last_name.as_deref(),
+            &password_hash,
+            role_id,
+        )
+        .await?;
 
     // Get created user for timestamp
-    let user = db.get_user_by_id(&user_id).await?
+    let user = db
+        .get_user_by_id(&user_id)
+        .await?
         .ok_or_else(|| ApiError::Internal("Failed to retrieve created user".to_string()))?;
 
     // Get agent details for created_at timestamp
-    let agent = db.get_agent_by_user_id(&user_id).await?
+    let agent = db
+        .get_agent_by_user_id(&user_id)
+        .await?
         .ok_or_else(|| ApiError::Internal("Failed to retrieve created agent".to_string()))?;
 
     Ok(CreateAgentResponse {
@@ -74,10 +90,7 @@ pub async fn create_agent(
 }
 
 /// Get an agent by ID
-pub async fn get_agent(
-    db: &Database,
-    id: &str,
-) -> ApiResult<AgentResponse> {
+pub async fn get_agent(db: &Database, id: &str) -> ApiResult<AgentResponse> {
     // Get user
     let user = db
         .get_user_by_id(id)
@@ -123,11 +136,7 @@ pub async fn get_agent(
 }
 
 /// Delete an agent
-pub async fn delete(
-    db: &Database,
-    auth_user: &AuthenticatedUser,
-    id: &str,
-) -> ApiResult<()> {
+pub async fn delete(db: &Database, auth_user: &AuthenticatedUser, id: &str) -> ApiResult<()> {
     // Check permission (admin only)
     if !auth_user.is_admin() {
         return Err(ApiError::Forbidden(
@@ -170,11 +179,7 @@ pub async fn delete(
 }
 
 /// List agents with pagination
-pub async fn list_agents(
-    db: &Database,
-    page: i64,
-    per_page: i64,
-) -> ApiResult<AgentListResponse> {
+pub async fn list_agents(db: &Database, page: i64, per_page: i64) -> ApiResult<AgentListResponse> {
     // Validate pagination parameters
     let page = if page < 1 { 1 } else { page };
     let per_page = if per_page < 1 {

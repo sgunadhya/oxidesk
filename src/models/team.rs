@@ -36,7 +36,7 @@ pub struct BusinessHours {
 /// Schedule for a specific day of the week
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DaySchedule {
-    pub day: String, // "Monday", "Tuesday", etc.
+    pub day: String,   // "Monday", "Tuesday", etc.
     pub start: String, // "09:00"
     pub end: String,   // "17:00"
 }

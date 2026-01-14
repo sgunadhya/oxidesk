@@ -1,15 +1,13 @@
-use openidconnect::{
-    core::{
-        CoreAuthenticationFlow, CoreClient, CoreProviderMetadata,
-    },
-    reqwest::async_http_client,
-    AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, PkceCodeChallenge,
-    PkceCodeVerifier, RedirectUrl, Scope, TokenResponse,
-};
 use crate::{
     api::middleware::ApiError,
     database::Database,
     models::{AuthMethod, OidcProvider, Session, User, UserType},
+};
+use openidconnect::{
+    core::{CoreAuthenticationFlow, CoreClient, CoreProviderMetadata},
+    reqwest::async_http_client,
+    AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, PkceCodeChallenge,
+    PkceCodeVerifier, RedirectUrl, Scope, TokenResponse,
 };
 
 /// OIDC service for handling OAuth2/OIDC authentication flows
@@ -28,9 +26,7 @@ impl OidcService {
     ///
     /// Returns the authorization URL to redirect the user to, along with
     /// state, nonce, and PKCE verifier that must be stored for the callback.
-    pub async fn initiate_login(
-        provider: &OidcProvider,
-    ) -> Result<OidcAuthRequest, ApiError> {
+    pub async fn initiate_login(provider: &OidcProvider) -> Result<OidcAuthRequest, ApiError> {
         // Create OIDC client
         let client = Self::create_client(provider).await?;
 
@@ -157,18 +153,14 @@ impl OidcService {
     /// Create OIDC client from provider configuration
     async fn create_client(provider: &OidcProvider) -> Result<CoreClient, ApiError> {
         // Discover provider metadata
-        let issuer_url = IssuerUrl::new(provider.issuer_url.clone()).map_err(|e| {
-            ApiError::Internal(format!("Invalid issuer URL: {}", e))
-        })?;
+        let issuer_url = IssuerUrl::new(provider.issuer_url.clone())
+            .map_err(|e| ApiError::Internal(format!("Invalid issuer URL: {}", e)))?;
 
-        let provider_metadata = CoreProviderMetadata::discover_async(
-            issuer_url,
-            async_http_client,
-        )
-        .await
-        .map_err(|e| {
-            ApiError::Internal(format!("Failed to discover provider metadata: {}", e))
-        })?;
+        let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, async_http_client)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to discover provider metadata: {}", e))
+            })?;
 
         // Create client
         let client = CoreClient::from_provider_metadata(
@@ -177,9 +169,8 @@ impl OidcService {
             Some(ClientSecret::new(provider.client_secret.clone())),
         )
         .set_redirect_uri(
-            RedirectUrl::new(provider.redirect_uri.clone()).map_err(|e| {
-                ApiError::Internal(format!("Invalid redirect URI: {}", e))
-            })?,
+            RedirectUrl::new(provider.redirect_uri.clone())
+                .map_err(|e| ApiError::Internal(format!("Invalid redirect URI: {}", e)))?,
         );
 
         Ok(client)

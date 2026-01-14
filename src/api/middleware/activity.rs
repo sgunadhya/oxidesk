@@ -1,9 +1,9 @@
+use crate::api::middleware::AppState;
 use axum::{
     extract::{Request, State},
     middleware::Next,
     response::Response,
 };
-use crate::api::middleware::AppState;
 
 /// Middleware to track agent activity on every authenticated request
 /// Updates last_activity_at timestamp for agents
@@ -13,7 +13,10 @@ pub async fn track_activity_middleware(
     next: Next,
 ) -> Response {
     // Check if this is an authenticated agent request
-    if let Some(auth_user) = request.extensions().get::<crate::api::middleware::AuthenticatedUser>() {
+    if let Some(auth_user) = request
+        .extensions()
+        .get::<crate::api::middleware::AuthenticatedUser>()
+    {
         // Only track activity for agent users (not contacts)
         if matches!(auth_user.user.user_type, crate::models::UserType::Agent) {
             // Update activity timestamp (fire and forget, don't block request)

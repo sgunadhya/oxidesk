@@ -1,5 +1,5 @@
-use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 
 /// Generate a cryptographically random 32-character alphanumeric API key
 pub fn generate_api_key() -> String {
@@ -58,7 +58,11 @@ mod tests {
     #[test]
     fn test_generate_api_secret_length() {
         let secret = generate_api_secret();
-        assert_eq!(secret.len(), 64, "API secret should be exactly 64 characters");
+        assert_eq!(
+            secret.len(),
+            64,
+            "API secret should be exactly 64 characters"
+        );
     }
 
     #[test]

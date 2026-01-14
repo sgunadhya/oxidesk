@@ -1,12 +1,12 @@
 #![allow(dead_code)]
-use oxidesk::models::conversation::{Conversation, ConversationStatus};
-use oxidesk::models::{User, UserType, Contact};
-use oxidesk::services::validate_and_normalize_email;
+use oxidesk::api::middleware::AuthenticatedUser;
 use oxidesk::database::Database;
+use oxidesk::models::conversation::{Conversation, ConversationStatus};
+use oxidesk::models::{Agent, Role};
+use oxidesk::models::{Contact, User, UserType};
+use oxidesk::services::validate_and_normalize_email;
 use sqlx::Row;
 use uuid::Uuid;
-use oxidesk::models::{Agent, Role};
-use oxidesk::api::middleware::AuthenticatedUser;
 
 /// Create a test contact with the given email
 pub async fn create_test_contact(db: &Database, email: &str) -> Contact {
@@ -15,14 +15,16 @@ pub async fn create_test_contact(db: &Database, email: &str) -> Contact {
     let contact = Contact::new(user.id.clone(), Some(format!("Test User {}", email)));
 
     db.create_user(&user).await.expect("Failed to create user");
-    db.create_contact(&contact).await.expect("Failed to create contact");
+    db.create_contact(&contact)
+        .await
+        .expect("Failed to create contact");
 
     // Create contact_channel linking this contact to the test inbox
     let pool = db.pool();
     let channel_id = Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO contact_channels (id, contact_id, inbox_id, email, created_at, updated_at)
-         VALUES (?, ?, 'inbox-001', ?, datetime('now'), datetime('now'))"
+         VALUES (?, ?, 'inbox-001', ?, datetime('now'), datetime('now'))",
     )
     .bind(&channel_id)
     .bind(&contact.id)
@@ -38,10 +40,17 @@ pub async fn create_test_contact(db: &Database, email: &str) -> Contact {
 pub async fn create_test_agent(db: &Database, email: &str, first_name: &str) -> Agent {
     let normalized_email = validate_and_normalize_email(email).expect("Invalid email");
     let user = User::new(normalized_email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), first_name.to_string(), None, "test-password-hash".to_string());
+    let agent = Agent::new(
+        user.id.clone(),
+        first_name.to_string(),
+        None,
+        "test-password-hash".to_string(),
+    );
 
     db.create_user(&user).await.expect("Failed to create user");
-    db.create_agent(&agent).await.expect("Failed to create agent");
+    db.create_agent(&agent)
+        .await
+        .expect("Failed to create agent");
 
     agent
 }
@@ -106,7 +115,7 @@ pub async fn create_test_conversation(
         contact_id: row.try_get("contact_id").unwrap(),
         subject: row.try_get("subject").ok(),
         resolved_at: row.try_get("resolved_at").ok(),
-        closed_at: row.try_get("closed_at").ok(),  // Feature 019
+        closed_at: row.try_get("closed_at").ok(), // Feature 019
         snoozed_until: row.try_get("snoozed_until").ok(),
         assigned_user_id: row.try_get("assigned_user_id").ok(),
         assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -170,7 +179,7 @@ pub async fn create_snoozed_conversation(
         contact_id: row.try_get("contact_id").unwrap(),
         subject: row.try_get("subject").ok(),
         resolved_at: row.try_get("resolved_at").ok(),
-        closed_at: row.try_get("closed_at").ok(),  // Feature 019
+        closed_at: row.try_get("closed_at").ok(), // Feature 019
         snoozed_until: row.try_get("snoozed_until").ok(),
         assigned_user_id: row.try_get("assigned_user_id").ok(),
         assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -218,7 +227,9 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         api_key_last_used_at: None,
         api_key_revoked_at: None,
     };
-    db.create_agent(&agent).await.expect("Failed to create agent");
+    db.create_agent(&agent)
+        .await
+        .expect("Failed to create agent");
 
     // Assign Admin role
     let role = Role {
@@ -246,7 +257,10 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         user_id: user.id.clone(),
         token: "test-token".to_string(),
         csrf_token: "test-csrf".to_string(),
-        expires_at: chrono::Utc::now().checked_add_signed(chrono::Duration::hours(24)).unwrap().to_rfc3339(),
+        expires_at: chrono::Utc::now()
+            .checked_add_signed(chrono::Duration::hours(24))
+            .unwrap()
+            .to_rfc3339(),
         created_at: chrono::Utc::now().to_rfc3339(),
         last_accessed_at: chrono::Utc::now().to_rfc3339(),
         auth_method: oxidesk::models::AuthMethod::Password,

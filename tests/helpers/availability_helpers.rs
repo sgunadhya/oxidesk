@@ -1,9 +1,9 @@
 #![allow(dead_code)]
+use chrono::{DateTime, Utc};
 use oxidesk::{
     database::Database,
-    models::{AgentAvailability, Agent},
+    models::{Agent, AgentAvailability},
 };
-use chrono::{DateTime, Utc};
 use sqlx::Row;
 
 /// Create a test agent with custom availability status
@@ -73,22 +73,26 @@ pub async fn set_agent_away_since(db: &Database, agent_id: &str, timestamp: Date
 /// Get count of activity logs for an agent
 pub async fn get_activity_log_count(db: &Database, agent_id: &str) -> i64 {
     let pool = db.pool();
-    let result: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM agent_activity_logs WHERE agent_id = ?")
-        .bind(agent_id)
-        .fetch_one(pool)
-        .await
-        .expect("Failed to count activity logs");
+    let result: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM agent_activity_logs WHERE agent_id = ?")
+            .bind(agent_id)
+            .fetch_one(pool)
+            .await
+            .expect("Failed to count activity logs");
     result.0
 }
 
 /// Get most recent activity log for an agent
-pub async fn get_latest_activity_log(db: &Database, agent_id: &str) -> Option<(String, Option<String>, Option<String>)> {
+pub async fn get_latest_activity_log(
+    db: &Database,
+    agent_id: &str,
+) -> Option<(String, Option<String>, Option<String>)> {
     let pool = db.pool();
 
     // Manual row parsing to handle NULL values properly
     let row = sqlx::query(
         "SELECT event_type, old_status, new_status FROM agent_activity_logs
-         WHERE agent_id = ? ORDER BY created_at DESC LIMIT 1"
+         WHERE agent_id = ? ORDER BY created_at DESC LIMIT 1",
     )
     .bind(agent_id)
     .fetch_optional(pool)
@@ -137,7 +141,7 @@ pub async fn get_assigned_conversation_count(db: &Database, user_id: &str) -> i6
     let pool = db.pool();
     let result: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM conversations
-         WHERE assigned_user_id = ? AND status IN ('open', 'snoozed')"
+         WHERE assigned_user_id = ? AND status IN ('open', 'snoozed')",
     )
     .bind(user_id)
     .fetch_one(pool)
@@ -161,13 +165,11 @@ pub async fn get_config_value(db: &Database, key: &str) -> Option<String> {
 pub async fn set_config_value(db: &Database, key: &str, value: &str) {
     let pool = db.pool();
     let now = Utc::now().to_rfc3339();
-    sqlx::query(
-        "INSERT OR REPLACE INTO system_config (key, value, updated_at) VALUES (?, ?, ?)"
-    )
-    .bind(key)
-    .bind(value)
-    .bind(&now)
-    .execute(pool)
-    .await
-    .expect("Failed to set config value");
+    sqlx::query("INSERT OR REPLACE INTO system_config (key, value, updated_at) VALUES (?, ?, ?)")
+        .bind(key)
+        .bind(value)
+        .bind(&now)
+        .execute(pool)
+        .await
+        .expect("Failed to set config value");
 }

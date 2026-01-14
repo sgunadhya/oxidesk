@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State, Extension},
+    extract::{Extension, Path, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    api::middleware::{ApiResult, AppState, AuthenticatedUser, error::ApiError},
+    api::middleware::{error::ApiError, ApiResult, AppState, AuthenticatedUser},
     models::*,
     services::MacroService,
 };
@@ -121,13 +121,9 @@ pub async fn apply_macro(
     Json(req): Json<ApplyMacroRequest>,
 ) -> ApiResult<impl IntoResponse> {
     // Apply macro
-    let result = MacroService::apply_macro(
-        &state.db,
-        &macro_id,
-        &req.conversation_id,
-        &user.user.id,
-    )
-    .await?;
+    let result =
+        MacroService::apply_macro(&state.db, &macro_id, &req.conversation_id, &user.user.id)
+            .await?;
 
     // Convert to response
     let response = ApplyMacroResponse {
@@ -383,7 +379,10 @@ pub async fn get_macro_logs(
     }
 
     // Get logs (with default pagination)
-    let logs = state.db.get_macro_application_logs(&macro_id, 50, 0).await?;
+    let logs = state
+        .db
+        .get_macro_application_logs(&macro_id, 50, 0)
+        .await?;
 
     // Convert to response
     let response: Vec<MacroApplicationLogResponse> = logs

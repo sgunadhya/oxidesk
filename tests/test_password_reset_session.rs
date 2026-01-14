@@ -2,8 +2,8 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent, Session},
-    services::{hash_password, validate_and_normalize_email, password_reset_service},
+    models::{Agent, Session, User, UserType},
+    services::{hash_password, password_reset_service, validate_and_normalize_email},
 };
 use uuid::Uuid;
 
@@ -17,7 +17,12 @@ async fn test_password_reset_destroys_all_user_sessions() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Session Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Session Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -33,19 +38,34 @@ async fn test_password_reset_destroys_all_user_sessions() {
 
     // Verify sessions exist
     let sessions_before = db.get_user_sessions(&user.id).await.unwrap();
-    assert_eq!(sessions_before.len(), 3, "Should have 3 sessions before reset");
+    assert_eq!(
+        sessions_before.len(),
+        3,
+        "Should have 3 sessions before reset"
+    );
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = &tokens[0].token;
 
     // Reset password (should destroy all sessions)
-    password_reset_service::reset_password(db, token, "NewPass123!").await.unwrap();
+    password_reset_service::reset_password(db, token, "NewPass123!")
+        .await
+        .unwrap();
 
     // Verify all sessions were destroyed
     let sessions_after = db.get_user_sessions(&user.id).await.unwrap();
-    assert_eq!(sessions_after.len(), 0, "All sessions should be destroyed after password reset");
+    assert_eq!(
+        sessions_after.len(),
+        0,
+        "All sessions should be destroyed after password reset"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -61,10 +81,20 @@ async fn test_password_reset_only_destroys_user_sessions() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user1 = User::new(email1.clone(), UserType::Agent);
-    let agent1 = Agent::new(user1.id.clone(), "User 1".to_string(), None, password_hash.clone());
+    let agent1 = Agent::new(
+        user1.id.clone(),
+        "User 1".to_string(),
+        None,
+        password_hash.clone(),
+    );
 
     let user2 = User::new(email2.clone(), UserType::Agent);
-    let agent2 = Agent::new(user2.id.clone(), "User 2".to_string(), None, password_hash.clone());
+    let agent2 = Agent::new(
+        user2.id.clone(),
+        "User 2".to_string(),
+        None,
+        password_hash.clone(),
+    );
 
     db.create_user(&user1).await.unwrap();
     db.create_agent(&agent1).await.unwrap();
@@ -81,18 +111,33 @@ async fn test_password_reset_only_destroys_user_sessions() {
     db.create_session(&session1_user2).await.unwrap();
 
     // Reset password for user1
-    password_reset_service::request_password_reset(db, &email1).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user1.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email1)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user1.id)
+        .await
+        .unwrap();
     let token = &tokens[0].token;
-    password_reset_service::reset_password(db, token, "NewPass123!").await.unwrap();
+    password_reset_service::reset_password(db, token, "NewPass123!")
+        .await
+        .unwrap();
 
     // User1's sessions should be destroyed
     let user1_sessions = db.get_user_sessions(&user1.id).await.unwrap();
-    assert_eq!(user1_sessions.len(), 0, "User1 sessions should be destroyed");
+    assert_eq!(
+        user1_sessions.len(),
+        0,
+        "User1 sessions should be destroyed"
+    );
 
     // User2's sessions should remain intact
     let user2_sessions = db.get_user_sessions(&user2.id).await.unwrap();
-    assert_eq!(user2_sessions.len(), 1, "User2 sessions should remain intact");
+    assert_eq!(
+        user2_sessions.len(),
+        1,
+        "User2 sessions should remain intact"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -107,7 +152,12 @@ async fn test_password_reset_session_destruction_count() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Session Count Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Session Count Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -119,8 +169,13 @@ async fn test_password_reset_session_destruction_count() {
     }
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = &tokens[0].token;
 
     // Reset password and check session destruction count
@@ -129,7 +184,11 @@ async fn test_password_reset_session_destruction_count() {
 
     // Note: The service logs the count internally, but we verify by checking the database
     let sessions_after = db.get_user_sessions(&user.id).await.unwrap();
-    assert_eq!(sessions_after.len(), 0, "All 5 sessions should be destroyed");
+    assert_eq!(
+        sessions_after.len(),
+        0,
+        "All 5 sessions should be destroyed"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -144,7 +203,12 @@ async fn test_password_reset_works_with_no_existing_sessions() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "No Sessions Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "No Sessions Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -154,13 +218,21 @@ async fn test_password_reset_works_with_no_existing_sessions() {
     assert_eq!(sessions_before.len(), 0, "Should have no sessions");
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = &tokens[0].token;
 
     // Reset password should still succeed (destroying 0 sessions)
     let result = password_reset_service::reset_password(db, token, "NewPass123!").await;
-    assert!(result.is_ok(), "Password reset should succeed even with no sessions");
+    assert!(
+        result.is_ok(),
+        "Password reset should succeed even with no sessions"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -175,7 +247,12 @@ async fn test_sessions_destroyed_synchronously() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Sync Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Sync Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -185,17 +262,28 @@ async fn test_sessions_destroyed_synchronously() {
     db.create_session(&session).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = &tokens[0].token;
 
     // Reset password
-    password_reset_service::reset_password(db, token, "NewPass123!").await.unwrap();
+    password_reset_service::reset_password(db, token, "NewPass123!")
+        .await
+        .unwrap();
 
     // Sessions should be destroyed immediately (synchronously)
     // No need to wait or poll - they should already be gone
     let sessions = db.get_user_sessions(&user.id).await.unwrap();
-    assert_eq!(sessions.len(), 0, "Sessions should be destroyed synchronously");
+    assert_eq!(
+        sessions.len(),
+        0,
+        "Sessions should be destroyed synchronously"
+    );
 
     teardown_test_db(test_db).await;
 }

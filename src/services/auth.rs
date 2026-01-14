@@ -1,8 +1,8 @@
+use crate::api::middleware::error::{ApiError, ApiResult};
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2, ParamsBuilder,
 };
-use crate::api::middleware::error::{ApiError, ApiResult};
 
 /// Validates password complexity requirements (FR-005, FR-006)
 /// - 10-72 characters long
@@ -63,16 +63,12 @@ pub fn hash_password(password: &str) -> ApiResult<String> {
     // Configure Argon2id with recommended parameters
     let params = ParamsBuilder::new()
         .m_cost(19456) // 19 MiB
-        .t_cost(2)     // 2 iterations
-        .p_cost(1)     // 1 thread
+        .t_cost(2) // 2 iterations
+        .p_cost(1) // 1 thread
         .build()
         .map_err(|_| ApiError::Internal("Failed to build Argon2 params".to_string()))?;
 
-    let argon2 = Argon2::new(
-        argon2::Algorithm::Argon2id,
-        argon2::Version::V0x13,
-        params,
-    );
+    let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
 
     let hash = argon2
         .hash_password(password.as_bytes(), &salt)
@@ -122,7 +118,7 @@ pub async fn authenticate(
     password: &str,
     session_duration_hours: i64,
 ) -> ApiResult<AuthResult> {
-    use crate::models::{UserType, Session};
+    use crate::models::{Session, UserType};
     use crate::services::validate_and_normalize_email;
 
     // 1. Validate and normalize email
@@ -154,9 +150,7 @@ pub async fn authenticate(
     let roles = db.get_user_roles(&user.id).await?;
 
     if roles.is_empty() {
-        return Err(ApiError::Internal(
-            "User has no roles assigned".to_string(),
-        ));
+        return Err(ApiError::Internal("User has no roles assigned".to_string()));
     }
 
     // 6. Generate session token

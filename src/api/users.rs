@@ -1,13 +1,13 @@
+use crate::{
+    api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
+    models::*,
+};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
 use serde::Deserialize;
-use crate::{
-    api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
-    models::*,
-};
 
 #[derive(Deserialize)]
 pub struct UserListParams {
@@ -56,7 +56,10 @@ pub async fn list_users(
     };
 
     // Get users with pagination and optional type filter
-    let (users, total_count) = state.db.list_users(per_page, offset, user_type_filter).await?;
+    let (users, total_count) = state
+        .db
+        .list_users(per_page, offset, user_type_filter)
+        .await?;
 
     let total_pages = (total_count + per_page - 1) / per_page;
 

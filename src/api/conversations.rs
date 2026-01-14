@@ -1,15 +1,15 @@
-use axum::{
-    extract::{State, Path, Query},
-    Json,
-    response::IntoResponse,
-};
-use serde::Deserialize;
-use crate::api::middleware::{AppState, ApiError, ApiResult, AuthenticatedUser};
+use crate::api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser};
 use crate::models::{
-    CreateConversation, UpdateStatusRequest, ConversationStatus, ConversationListResponse, PaginationMetadata,
-    UpdatePriorityRequest,
+    ConversationListResponse, ConversationStatus, CreateConversation, PaginationMetadata,
+    UpdatePriorityRequest, UpdateStatusRequest,
 };
 use crate::services::conversation_service;
+use axum::{
+    extract::{Path, Query, State},
+    response::IntoResponse,
+    Json,
+};
+use serde::Deserialize;
 
 /// Create a new conversation
 pub async fn create_conversation(
@@ -34,7 +34,8 @@ pub async fn create_conversation(
         &auth_user,
         request,
         Some(&state.sla_service),
-    ).await?;
+    )
+    .await?;
     Ok(Json(conversation))
 }
 
@@ -60,7 +61,8 @@ pub async fn update_conversation_status(
     // User must have at least one of these permissions
     if !has_update_all && !has_update_assigned {
         return Err(ApiError::Forbidden(
-            "Missing permission: conversations:update_all or conversations:update_assigned".to_string(),
+            "Missing permission: conversations:update_all or conversations:update_assigned"
+                .to_string(),
         ));
     }
 
@@ -69,16 +71,15 @@ pub async fn update_conversation_status(
         // Get the conversation first to check assignment
         let conversation = conversation_service::get_conversation(&state.db, &id).await?;
 
-        let is_assigned = conversation.assigned_user_id.as_ref() == Some(&auth_user.user.id)
-            || {
-                if let Some(team_id) = &conversation.assigned_team_id {
-                    // Check if user is member of assigned team
-                    let user_teams = state.db.get_user_teams(&auth_user.user.id).await?;
-                    user_teams.iter().any(|team| &team.id == team_id)
-                } else {
-                    false
-                }
-            };
+        let is_assigned = conversation.assigned_user_id.as_ref() == Some(&auth_user.user.id) || {
+            if let Some(team_id) = &conversation.assigned_team_id {
+                // Check if user is member of assigned team
+                let user_teams = state.db.get_user_teams(&auth_user.user.id).await?;
+                user_teams.iter().any(|team| &team.id == team_id)
+            } else {
+                false
+            }
+        };
 
         if !is_assigned {
             return Err(ApiError::Forbidden(format!(
@@ -93,8 +94,9 @@ pub async fn update_conversation_status(
         &id,
         request,
         Some(auth_user.user.id.clone()),
-        Some(&state.event_bus)
-    ).await?;
+        Some(&state.event_bus),
+    )
+    .await?;
     Ok(Json(conversation))
 }
 
@@ -128,16 +130,15 @@ pub async fn get_conversation(
 
     // If user has read_assigned (not read_all), verify assignment
     if !has_read_all && has_read_assigned {
-        let is_assigned = conversation.assigned_user_id.as_ref() == Some(&auth_user.user.id)
-            || {
-                if let Some(team_id) = &conversation.assigned_team_id {
-                    // Check if user is member of assigned team
-                    let user_teams = state.db.get_user_teams(&auth_user.user.id).await?;
-                    user_teams.iter().any(|team| &team.id == team_id)
-                } else {
-                    false
-                }
-            };
+        let is_assigned = conversation.assigned_user_id.as_ref() == Some(&auth_user.user.id) || {
+            if let Some(team_id) = &conversation.assigned_team_id {
+                // Check if user is member of assigned team
+                let user_teams = state.db.get_user_teams(&auth_user.user.id).await?;
+                user_teams.iter().any(|team| &team.id == team_id)
+            } else {
+                false
+            }
+        };
 
         if !is_assigned {
             return Err(ApiError::Forbidden(format!(
@@ -156,7 +157,8 @@ pub async fn get_conversation_by_reference(
     axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
     Path(reference_number): Path<i64>,
 ) -> ApiResult<impl IntoResponse> {
-    let conversation = conversation_service::get_conversation_by_reference(&state.db, reference_number).await?;
+    let conversation =
+        conversation_service::get_conversation_by_reference(&state.db, reference_number).await?;
     Ok(Json(conversation))
 }
 
@@ -266,8 +268,6 @@ pub async fn list_conversations(
     Ok(Json(response))
 }
 
-
-
 /// Update conversation priority (Feature 020)
 pub async fn update_conversation_priority(
     State(state): State<AppState>,
@@ -288,7 +288,8 @@ pub async fn update_conversation_priority(
     }
 
     // Use the priority service to update the conversation
-    let priority_service = crate::services::conversation_priority_service::ConversationPriorityService::new(&state.db);
+    let priority_service =
+        crate::services::conversation_priority_service::ConversationPriorityService::new(&state.db);
 
     let updated = priority_service
         .update_conversation_priority(

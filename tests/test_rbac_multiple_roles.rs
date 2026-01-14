@@ -1,8 +1,8 @@
 /// Integration tests for multiple roles permission aggregation (Scenario 4)
 /// Tests that users with multiple roles have permissions from ALL roles (union)
 mod helpers;
+use helpers::rbac_helpers::{create_auth_user_with_roles, create_test_role};
 use helpers::*;
-use helpers::rbac_helpers::{create_test_role, create_auth_user_with_roles};
 use oxidesk::services::PermissionService;
 
 #[tokio::test]
@@ -88,13 +88,8 @@ async fn test_user_with_single_role_limited_permissions() {
     .await;
 
     // Create user Alice with only Support Agent role
-    let alice = create_auth_user_with_roles(
-        db,
-        "alice@example.com",
-        "Alice",
-        vec![support_role],
-    )
-    .await;
+    let alice =
+        create_auth_user_with_roles(db, "alice@example.com", "Alice", vec![support_role]).await;
 
     // Alice should have permissions from Support Agent role
     assert!(PermissionService::has_permission(
@@ -139,13 +134,7 @@ async fn test_three_roles_aggregation() {
     )
     .await;
 
-    let role3 = create_test_role(
-        db,
-        "Role 3",
-        None,
-        vec!["permission:e".to_string()],
-    )
-    .await;
+    let role3 = create_test_role(db, "Role 3", None, vec!["permission:e".to_string()]).await;
 
     // Create user with all three roles
     let user = create_auth_user_with_roles(
@@ -157,14 +146,32 @@ async fn test_three_roles_aggregation() {
     .await;
 
     // Should have permissions from all three roles
-    assert!(PermissionService::has_permission(&user.roles, "permission:a"));
-    assert!(PermissionService::has_permission(&user.roles, "permission:b"));
-    assert!(PermissionService::has_permission(&user.roles, "permission:c"));
-    assert!(PermissionService::has_permission(&user.roles, "permission:d"));
-    assert!(PermissionService::has_permission(&user.roles, "permission:e"));
+    assert!(PermissionService::has_permission(
+        &user.roles,
+        "permission:a"
+    ));
+    assert!(PermissionService::has_permission(
+        &user.roles,
+        "permission:b"
+    ));
+    assert!(PermissionService::has_permission(
+        &user.roles,
+        "permission:c"
+    ));
+    assert!(PermissionService::has_permission(
+        &user.roles,
+        "permission:d"
+    ));
+    assert!(PermissionService::has_permission(
+        &user.roles,
+        "permission:e"
+    ));
 
     // Should not have permissions from no role
-    assert!(!PermissionService::has_permission(&user.roles, "permission:f"));
+    assert!(!PermissionService::has_permission(
+        &user.roles,
+        "permission:f"
+    ));
 }
 
 #[tokio::test]
@@ -205,9 +212,18 @@ async fn test_overlapping_permissions_in_multiple_roles() {
     .await;
 
     // Should have all unique permissions (union handles duplicates)
-    assert!(PermissionService::has_permission(&user.roles, "messages:write"));
-    assert!(PermissionService::has_permission(&user.roles, "conversations:read_assigned"));
-    assert!(PermissionService::has_permission(&user.roles, "conversations:read_all"));
+    assert!(PermissionService::has_permission(
+        &user.roles,
+        "messages:write"
+    ));
+    assert!(PermissionService::has_permission(
+        &user.roles,
+        "conversations:read_assigned"
+    ));
+    assert!(PermissionService::has_permission(
+        &user.roles,
+        "conversations:read_all"
+    ));
 }
 
 #[tokio::test]
@@ -234,13 +250,8 @@ async fn test_role_permissions_are_additive_across_roles() {
     .await;
 
     // User with only role1
-    let user1 = create_auth_user_with_roles(
-        db,
-        "user1@example.com",
-        "User 1",
-        vec![role1.clone()],
-    )
-    .await;
+    let user1 =
+        create_auth_user_with_roles(db, "user1@example.com", "User 1", vec![role1.clone()]).await;
 
     // User with both roles
     let user2 = create_auth_user_with_roles(
@@ -252,14 +263,38 @@ async fn test_role_permissions_are_additive_across_roles() {
     .await;
 
     // User 1 should only have role1 permissions
-    assert!(PermissionService::has_permission(&user1.roles, "permission:a"));
-    assert!(PermissionService::has_permission(&user1.roles, "permission:b"));
-    assert!(!PermissionService::has_permission(&user1.roles, "permission:c"));
-    assert!(!PermissionService::has_permission(&user1.roles, "permission:d"));
+    assert!(PermissionService::has_permission(
+        &user1.roles,
+        "permission:a"
+    ));
+    assert!(PermissionService::has_permission(
+        &user1.roles,
+        "permission:b"
+    ));
+    assert!(!PermissionService::has_permission(
+        &user1.roles,
+        "permission:c"
+    ));
+    assert!(!PermissionService::has_permission(
+        &user1.roles,
+        "permission:d"
+    ));
 
     // User 2 should have permissions from both roles
-    assert!(PermissionService::has_permission(&user2.roles, "permission:a"));
-    assert!(PermissionService::has_permission(&user2.roles, "permission:b"));
-    assert!(PermissionService::has_permission(&user2.roles, "permission:c"));
-    assert!(PermissionService::has_permission(&user2.roles, "permission:d"));
+    assert!(PermissionService::has_permission(
+        &user2.roles,
+        "permission:a"
+    ));
+    assert!(PermissionService::has_permission(
+        &user2.roles,
+        "permission:b"
+    ));
+    assert!(PermissionService::has_permission(
+        &user2.roles,
+        "permission:c"
+    ));
+    assert!(PermissionService::has_permission(
+        &user2.roles,
+        "permission:d"
+    ));
 }

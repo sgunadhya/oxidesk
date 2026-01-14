@@ -63,7 +63,8 @@ impl WebhookWorker {
         let (event_type, payload) = self.construct_payload(&event)?;
 
         // Get all active webhooks subscribed to this event type
-        let webhooks = self.db
+        let webhooks = self
+            .db
             .get_active_webhooks_for_event(&event_type)
             .await
             .map_err(|e| format!("Failed to fetch webhooks: {}", e))?;
@@ -82,10 +83,7 @@ impl WebhookWorker {
         // Queue delivery for each matching webhook
         for webhook in webhooks {
             if let Err(e) = self.queue_delivery(&webhook, &event_type, &payload).await {
-                error!(
-                    "Failed to queue delivery for webhook {}: {}",
-                    webhook.id, e
-                );
+                error!("Failed to queue delivery for webhook {}: {}", webhook.id, e);
                 // Continue with other webhooks even if one fails
             }
         }
@@ -94,7 +92,10 @@ impl WebhookWorker {
     }
 
     /// Construct JSON payload from system event
-    fn construct_payload(&self, event: &SystemEvent) -> Result<(String, serde_json::Value), String> {
+    fn construct_payload(
+        &self,
+        event: &SystemEvent,
+    ) -> Result<(String, serde_json::Value), String> {
         let (event_type, data) = match event {
             SystemEvent::ConversationCreated {
                 conversation_id,

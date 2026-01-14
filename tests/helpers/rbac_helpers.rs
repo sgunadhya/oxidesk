@@ -1,9 +1,9 @@
 #![allow(dead_code)]
-use oxidesk::database::Database;
-use oxidesk::models::{User, UserType, Agent, Role};
 use oxidesk::api::middleware::AuthenticatedUser;
-use uuid::Uuid;
+use oxidesk::database::Database;
+use oxidesk::models::{Agent, Role, User, UserType};
 use sqlx::Row;
+use uuid::Uuid;
 
 /// Create a test role with specified permissions
 pub async fn create_test_role(
@@ -63,7 +63,9 @@ pub async fn create_test_agent(db: &Database, email: &str, first_name: &str) -> 
         api_key_last_used_at: None,
         api_key_revoked_at: None,
     };
-    db.create_agent(&agent).await.expect("Failed to create agent");
+    db.create_agent(&agent)
+        .await
+        .expect("Failed to create agent");
 
     (user, agent)
 }
@@ -100,7 +102,10 @@ pub async fn create_auth_user_with_roles(
         user_id: user.id.clone(),
         token: format!("test-token-{}", Uuid::new_v4()),
         csrf_token: format!("test-csrf-{}", Uuid::new_v4()),
-        expires_at: chrono::Utc::now().checked_add_signed(chrono::Duration::hours(24)).unwrap().to_rfc3339(),
+        expires_at: chrono::Utc::now()
+            .checked_add_signed(chrono::Duration::hours(24))
+            .unwrap()
+            .to_rfc3339(),
         created_at: chrono::Utc::now().to_rfc3339(),
         last_accessed_at: chrono::Utc::now().to_rfc3339(),
         auth_method: oxidesk::models::AuthMethod::Password,
@@ -178,7 +183,7 @@ pub async fn create_test_team(db: &Database, name: &str) -> String {
 
     sqlx::query(
         "INSERT INTO teams (id, name, description, created_at, updated_at)
-         VALUES (?, ?, 'Test team', ?, ?)"
+         VALUES (?, ?, 'Test team', ?, ?)",
     )
     .bind(&team_id)
     .bind(name)
@@ -198,7 +203,7 @@ pub async fn add_user_to_team(db: &Database, user_id: &str, team_id: &str) {
 
     sqlx::query(
         "INSERT INTO team_memberships (id, team_id, user_id, role, joined_at)
-         VALUES (?, ?, ?, 'member', ?)"
+         VALUES (?, ?, ?, 'member', ?)",
     )
     .bind(&membership_id)
     .bind(team_id)
@@ -217,7 +222,7 @@ pub async fn ensure_test_inbox(db: &Database) -> String {
     // Try to create inbox, ignore if exists
     let _ = sqlx::query(
         "INSERT OR IGNORE INTO inboxes (id, name, channel_type, created_at, updated_at)
-         VALUES (?, 'Test Inbox', 'email', ?, ?)"
+         VALUES (?, 'Test Inbox', 'email', ?, ?)",
     )
     .bind(&inbox_id)
     .bind(&now)
@@ -242,7 +247,7 @@ pub async fn create_conversation_assigned_to_user(
         "INSERT INTO conversations (id, reference_number, status, inbox_id, contact_id,
          assigned_user_id, assigned_at, created_at, updated_at)
          VALUES (?, (SELECT COALESCE(MAX(reference_number), 99) + 1 FROM conversations),
-         'open', ?, ?, ?, ?, ?, ?)"
+         'open', ?, ?, ?, ?, ?, ?)",
     )
     .bind(&conv_id)
     .bind(&inbox_id)
@@ -272,7 +277,7 @@ pub async fn create_conversation_assigned_to_team(
         "INSERT INTO conversations (id, reference_number, status, inbox_id, contact_id,
          assigned_team_id, assigned_at, created_at, updated_at)
          VALUES (?, (SELECT COALESCE(MAX(reference_number), 99) + 1 FROM conversations),
-         'open', ?, ?, ?, ?, ?, ?)"
+         'open', ?, ?, ?, ?, ?, ?)",
     )
     .bind(&conv_id)
     .bind(&inbox_id)
@@ -298,7 +303,7 @@ pub async fn check_auth_denial_logged(
         "SELECT COUNT(*) as count FROM auth_events
          WHERE user_id = ?
          AND event_type = 'authorization_denied'
-         AND error_reason LIKE ?"
+         AND error_reason LIKE ?",
     )
     .bind(user_id)
     .bind(format!("%{}%", required_permission))

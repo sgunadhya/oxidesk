@@ -7,9 +7,9 @@ pub struct SlaPolicy {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
-    pub first_response_time: String,  // Format: "2h", "30m", "1d"
-    pub resolution_time: String,       // Format: "24h", "2d"
-    pub next_response_time: String,    // Format: "4h", "30m"
+    pub first_response_time: String, // Format: "2h", "30m", "1d"
+    pub resolution_time: String,     // Format: "24h", "2d"
+    pub next_response_time: String,  // Format: "4h", "30m"
     pub created_at: String,
     pub updated_at: String,
 }
@@ -118,11 +118,7 @@ pub struct SlaEvent {
 }
 
 impl SlaEvent {
-    pub fn new(
-        applied_sla_id: String,
-        event_type: SlaEventType,
-        deadline_at: String,
-    ) -> Self {
+    pub fn new(applied_sla_id: String, event_type: SlaEventType, deadline_at: String) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
         Self {
             id: uuid::Uuid::new_v4().to_string(),
@@ -208,13 +204,15 @@ use std::sync::OnceLock;
 /// Parse duration string like "2h", "30m", "1d" into seconds
 pub fn parse_duration(duration_str: &str) -> Result<i64, String> {
     static DURATION_REGEX: OnceLock<Regex> = OnceLock::new();
-    let re = DURATION_REGEX.get_or_init(|| {
-        Regex::new(r"^(\d+)([hmd])$").expect("Invalid duration regex")
-    });
+    let re = DURATION_REGEX
+        .get_or_init(|| Regex::new(r"^(\d+)([hmd])$").expect("Invalid duration regex"));
 
-    let caps = re
-        .captures(duration_str)
-        .ok_or_else(|| format!("Invalid duration format: {}. Expected format: <number><h|m|d>", duration_str))?;
+    let caps = re.captures(duration_str).ok_or_else(|| {
+        format!(
+            "Invalid duration format: {}. Expected format: <number><h|m|d>",
+            duration_str
+        )
+    })?;
 
     let number: i64 = caps[1]
         .parse()
