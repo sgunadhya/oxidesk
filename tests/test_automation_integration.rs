@@ -4,7 +4,7 @@ use helpers::*;
 use oxidesk::{
     models::{
         AutomationRule, RuleType, RuleCondition, RuleAction, ActionType, ComparisonOperator,
-        ConversationStatus,
+        ConversationStatus, Priority,
     },
     services::automation_service::{AutomationService, AutomationConfig},
 };
@@ -64,7 +64,7 @@ async fn test_event_triggered_rule_execution() {
 
     // Verify: Priority was set to "High"
     let updated_conversation = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
-    assert_eq!(updated_conversation.priority, Some("High".to_string()));
+    assert_eq!(updated_conversation.priority, Some(Priority::High));
 
     // Verify: Evaluation log was created
     let logs = db.get_rule_evaluation_logs_by_rule(&rule.id, 10, 0).await.unwrap();
@@ -92,7 +92,7 @@ async fn test_conditional_rule_evaluation() {
         RuleCondition::Simple {
             attribute: "priority".to_string(),
             comparison: ComparisonOperator::Equals,
-            value: json!("Urgent"),
+            value: json!("High"),
         },
         RuleAction {
             action_type: ActionType::ChangeStatus,
@@ -116,8 +116,8 @@ async fn test_conditional_rule_evaluation() {
         ConversationStatus::Open,
     )
     .await;
-    conversation1.priority = Some("Urgent".to_string());
-    db.set_conversation_priority(&conversation1.id, "Urgent").await.unwrap();
+    conversation1.priority = Some(Priority::High);
+    db.set_conversation_priority(&conversation1.id, &Priority::High).await.unwrap();
 
     service
         .handle_conversation_event("conversation.priority_changed", &conversation1, "test-user")
@@ -138,8 +138,8 @@ async fn test_conditional_rule_evaluation() {
         ConversationStatus::Open,
     )
     .await;
-    conversation2.priority = Some("Low".to_string());
-    db.set_conversation_priority(&conversation2.id, "Low").await.unwrap();
+    conversation2.priority = Some(Priority::Low);
+    db.set_conversation_priority(&conversation2.id, &Priority::Low).await.unwrap();
 
     service
         .handle_conversation_event("conversation.priority_changed", &conversation2, "test-user")
@@ -200,7 +200,7 @@ async fn test_enabled_disabled_rule_control() {
         .unwrap();
 
     let updated1 = db.get_conversation_by_id(&conversation1.id).await.unwrap().unwrap();
-    assert_eq!(updated1.priority, Some("Medium".to_string()));
+    assert_eq!(updated1.priority, Some(Priority::Medium));
 
     // Action: Disable the rule
     db.disable_automation_rule(&rule.id).await.unwrap();
@@ -244,7 +244,7 @@ async fn test_enabled_disabled_rule_control() {
 
     // Verify: Action was executed (rule re-enabled)
     let updated3 = db.get_conversation_by_id(&conversation3.id).await.unwrap().unwrap();
-    assert_eq!(updated3.priority, Some("Medium".to_string()));
+    assert_eq!(updated3.priority, Some(Priority::Medium));
 
     teardown_test_db(test_db).await;
 }
@@ -337,7 +337,7 @@ async fn test_rule_type_and_event_subscription() {
 
     // Verify: Priority set by rule1
     let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
-    assert_eq!(updated.priority, Some("High".to_string()));
+    assert_eq!(updated.priority, Some(Priority::High));
 
     teardown_test_db(test_db).await;
 }
@@ -418,10 +418,10 @@ async fn test_complex_workflow_with_multiple_rules() {
 
     // Verify: Priority was set
     let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
-    assert_eq!(updated.priority, Some("High".to_string()));
+    assert_eq!(updated.priority, Some(Priority::High));
 
     // Step 2: Trigger priority_changed event (triggers rule2)
-    conversation.priority = Some("High".to_string());
+    conversation.priority = Some(Priority::High);
     service
         .handle_conversation_event("conversation.priority_changed", &conversation, "system")
         .await
@@ -430,7 +430,7 @@ async fn test_complex_workflow_with_multiple_rules() {
     // Verify: Conversation was assigned
     let final_conversation = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
     assert_eq!(final_conversation.assigned_user_id, Some(agent.user_id.clone()));
-    assert_eq!(final_conversation.priority, Some("High".to_string()));
+    assert_eq!(final_conversation.priority, Some(Priority::High));
 
     // Verify: Both rules have evaluation logs
     let logs1 = db.get_rule_evaluation_logs_by_rule(&rule1.id, 10, 0).await.unwrap();
