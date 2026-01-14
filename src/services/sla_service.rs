@@ -246,7 +246,7 @@ impl SlaService {
         let first_response_deadline = if let Some(ref bh) = business_hours {
             let duration_seconds = crate::parse_duration(&policy.first_response_time)
                 .map_err(|e| ApiError::BadRequest(format!("Invalid first_response_time: {}", e)))?;
-            self.calculate_deadline_with_business_hours(base_timestamp, duration_seconds, bh)?
+            self.calculate_deadline_with_business_hours(base_timestamp, duration_seconds, bh).await?
         } else {
             self.calculate_deadline(base_timestamp, &policy.first_response_time)?
         };
@@ -254,7 +254,7 @@ impl SlaService {
         let resolution_deadline = if let Some(ref bh) = business_hours {
             let duration_seconds = crate::parse_duration(&policy.resolution_time)
                 .map_err(|e| ApiError::BadRequest(format!("Invalid resolution_time: {}", e)))?;
-            self.calculate_deadline_with_business_hours(base_timestamp, duration_seconds, bh)?
+            self.calculate_deadline_with_business_hours(base_timestamp, duration_seconds, bh).await?
         } else {
             self.calculate_deadline(base_timestamp, &policy.resolution_time)?
         };
@@ -562,7 +562,7 @@ impl SlaService {
     }
 
     /// Calculate deadline with business hours (skipping non-working hours)
-    pub fn calculate_deadline_with_business_hours(
+    pub async fn calculate_deadline_with_business_hours(
         &self,
         base_time: &str,
         duration_seconds: i64,
@@ -590,14 +590,14 @@ impl SlaService {
             // Convert current time to team timezone for business hours check
             let current_in_tz = current.with_timezone(&tz);
 
-            if self.is_working_hour(&current_in_tz, business_hours, &tz)? {
+            if self.is_working_hour(&current_in_tz, business_hours, &tz).await? {
                 // We're in working hours, advance by 1 minute
                 current = current + chrono::Duration::minutes(1);
                 remaining_seconds -= 60;
             } else {
                 // We're outside working hours, jump to next working hour
                 current = self
-                    .next_working_hour(&current_in_tz, business_hours, &tz)?
+                    .next_working_hour(&current_in_tz, business_hours, &tz).await?
                     .with_timezone(&chrono::Utc);
             }
         }
@@ -605,14 +605,20 @@ impl SlaService {
         Ok(current.to_rfc3339())
     }
 
-    /// Check if a datetime falls within business hours
-    fn is_working_hour(
+    /// Check if a datetime falls within business hours and is not a holiday
+    async fn is_working_hour(
         &self,
         datetime: &chrono::DateTime<impl chrono::TimeZone>,
         business_hours: &crate::models::team::BusinessHours,
         _tz: &chrono_tz::Tz,
     ) -> ApiResult<bool> {
         use chrono::Datelike;
+
+        // Check if this date is a holiday (Feature 029)
+        let date_str = format!("{:04}-{:02}-{:02}", datetime.year(), datetime.month(), datetime.day());
+        if self.db.is_holiday(&date_str).await? {
+            return Ok(false); // Holidays are non-working days
+        }
 
         let day_name = match datetime.weekday() {
             chrono::Weekday::Mon => "Monday",
@@ -634,13 +640,13 @@ impl SlaService {
             // Simple string comparison works for HH:MM format
             Ok(time_str >= schedule.start && time_str < schedule.end)
         } else {
-            // No schedule for this day (non-working day)
+            // No schedule for this day (weekend/non-working day)
             Ok(false)
         }
     }
 
     /// Find the next working hour after the given datetime
-    fn next_working_hour(
+    async fn next_working_hour(
         &self,
         datetime: &chrono::DateTime<impl chrono::TimeZone>,
         business_hours: &crate::models::team::BusinessHours,
@@ -652,7 +658,7 @@ impl SlaService {
         for _ in 0..14 * 24 * 60 {
             current = current + chrono::Duration::minutes(1);
 
-            if self.is_working_hour(&current, business_hours, tz)? {
+            if self.is_working_hour(&current, business_hours, tz).await? {
                 return Ok(current);
             }
         }
