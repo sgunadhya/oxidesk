@@ -154,7 +154,7 @@ pub async fn toggle_oidc_provider(
         .ok_or_else(|| ApiError::NotFound("OIDC provider not found".to_string()))?;
 
     // Toggle enabled status
-    let new_status = state.db.toggle_oidc_provider(&provider.id).await?;
+    let _new_status = state.db.toggle_oidc_provider(&provider.id).await?;
 
     // Get updated provider
     let updated_provider = state

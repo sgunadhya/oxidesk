@@ -1,6 +1,6 @@
 use crate::models::conversation::ConversationStatus;
 use tokio::sync::broadcast;
-use uuid::Uuid;
+
 
 /// System events that can trigger automation rules
 #[derive(Debug, Clone)]
@@ -56,6 +56,13 @@ pub enum SystemEvent {
         previous_tags: Vec<String>,
         new_tags: Vec<String>,
         changed_by: String,
+        timestamp: String, // ISO 8601
+    },
+    ConversationPriorityChanged {
+        conversation_id: String,
+        previous_priority: Option<String>,
+        new_priority: Option<String>,
+        updated_by: String,
         timestamp: String, // ISO 8601
     },
     AgentAvailabilityChanged {

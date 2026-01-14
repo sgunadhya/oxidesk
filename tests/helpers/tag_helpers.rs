@@ -1,6 +1,6 @@
+#![allow(dead_code)]
 use oxidesk::models::Tag;
 use oxidesk::database::Database;
-use uuid::Uuid;
 
 /// Create a test tag
 pub async fn create_test_tag(db: &Database, name: &str, description: Option<String>, color: Option<String>) -> Tag {

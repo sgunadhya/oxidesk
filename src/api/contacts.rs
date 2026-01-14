@@ -5,9 +5,9 @@ use axum::{
 };
 use serde::Deserialize;
 use crate::{
-    api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
+    api::middleware::{ApiResult, AppState, AuthenticatedUser},
     models::*,
-    services::*,
+
 };
 
 pub async fn create_contact(

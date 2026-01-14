@@ -5,7 +5,10 @@ use axum::{
 };
 use serde::Deserialize;
 use crate::api::middleware::{AppState, ApiError, ApiResult, AuthenticatedUser};
-use crate::models::{CreateConversation, UpdateStatusRequest, ConversationStatus, ConversationListResponse, PaginationMetadata};
+use crate::models::{
+    CreateConversation, UpdateStatusRequest, ConversationStatus, ConversationListResponse, PaginationMetadata,
+    UpdatePriorityRequest,
+};
 use crate::services::conversation_service;
 
 /// Create a new conversation
@@ -261,4 +264,40 @@ pub async fn list_conversations(
     };
 
     Ok(Json(response))
+}
+
+
+
+/// Update conversation priority (Feature 020)
+pub async fn update_conversation_priority(
+    State(state): State<AppState>,
+    axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
+    Path(id): Path<String>,
+    Json(request): Json<UpdatePriorityRequest>,
+) -> ApiResult<impl IntoResponse> {
+    // Check if user has conversations:update_priority permission
+    let has_permission = crate::services::PermissionService::has_permission(
+        &auth_user.roles,
+        "conversations:update_priority",
+    );
+
+    if !has_permission {
+        return Err(ApiError::Forbidden(
+            "Missing permission: conversations:update_priority".to_string(),
+        ));
+    }
+
+    // Use the priority service to update the conversation
+    let priority_service = crate::services::conversation_priority_service::ConversationPriorityService::new(&state.db);
+
+    let updated = priority_service
+        .update_conversation_priority(
+            &id,
+            request.priority,
+            &auth_user.user.id,
+            Some(&state.event_bus),
+        )
+        .await?;
+
+    Ok(Json(updated))
 }

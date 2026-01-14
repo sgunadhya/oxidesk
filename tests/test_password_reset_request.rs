@@ -2,7 +2,7 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent, RequestPasswordResetRequest},
+    models::{User, UserType, Agent},
     services::{hash_password, validate_and_normalize_email, password_reset_service},
 };
 

@@ -2,7 +2,7 @@ use crate::{
     database::Database,
     models::WebhookDelivery,
 };
-use reqwest::{Client, StatusCode};
+use reqwest::Client;
 use std::time::Duration;
 use tracing::{error, info, warn};
 

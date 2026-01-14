@@ -1,8 +1,8 @@
 mod helpers;
 
-use helpers::*;
+
 use oxidesk::{
-    models::{Conversation, ConversationStatus, RuleCondition, ComparisonOperator},
+    models::{Conversation, ConversationStatus, RuleCondition, ComparisonOperator, Priority},
     services::condition_evaluator::ConditionEvaluator,
 };
 use serde_json::json;
@@ -54,7 +54,7 @@ async fn test_simple_condition_priority_equals() {
     };
 
     let mut conversation = create_test_conversation_minimal();
-    conversation.priority = Some("High".to_string());
+    conversation.priority = Some(Priority::High);
 
     let evaluator = ConditionEvaluator::new();
     let result = evaluator.evaluate(&condition, &conversation).await;
@@ -72,7 +72,7 @@ async fn test_simple_condition_priority_not_equals() {
     };
 
     let mut conversation = create_test_conversation_minimal();
-    conversation.priority = Some("High".to_string());
+    conversation.priority = Some(Priority::High);
 
     let evaluator = ConditionEvaluator::new();
     let result = evaluator.evaluate(&condition, &conversation).await;
@@ -154,7 +154,7 @@ async fn test_and_condition_both_true() {
 
     let mut conversation = create_test_conversation_minimal();
     conversation.tags = Some(vec!["Bug".to_string()]);
-    conversation.priority = Some("High".to_string());
+    conversation.priority = Some(Priority::High);
 
     let evaluator = ConditionEvaluator::new();
     let result = evaluator.evaluate(&condition, &conversation).await;
@@ -182,7 +182,7 @@ async fn test_and_condition_one_false() {
 
     let mut conversation = create_test_conversation_minimal();
     conversation.tags = Some(vec!["Bug".to_string()]);
-    conversation.priority = Some("Low".to_string()); // Different priority
+    conversation.priority = Some(Priority::Low); // Different priority
 
     let evaluator = ConditionEvaluator::new();
     let result = evaluator.evaluate(&condition, &conversation).await;
@@ -210,7 +210,7 @@ async fn test_or_condition_one_true() {
 
     let mut conversation = create_test_conversation_minimal();
     conversation.tags = Some(vec!["Feature".to_string()]); // No Bug tag
-    conversation.priority = Some("High".to_string()); // But high priority
+    conversation.priority = Some(Priority::High); // But high priority
 
     let evaluator = ConditionEvaluator::new();
     let result = evaluator.evaluate(&condition, &conversation).await;
@@ -238,7 +238,7 @@ async fn test_or_condition_both_false() {
 
     let mut conversation = create_test_conversation_minimal();
     conversation.tags = Some(vec!["Feature".to_string()]);
-    conversation.priority = Some("Low".to_string());
+    conversation.priority = Some(Priority::Low);
 
     let evaluator = ConditionEvaluator::new();
     let result = evaluator.evaluate(&condition, &conversation).await;
@@ -296,7 +296,7 @@ async fn test_nested_condition() {
 
     let mut conversation = create_test_conversation_minimal();
     conversation.tags = Some(vec!["Feature".to_string()]); // No Bug
-    conversation.priority = Some("Low".to_string()); // Low priority
+    conversation.priority = Some(Priority::Low); // Low priority
     conversation.status = ConversationStatus::Open; // But status is open
 
     let evaluator = ConditionEvaluator::new();
@@ -331,7 +331,7 @@ async fn test_in_operator() {
     };
 
     let mut conversation = create_test_conversation_minimal();
-    conversation.priority = Some("High".to_string());
+    conversation.priority = Some(Priority::High);
 
     let evaluator = ConditionEvaluator::new();
     let result = evaluator.evaluate(&condition, &conversation).await;
@@ -349,7 +349,7 @@ async fn test_not_in_operator() {
     };
 
     let mut conversation = create_test_conversation_minimal();
-    conversation.priority = Some("Low".to_string());
+    conversation.priority = Some(Priority::Low);
 
     let evaluator = ConditionEvaluator::new();
     let result = evaluator.evaluate(&condition, &conversation).await;

@@ -1,3 +1,4 @@
+#![allow(ambiguous_glob_reexports)]
 pub mod api;
 pub mod config;
 pub mod database;

@@ -4,7 +4,7 @@ use crate::{
     models::*,
 };
 use regex::Regex;
-use std::sync::Arc;
+
 use time::OffsetDateTime;
 
 /// Context for variable substitution
@@ -155,7 +155,7 @@ impl MacroService {
             team_name,
             contact_email,
             conversation_status: conversation.status.to_string(),
-            conversation_priority: conversation.priority.clone(),
+            conversation_priority: conversation.priority.map(|p| p.to_string()),
         })
     }
 

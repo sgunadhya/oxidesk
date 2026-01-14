@@ -2,7 +2,7 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent, Session, ChangePasswordRequest, Role},
+    models::{User, UserType, Agent, Session, ChangePasswordRequest},
     services::{hash_password, validate_and_normalize_email, agent_service},
     api::middleware::error::ApiError,
     api::middleware::auth::AuthenticatedUser,

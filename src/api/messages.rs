@@ -5,11 +5,11 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
     api::middleware::{ApiResult, AppState, AuthenticatedUser},
-    models::{IncomingMessageRequest, Message, MessageListResponse, PaginationMetadata, SendMessageRequest},
+    models::{IncomingMessageRequest, MessageListResponse, PaginationMetadata, SendMessageRequest},
     services::MessageService,
 };
 

@@ -49,6 +49,93 @@ impl sqlx::Type<sqlx::Sqlite> for ConversationStatus {
     }
 }
 
+impl sqlx::Type<sqlx::Any> for ConversationStatus {
+    fn type_info() -> sqlx::any::AnyTypeInfo {
+        <String as sqlx::Type<sqlx::Any>>::type_info()
+    }
+
+    fn compatible(ty: &sqlx::any::AnyTypeInfo) -> bool {
+        <String as sqlx::Type<sqlx::Any>>::compatible(ty)
+    }
+}
+
+impl<'r> sqlx::Decode<'r, sqlx::Any> for ConversationStatus {
+    fn decode(value: sqlx::any::AnyValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let s = <String as sqlx::Decode<sqlx::Any>>::decode(value)?;
+        Ok(ConversationStatus::from(s))
+    }
+}
+
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum Priority {
+    Low,
+    Medium,
+    High,
+}
+
+impl fmt::Display for Priority {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Priority::Low => write!(f, "Low"),
+            Priority::Medium => write!(f, "Medium"),
+            Priority::High => write!(f, "High"),
+        }
+    }
+}
+
+// Convert from string (for SQLx)
+impl From<String> for Priority {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "High" => Priority::High,
+            "Medium" => Priority::Medium,
+            _ => Priority::Low,
+        }
+    }
+}
+
+impl std::str::FromStr for Priority {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Priority::from(s.to_string()))
+    }
+}
+
+// Allow reading from DB as string
+impl<'r> sqlx::Decode<'r, sqlx::Sqlite> for Priority {
+    fn decode(value: sqlx::sqlite::SqliteValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let s = <String as sqlx::Decode<sqlx::Sqlite>>::decode(value)?;
+        Ok(Priority::from(s))
+    }
+}
+
+impl sqlx::Type<sqlx::Sqlite> for Priority {
+    fn type_info() -> sqlx::sqlite::SqliteTypeInfo {
+        <String as sqlx::Type<sqlx::Sqlite>>::type_info()
+    }
+}
+
+impl sqlx::Type<sqlx::Any> for Priority {
+    fn type_info() -> sqlx::any::AnyTypeInfo {
+        <String as sqlx::Type<sqlx::Any>>::type_info()
+    }
+
+
+}
+
+impl<'r> sqlx::Decode<'r, sqlx::Any> for Priority {
+    fn decode(value: sqlx::any::AnyValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let s = <String as sqlx::Decode<sqlx::Any>>::decode(value)?;
+        Ok(Priority::from(s))
+    }
+}
+
+
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Conversation {
     pub id: String,
@@ -69,7 +156,7 @@ pub struct Conversation {
     pub version: i32,
     #[sqlx(skip)]
     pub tags: Option<Vec<String>>,
-    pub priority: Option<String>,
+    pub priority: Option<Priority>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,8 +183,8 @@ pub struct ConversationResponse {
     pub assigned_by: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub tags: Option<Vec<String>>,  // Fixed: should match Conversation type
-    pub priority: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub priority: Option<Priority>,
 }
 
 impl From<Conversation> for ConversationResponse {
@@ -128,6 +215,13 @@ impl From<Conversation> for ConversationResponse {
 pub struct UpdateStatusRequest {
     pub status: ConversationStatus,
     pub snooze_duration: Option<String>, // e.g. "2h", "30m"
+}
+
+/// Request body for updating conversation priority (Feature 020)
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdatePriorityRequest {
+    /// New priority value: "Low", "Medium", "High", or null to remove priority
+    pub priority: Option<Priority>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

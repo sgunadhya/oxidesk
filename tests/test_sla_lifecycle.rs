@@ -4,7 +4,6 @@ use chrono::Utc;
 use helpers::*;
 use oxidesk::{
     models::*,
-    parse_duration,
 };
 
 // ========================================

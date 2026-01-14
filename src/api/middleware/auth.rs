@@ -4,7 +4,7 @@ use axum::{
     response::Response,
 };
 use crate::{
-    api::middleware::error::{ApiError, ApiResult},
+    api::middleware::error::ApiError,
     database::Database,
     models::*,
     services::connection_manager::ConnectionManager,
@@ -158,7 +158,7 @@ fn compute_permissions(roles: &[Role]) -> Vec<String> {
 pub async fn require_permission(
     permission: &'static str,
 ) -> impl Fn(Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, ApiError>> + Send>> + Clone {
-    move |mut request: Request, next: Next| {
+    move |request: Request, next: Next| {
         Box::pin(async move {
             let auth_user = request
                 .extensions()

@@ -5,8 +5,8 @@ use oxidesk::{
     api::{self, middleware::{AppState, ApiError}}, // Explicitly fixing imports mapping
     config::Config,
     database::Database,
-    models::{self, *},
-    services::{self, *, connection_manager::{ConnectionManager, InMemoryConnectionManager}},
+    models::*,
+    services::{*, connection_manager::{ConnectionManager, InMemoryConnectionManager}},
     web,
 };
 // Re-import initialize_admin for main.rs usage if it was public in lib? 
@@ -552,6 +552,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // TODO: Feature 010 will add notification sending
                             // TODO: Feature 012 will add webhook triggering
                         }
+                        oxidesk::SystemEvent::ConversationPriorityChanged {
+                            conversation_id,
+                            previous_priority,
+                            new_priority,
+                            updated_by,
+                            timestamp,
+                        } => {
+                            tracing::info!(
+                                "Automation: Conversation {} priority changed from {:?} to {:?} by {} at {}",
+                                conversation_id,
+                                previous_priority,
+                                new_priority,
+                                updated_by,
+                                timestamp
+                            );
+
+                            // Trigger automation rules for priority change
+                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                                if let Err(e) = automation_rule_service
+                                    .handle_conversation_event("conversation.priority_changed", &conversation, &updated_by)
+                                    .await
+                                {
+                                    tracing::error!("Failed to execute automation rules for priority change: {}", e);
+                                }
+                            }
+                        }
                     }
                 }
                 Err(e) => {
@@ -672,6 +698,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/conversations", post(api::conversations::create_conversation))
         .route("/api/conversations/:id", get(api::conversations::get_conversation))
         .route("/api/conversations/:id/status", patch(api::conversations::update_conversation_status))
+        .route("/api/conversations/:id/priority", patch(api::conversations::update_conversation_priority))
         .route("/api/conversations/ref/:reference_number", get(api::conversations::get_conversation_by_reference))
         .route("/api/roles", get(api::roles::list_roles))
         .route("/api/roles", post(api::roles::create_role))

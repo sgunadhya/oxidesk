@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use oxidesk::{
     database::Database,
     models::{AgentAvailability, Agent},
@@ -13,7 +14,7 @@ pub async fn create_test_agent_with_status(
     status: AgentAvailability,
 ) -> Agent {
     let pool = db.pool();
-    let now = Utc::now().to_rfc3339();
+    let _now = Utc::now().to_rfc3339();
     let agent_id = uuid::Uuid::new_v4().to_string();
 
     sqlx::query(

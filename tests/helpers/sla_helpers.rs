@@ -1,6 +1,7 @@
+#![allow(dead_code)]
 use oxidesk::{
     database::Database,
-    models::{SlaPolicy, AppliedSla, SlaEvent, SlaEventType, SlaEventStatus, AppliedSlaStatus},
+    models::{SlaPolicy, AppliedSla, SlaEvent, SlaEventType, SlaEventStatus},
 };
 use chrono::{DateTime, Utc, Duration};
 

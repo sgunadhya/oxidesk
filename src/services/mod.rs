@@ -5,6 +5,7 @@ pub mod contact_service;
 pub mod role_service;
 pub mod state_machine;
 pub mod conversation_service;
+pub mod conversation_priority_service;
 pub mod snooze_service;
 pub mod delivery_service;
 pub mod message_service;

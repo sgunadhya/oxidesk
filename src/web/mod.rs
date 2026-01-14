@@ -8,8 +8,8 @@ use axum::{
 use serde::Deserialize;
 use crate::{
     api::middleware::{AppState, AuthenticatedUser},
-    models::*,
-    services::{self, *},
+
+    services::self,
 };
 
 // Template structs
