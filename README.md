@@ -1,30 +1,443 @@
 # Oxidesk
 
-Customer support helpdesk system built with Rust, Axum, and sqlx featuring clean architecture, RBAC, and modern HTMX frontend.
+> **A modern, intelligent customer support platform built for teams that care about response times, service quality, and customer satisfaction.**
 
-## Features
+Oxidesk helps your support team manage customer conversations efficiently with powerful automation, smart assignment, SLA tracking, and real-time collaboration tools.
 
-- **User Management**: Support for agents (support staff) and contacts (customers)
-- **Role-Based Access Control**: Flexible permission system for agents
-- **Multi-Database Support**: Works with SQLite, PostgreSQL, and MySQL from a single binary
-- **Service Layer Architecture**: Clean separation of concerns (Handlers → Services → Database)
-- **RESTful API**: Complete REST API with session-based authentication
-- **HTMX Frontend**: Server-rendered HTML with HTMX for dynamic interactions
-- **Secure by Default**: Argon2id password hashing, prepared statements, input validation
-- **Session Management**: Automatic cleanup of expired sessions
-- **Structured Logging**: Comprehensive logging for security and debugging
+---
 
-## Architecture
+## Why Oxidesk?
 
-Oxidesk follows a strict layered architecture enforced by the project constitution:
+Traditional helpdesk software is either too complex or too simple. Oxidesk strikes the perfect balance:
+
+- **Smart Conversation Management** - Email integration, automatic threading, and reference numbers keep conversations organized
+- **Intelligent Assignment** - Automatic routing based on availability, workload, and team capacity
+- **SLA Tracking** - Set response time targets and track performance with business hours and holiday support
+- **Team Collaboration** - Real-time notifications, conversation tagging, and role-based access control
+- **Automation** - Create rules to automatically assign, tag, prioritize, and respond to conversations
+- **Multi-Channel Support** - Start with email, expand to other channels as you grow
+
+---
+
+## Core Features
+
+### 📧 Email Integration
+- **IMAP email receiving** - Automatically fetch emails from your support inbox
+- **Smart threading** - Replies are automatically matched to existing conversations via reference numbers
+- **Attachment handling** - Store and retrieve email attachments securely
+- **Send from conversation** - Reply directly from the conversation view
+
+### 🎯 Conversation Management
+- **Status tracking** - Open, Snoozed, Resolved, Closed states with automatic transitions
+- **Priority levels** - Low, Normal, High, Urgent with visual indicators
+- **Tagging system** - Organize conversations with custom tags and colors
+- **Smart filtering** - Find conversations by status, assignee, priority, or tags
+- **Reference numbers** - Each conversation gets a unique #REF number for easy tracking
+
+### 👥 Team Management
+- **Role-based access** - Create custom roles with granular permissions
+- **Team assignments** - Assign conversations to individuals or entire teams
+- **Availability tracking** - Agents can set their status (Available, Busy, Away)
+- **Automatic unassignment** - When agents go away, their conversations return to the queue
+- **Workload balancing** - See conversation counts per agent at a glance
+
+### ⚡ Smart Assignment
+- **Self-assignment** - Agents can claim unassigned conversations
+- **Manual assignment** - Assign to specific agents or teams
+- **Auto-assignment** - Configure rules to automatically route conversations
+- **Concurrent protection** - Built-in race condition handling prevents double assignment
+- **Assignment history** - Full audit trail of who handled each conversation
+
+### 📊 SLA Management
+- **Response time tracking** - First response, next response, and resolution SLAs
+- **Business hours support** - Define working hours by day of week
+- **Holiday calendar** - Exclude holidays from SLA calculations
+- **Weekend exclusion** - Automatically skip weekends in deadline calculations
+- **Breach detection** - Get notified when SLAs are at risk or breached
+- **Team-based SLAs** - Different SLA policies for different teams
+
+### 🤖 Automation Rules
+- **Event-based triggers** - React to conversation status changes, messages, assignments
+- **Conditional logic** - Complex conditions with AND/OR operators
+- **Multiple actions** - Set status, assign, tag, set priority in one rule
+- **Priority ordering** - Control rule execution order
+- **Cascade prevention** - Automatic infinite loop detection
+- **Audit logging** - See exactly when and why rules fired
+
+### 🔐 Security & Access Control
+- **Role-based permissions** - 60+ granular permissions for fine-grained control
+- **Password reset flow** - Secure email-based password reset with rate limiting
+- **Session management** - Automatic session expiration and security
+- **API key support** - Authenticate API requests without exposing passwords
+- **OIDC integration** - Single sign-on with Google and other providers
+- **Audit trails** - Track all security-relevant actions
+
+### 🔔 Notifications
+- **Real-time updates** - WebSocket notifications for instant updates
+- **Assignment alerts** - Get notified when conversations are assigned to you
+- **SLA warnings** - Alerts before SLAs breach
+- **Database persistence** - Never miss a notification, even offline
+- **Mark as read** - Keep track of what you've seen
+
+### 💬 Macros (Saved Replies)
+- **Text templates** - Save common responses for quick replies
+- **Team sharing** - Share macros with your entire team
+- **Personal macros** - Keep private macros for your own use
+- **Quick access** - Insert macros with a single click
+
+### 📈 Reporting & Analytics
+- **Conversation metrics** - Track volume, response times, resolution times
+- **Agent performance** - See individual and team statistics
+- **SLA compliance** - Monitor SLA achievement rates
+- **Tag analytics** - Identify common conversation topics
+- **Priority distribution** - Understand your workload composition
+
+---
+
+## Quick Start
+
+### 1. Install and Run
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/oxidesk.git
+cd oxidesk
+
+# Create configuration file
+cp .env.example .env
+
+# Edit .env with your settings
+nano .env
+
+# Build and run
+cargo build --release
+cargo run --release
+```
+
+### 2. First Login
+
+1. Open http://localhost:8080/login
+2. Login with your admin credentials from `.env`:
+   - Email: Your `ADMIN_EMAIL`
+   - Password: Your `ADMIN_PASSWORD`
+
+### 3. Set Up Your Team
+
+1. **Create roles** - Go to Settings → Roles, create roles like "Support Agent", "Team Lead"
+2. **Invite agents** - Go to Team → Agents, add your support team members
+3. **Create teams** - Organize agents into teams (Sales Support, Technical Support, etc.)
+4. **Configure inboxes** - Set up email integration for your support inbox
+
+### 4. Configure SLAs
+
+1. **Create SLA policy** - Go to Settings → SLA Policies
+   - Set first response time (e.g., 4 hours)
+   - Set resolution time (e.g., 24 hours)
+2. **Add business hours** - Define your working hours (Mon-Fri 9am-5pm)
+3. **Add holidays** - Configure your company holidays
+4. **Assign to teams** - Link SLA policies to teams
+
+### 5. Set Up Automation
+
+1. **Create assignment rules** - Auto-assign based on tags, priority, or keywords
+2. **Create tagging rules** - Auto-tag conversations based on content
+3. **Create priority rules** - Auto-escalate based on keywords or contact history
+
+---
+
+## How To...
+
+<details>
+<summary><b>Handle incoming customer emails</b></summary>
+
+1. **Automatic receipt** - Oxidesk polls your IMAP inbox every 60 seconds
+2. **Conversation creation** - New emails become new conversations
+3. **Smart threading** - Replies are matched to existing conversations by reference number
+4. **Auto-assignment** - If you have rules configured, conversations are automatically assigned
+5. **Notifications** - Assigned agents receive real-time notifications
+
+</details>
+
+<details>
+<summary><b>Respond to a customer</b></summary>
+
+1. Open the conversation from your dashboard or inbox
+2. Type your response in the message box
+3. Click "Send" - the email is sent via SMTP and recorded in the conversation
+4. The conversation updates automatically with your response
+5. Customer receives email with unique reference number for tracking
+
+</details>
+
+<details>
+<summary><b>Track SLA compliance</b></summary>
+
+1. **View SLA status** - Each conversation shows SLA deadlines
+2. **Color coding** - Green (met), Yellow (at risk), Red (breached)
+3. **Filter by SLA status** - Find all conversations at risk of breach
+4. **Reports** - See team-wide SLA compliance metrics
+5. **Notifications** - Get alerted before deadlines are breached
+
+</details>
+
+<details>
+<summary><b>Create automation rules</b></summary>
+
+1. Go to Settings → Automation Rules
+2. Click "New Rule"
+3. **Name your rule** - e.g., "Auto-assign billing questions"
+4. **Set trigger** - Choose event (Message Created, Status Changed, etc.)
+5. **Add conditions** - e.g., "Subject contains 'billing' AND Priority is High"
+6. **Choose action** - e.g., "Assign to team: Billing Support"
+7. Save and enable
+
+Rules fire automatically when conditions match!
+
+</details>
+
+<details>
+<summary><b>Set up team workflows</b></summary>
+
+1. **Create teams** - Settings → Teams (e.g., "Tier 1", "Tier 2", "Billing")
+2. **Add members** - Assign agents to teams
+3. **Set SLA policies** - Each team can have different response time targets
+4. **Configure business hours** - Teams can have different working schedules
+5. **Create routing rules** - Auto-route conversations to the right team
+
+</details>
+
+<details>
+<summary><b>Manage agent availability</b></summary>
+
+Agents can set their status:
+- **Available** - Ready to take new assignments
+- **Busy** - Working but not taking new work
+- **Away** - Out of office, conversations auto-unassigned
+
+Status changes trigger automatic workflow actions!
+
+</details>
+
+---
+
+## Configuration
+
+### Database Setup
+
+Choose your database (SQLite for development, PostgreSQL/MySQL for production):
+
+```env
+# SQLite (easiest to start)
+DATABASE_URL=sqlite://oxidesk.db
+
+# PostgreSQL (recommended for production)
+DATABASE_URL=postgres://user:password@localhost/oxidesk
+
+# MySQL (also supported)
+DATABASE_URL=mysql://user:password@localhost/oxidesk
+```
+
+### Email Integration
+
+Configure IMAP (receiving) and SMTP (sending):
+
+```env
+# IMAP - Receive emails
+IMAP_HOST=imap.gmail.com
+IMAP_PORT=993
+IMAP_USERNAME=support@yourcompany.com
+IMAP_PASSWORD=your-app-password
+IMAP_USE_TLS=true
+
+# SMTP - Send emails
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=support@yourcompany.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM_EMAIL=support@yourcompany.com
+SMTP_FROM_NAME=Your Company Support
+```
+
+### Authentication Options
+
+Oxidesk supports multiple authentication methods:
+
+```env
+# Password-based (default)
+SESSION_DURATION_HOURS=24
+
+# OIDC/OAuth (Google, etc.)
+OIDC_GOOGLE_CLIENT_ID=your-client-id
+OIDC_GOOGLE_CLIENT_SECRET=your-client-secret
+OIDC_GOOGLE_REDIRECT_URI=http://localhost:8080/auth/oidc/google/callback
+
+# API Keys (for integrations)
+# Generated per-agent via the UI
+```
+
+### Performance Tuning
+
+```env
+# Session cleanup
+SESSION_CLEANUP_INTERVAL_HOURS=1
+
+# Email polling
+EMAIL_POLL_INTERVAL_SECONDS=60
+
+# SLA breach checking
+SLA_CHECK_INTERVAL_SECONDS=300
+
+# Rate limiting
+PASSWORD_RESET_RATE_LIMIT=5  # per hour
+```
+
+---
+
+## API Access
+
+Oxidesk provides a complete REST API for integrations:
+
+```bash
+# Get API token
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "your@email.com", "password": "yourpassword"}'
+
+# Use token in requests
+curl http://localhost:8080/api/conversations \
+  -H "Authorization: Bearer <your-token>"
+```
+
+### Key API Endpoints
+
+- `GET /api/conversations` - List conversations
+- `POST /api/conversations/:id/messages` - Send a message
+- `PATCH /api/conversations/:id/status` - Update status
+- `POST /api/conversations/:id/assign` - Assign conversation
+- `GET /api/agents` - List team members
+- `GET /api/sla/policies` - List SLA policies
+- `POST /api/automation/rules` - Create automation rule
+
+See full API documentation at `/api/docs` when running.
+
+---
+
+## Deployment
+
+### Docker Deployment
+
+```dockerfile
+# Use official image
+docker pull ghcr.io/your-org/oxidesk:latest
+
+# Run with environment config
+docker run -d \
+  --name oxidesk \
+  -p 8080:8080 \
+  -e DATABASE_URL=postgres://user:pass@db/oxidesk \
+  -e ADMIN_EMAIL=admin@example.com \
+  -e ADMIN_PASSWORD=SecurePassword123! \
+  ghcr.io/your-org/oxidesk:latest
+```
+
+### Kubernetes Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oxidesk
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: oxidesk
+        image: ghcr.io/your-org/oxidesk:latest
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: oxidesk-secrets
+              key: database-url
+```
+
+### Reverse Proxy (nginx)
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name support.yourcompany.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+---
+
+## Support & Community
+
+- **Issues**: Report bugs at [GitHub Issues](https://github.com/your-org/oxidesk/issues)
+- **Discussions**: Ask questions in [GitHub Discussions](https://github.com/your-org/oxidesk/discussions)
+- **Documentation**: Full docs at [docs.oxidesk.io](https://docs.oxidesk.io)
+- **Email**: support@oxidesk.io
+
+---
+
+## Roadmap
+
+- ✅ Core conversation management
+- ✅ Email integration (IMAP/SMTP)
+- ✅ SLA tracking with business hours
+- ✅ Automation rules engine
+- ✅ Team collaboration
+- 🚧 Knowledge base integration
+- 🚧 Chat widget for websites
+- 🚧 Mobile apps (iOS/Android)
+- 📋 Social media integration
+- 📋 AI-powered response suggestions
+- 📋 Customer satisfaction surveys
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details
+
+---
+
+<details>
+<summary><h2>📚 Technical Details (For Developers)</h2></summary>
+
+### Technology Stack
+
+- **Language**: Rust 1.75+
+- **Web Framework**: Axum 0.7
+- **Database**: sqlx 0.7 (SQLite, PostgreSQL, MySQL)
+- **Frontend**: HTMX + Server-rendered HTML (Askama templates)
+- **Authentication**: Argon2id password hashing, session-based auth
+- **Real-time**: WebSocket notifications
+- **Email**: async-imap (receive), lettre (send)
+
+### Architecture
 
 ```
 ┌─────────────────┐
-│  Web Handlers   │  ← Thin HTTP layer (HTMX templates)
+│  Web Handlers   │  ← HTMX templates, thin HTTP layer
 └────────┬────────┘
          │
 ┌────────▼────────┐
-│  API Handlers   │  ← Thin HTTP layer (JSON responses)
+│  API Handlers   │  ← JSON responses, thin HTTP layer
 └────────┬────────┘
          │
 ┌────────▼────────┐
@@ -36,221 +449,56 @@ Oxidesk follows a strict layered architecture enforced by the project constituti
 └─────────────────┘
 ```
 
-See [.speckit/constitution.md](.speckit/constitution.md) for full architecture guidelines.
+**Key Principles:**
+- Handlers are thin (no business logic)
+- Services contain all business logic
+- Database layer is pure CRUD operations
+- Models are shared across layers
 
-## Quick Start
+### Security Features
 
-### Prerequisites
+- **Argon2id**: Password hashing with m_cost=19456, t_cost=2, p_cost=1
+- **Prepared Statements**: All SQL queries are parameterized
+- **CSRF Protection**: Token-based CSRF validation
+- **Session Security**: HttpOnly cookies, automatic expiration
+- **Rate Limiting**: Password reset, API endpoints
+- **Input Validation**: Email format, password complexity
+- **Soft Deletes**: Data retention for audit trails
 
-- Rust 1.75+
-- SQLite (included) OR PostgreSQL 14+ OR MySQL 8.0+
+### Database Schema
 
-### Environment Configuration
+Key tables:
+- `users` - Agents and contacts (polymorphic)
+- `conversations` - Customer support conversations
+- `messages` - Conversation messages (inbound/outbound)
+- `sla_policies` - Response time targets
+- `applied_slas` - SLA tracking per conversation
+- `automation_rules` - Business logic automation
+- `teams` - Agent organization
+- `holidays` - Non-working days for SLA calculation
 
-Create a `.env` file or set environment variables:
+### Performance
 
-```env
-# Database
-DATABASE_URL=sqlite://oxidesk.db
+- **Database Connection Pooling**: sqlx connection pool
+- **Async I/O**: Tokio async runtime
+- **Efficient Queries**: Indexed lookups, pagination
+- **Background Tasks**: Tokio tasks for email polling, SLA checking
+- **Caching**: In-memory caching for frequently accessed data
 
-# Server
-HOST=127.0.0.1
-PORT=8080
-
-# Admin Account (created on first run)
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=SecurePassword123!
-
-# Session
-SESSION_DURATION_HOURS=24
-
-# Logging
-RUST_LOG=oxidesk=info,tower_http=info
-```
-
-### Setup
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-org/oxidesk.git
-   cd oxidesk
-   ```
-
-2. Build and run:
-   ```bash
-   cargo build --release
-   cargo run --release
-   ```
-
-3. Access the application:
-   - Web UI: http://localhost:8080/login
-   - API: http://localhost:8080/api
-   - Health: http://localhost:8080/health
-
-Default admin credentials are set via `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables.
-
-## API Documentation
-
-### Authentication
+### Testing
 
 ```bash
-# Login (get Bearer token)
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com", "password": "SecurePassword123!"}'
-
-# Returns: {"token": "session-token-here"}
-
-# Use token in subsequent requests
-curl http://localhost:8080/api/agents \
-  -H "Authorization: Bearer <token>"
-
-# Get current session
-GET /api/auth/session
-
-# Logout
-POST /api/auth/logout
-```
-
-### Agents API
-
-```bash
-# List agents (paginated)
-GET /api/agents?page=1&per_page=20
-
-# Create agent
-POST /api/agents
-{
-  "email": "agent@example.com",
-  "first_name": "John",
-  "password": "SecurePassword123!",
-  "role_ids": ["<role-id>"]
-}
-
-# Get agent by ID
-GET /api/agents/:id
-
-# Update agent
-PATCH /api/agents/:id
-{
-  "first_name": "Jane",
-  "role_ids": ["<role-id>"]
-}
-
-# Delete agent
-DELETE /api/agents/:id
-
-# Change password
-POST /api/agents/:id/password
-{
-  "new_password": "NewPassword123!"
-}
-```
-
-### Contacts API
-
-```bash
-# List contacts (paginated)
-GET /api/contacts?page=1&per_page=20
-
-# Create contact
-POST /api/contacts
-{
-  "email": "contact@example.com",
-  "first_name": "Alice",
-  "channels": [
-    {"inbox_id": "<inbox-id>", "email": "alice@example.com"}
-  ]
-}
-
-# Get contact by ID
-GET /api/contacts/:id
-
-# Update contact
-PATCH /api/contacts/:id
-{
-  "first_name": "Bob"
-}
-
-# Delete contact
-DELETE /api/contacts/:id
-```
-
-### Roles & Permissions API
-
-```bash
-# List roles
-GET /api/roles
-
-# Create role
-POST /api/roles
-{
-  "name": "Support Agent",
-  "description": "Customer support role",
-  "permission_ids": ["<permission-id>"]
-}
-
-# Get role by ID
-GET /api/roles/:id
-
-# Update role
-PATCH /api/roles/:id
-{
-  "name": "Senior Support Agent",
-  "permission_ids": ["<permission-id>"]
-}
-
-# Delete role
-DELETE /api/roles/:id
-
-# List all permissions
-GET /api/permissions
-```
-
-### Users API (Generic)
-
-```bash
-# List all users (agents and contacts)
-GET /api/users?type=agent  # Optional: filter by type
-
-# Get user by ID
-GET /api/users/:id
-
-# Delete user by ID
-DELETE /api/users/:id
-```
-
-## Web Interface
-
-Access the HTMX-powered web UI at http://localhost:8080/login
-
-### Routes
-
-- `/login` - Login page
-- `/dashboard` - Main dashboard with stats
-- `/agents` - Agent management (list, delete)
-- `/contacts` - Contact management (list, delete)
-- `/roles` - Role management (list, delete)
-- `/logout` - Logout (POST)
-
-All management pages require authentication and appropriate permissions.
-
-## Development
-
-### Running Tests
-
-```bash
-# Unit tests only
+# Unit tests
 cargo test --lib
 
-# Integration tests only
+# Integration tests
 cargo test --test '*'
 
-# All tests
-cargo test
-
-# With logging
+# All tests with logging
 RUST_LOG=debug cargo test
+
+# Coverage
+cargo tarpaulin --out Html
 ```
 
 ### Code Quality
@@ -259,178 +507,75 @@ RUST_LOG=debug cargo test
 # Format code
 cargo fmt
 
-# Lint code
+# Lint (strict)
 cargo clippy -- -D warnings
 
-# Check compilation
-cargo check
+# Security audit
+cargo audit
 
-# Run in development mode with hot reload
+# Check dependencies
+cargo outdated
+```
+
+### Development Setup
+
+```bash
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install cargo-watch (hot reload)
+cargo install cargo-watch
+
+# Run with hot reload
 cargo watch -x run
+
+# Run tests on file change
+cargo watch -x test
 ```
 
 ### Project Structure
 
 ```
 src/
-├── api/              # API handlers (thin)
-│   ├── agents.rs
-│   ├── contacts.rs
-│   ├── roles.rs
-│   ├── users.rs
-│   └── auth.rs
-├── web/              # Web handlers (thin)
-│   └── mod.rs
-├── services/         # Business logic (thick)
-│   ├── agent_service.rs
-│   ├── contact_service.rs
-│   ├── role_service.rs
-│   ├── auth.rs
-│   └── email_validator.rs
-├── database/         # Data access (CRUD only)
-│   └── mod.rs
+├── api/              # API handlers (REST endpoints)
+├── web/              # Web handlers (HTMX views)
+├── services/         # Business logic
+│   ├── assignment_service.rs
+│   ├── sla_service.rs
+│   ├── automation_service.rs
+│   └── ...
+├── database/         # Data access layer
 ├── models/           # Data structures & DTOs
-│   ├── user.rs
-│   ├── role.rs
-│   └── session.rs
-├── config.rs         # Configuration
+├── events/           # Event bus for pub/sub
+├── utils/            # Shared utilities
 └── main.rs           # Entry point
-
-templates/            # Askama templates
-├── base.html         # Base layout
-├── login.html
-├── dashboard.html
-├── agents.html
-├── contacts.html
-├── roles.html
-└── partials/
-    └── error.html    # Reusable error template
 
 migrations/           # SQL migrations
 ├── sqlite/
 ├── postgres/
 └── mysql/
+
+templates/            # Askama HTML templates
+tests/                # Integration tests
 ```
 
-## Security Features
+### Contributing
 
-- **Argon2id Password Hashing**: Industry-standard (m_cost=19456, t_cost=2, p_cost=1)
-- **HttpOnly Cookies**: Session tokens secured from XSS attacks
-- **Last Admin Protection**: Cannot delete the final admin user
-- **Password Complexity**: Enforced 12-128 chars, uppercase, lowercase, digit, special char
-- **Session Expiration**: Automatic hourly cleanup of expired sessions
-- **Input Validation**: Email validation with TLD requirements
-- **Per-Type Email Uniqueness**: Same email can be agent AND contact
-- **SQL Injection Prevention**: All queries use parameterized statements
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Follow the code style (`cargo fmt`)
+4. Add tests for new features
+5. Ensure all tests pass (`cargo test`)
+6. Commit your changes (`git commit -m 'Add amazing feature'`)
+7. Push to the branch (`git push origin feature/amazing-feature`)
+8. Open a Pull Request
 
-## Background Tasks
+**Code Guidelines:**
+- Follow Rust idioms and best practices
+- Write comprehensive tests
+- Document public APIs with rustdoc
+- Keep services focused and single-purpose
+- Never put business logic in handlers
+- Use the event bus for cross-service communication
 
-- **Session Cleanup**: Runs every hour to remove expired sessions from the database
-
-## Logging
-
-Structured logging via `tracing`:
-
-```bash
-# Set log level
-RUST_LOG=oxidesk=debug,tower_http=debug cargo run
-```
-
-Key events logged:
-- Login attempts (success/failure with reasons)
-- Logout events
-- Agent/Contact/Role deletions
-- Permission denials
-- Session cleanup statistics
-- Admin protection violations
-- Database operations
-
-## Production Deployment
-
-### Database Configuration
-
-**SQLite** (Development):
-```env
-DATABASE_URL=sqlite://oxidesk.db
-```
-
-**PostgreSQL** (Production):
-```env
-DATABASE_URL=postgres://user:password@localhost/oxidesk
-```
-
-**MySQL** (Production):
-```env
-DATABASE_URL=mysql://user:password@localhost/oxidesk
-```
-
-### Environment Variables
-
-```env
-# Required
-DATABASE_URL=<database-url>
-ADMIN_EMAIL=<admin-email>
-ADMIN_PASSWORD=<strong-password>
-
-# Optional
-HOST=0.0.0.0
-PORT=8080
-SESSION_DURATION_HOURS=24
-RUST_LOG=oxidesk=info,tower_http=warn
-
-# Password Reset / SMTP Email (required for password reset feature)
-SMTP_HOST=smtp.example.com           # SMTP server hostname
-SMTP_PORT=587                        # SMTP port (587 for TLS, 465 for SSL)
-SMTP_USERNAME=noreply@example.com    # SMTP authentication username
-SMTP_PASSWORD=smtp_password          # SMTP authentication password
-SMTP_FROM_EMAIL=noreply@example.com  # Sender email address
-SMTP_FROM_NAME=Oxidesk Support       # Sender name in email
-RESET_PASSWORD_BASE_URL=http://localhost:3000  # Base URL for reset links
-PASSWORD_RESET_TOKEN_EXPIRY=3600     # Token expiry in seconds (default: 1 hour)
-PASSWORD_RESET_RATE_LIMIT=5          # Max requests per hour per email
-```
-
-### Build & Run
-
-```bash
-# Build for production
-cargo build --release
-
-# Run
-./target/release/oxidesk
-```
-
-### Docker (Optional)
-
-```dockerfile
-FROM rust:1.75 as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release
-
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/oxidesk /usr/local/bin/
-CMD ["oxidesk"]
-```
-
-## Documentation
-
-- [Feature Specification](specs/001-user-management/spec.md) - Requirements and user stories
-- [Implementation Plan](specs/001-user-management/plan.md) - Technical architecture
-- [Constitution](.speckit/constitution.md) - Architecture principles and code guidelines
-- [Data Model](specs/001-user-management/data-model.md) - Database schema
-- [API Contracts](specs/001-user-management/contracts/openapi.yaml) - OpenAPI specification
-- [Quickstart Guide](specs/001-user-management/quickstart.md) - Setup and usage
-
-## Contributing
-
-1. Follow the architecture principles in `.speckit/constitution.md`
-2. Write tests for all new features
-3. Use the service layer for business logic
-4. Never put HTML strings in code - use templates
-5. Add structured logging for important operations
-
-## License
-
-MIT
+</details>
