@@ -61,8 +61,8 @@ impl AssignmentService {
             ));
         }
 
-        // 2. Verify conversation exists
-        let _conversation = self
+        // 2. Verify conversation exists and check for idempotency
+        let conversation = self
             .db
             .get_conversation_by_id(conversation_id)
             .await?
@@ -70,10 +70,42 @@ impl AssignmentService {
                 ApiError::NotFound(format!("Conversation {} not found", conversation_id))
             })?;
 
-        // 3. Assign to database
-        self.db
-            .assign_conversation_to_user(conversation_id, agent_id, agent_id)
-            .await?;
+        // Idempotency check: If already assigned to this agent, return success
+        if conversation.assigned_user_id.as_ref() == Some(&agent_id.to_string()) {
+            tracing::info!(
+                "Conversation {} already assigned to agent {} (idempotent request)",
+                conversation_id,
+                agent_id
+            );
+            return Ok(conversation);
+        }
+
+        // 3. Assign to database with retry logic for optimistic concurrency conflicts
+        const MAX_RETRIES: u32 = 3;
+        const RETRY_DELAYS_MS: [u64; 3] = [50, 100, 200]; // Exponential backoff
+
+        for attempt in 0..=MAX_RETRIES {
+            match self
+                .db
+                .assign_conversation_to_user(conversation_id, agent_id, agent_id)
+                .await
+            {
+                Ok(_) => break, // Success - exit retry loop
+                Err(ApiError::Conflict(_)) if attempt < MAX_RETRIES => {
+                    // Conflict detected - retry with exponential backoff
+                    let delay_ms = RETRY_DELAYS_MS[attempt as usize];
+                    tracing::info!(
+                        "Assignment conflict on attempt {} for conversation {}, retrying in {}ms",
+                        attempt + 1,
+                        conversation_id,
+                        delay_ms
+                    );
+                    tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                    continue;
+                }
+                Err(e) => return Err(e), // Other error or max retries exceeded
+            }
+        }
 
         // 4. Add as participant (ignore if already exists)
         let _ = self
@@ -150,8 +182,8 @@ impl AssignmentService {
             ));
         }
 
-        // 2. Verify conversation exists
-        let _conversation = self
+        // 2. Verify conversation exists and check for idempotency
+        let conversation = self
             .db
             .get_conversation_by_id(conversation_id)
             .await?
@@ -166,10 +198,42 @@ impl AssignmentService {
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Agent {} not found", target_agent_id)))?;
 
-        // 4. Assign to database
-        self.db
-            .assign_conversation_to_user(conversation_id, target_agent_id, assigning_agent_id)
-            .await?;
+        // Idempotency check: If already assigned to target agent, return success
+        if conversation.assigned_user_id.as_ref() == Some(&target_agent_id.to_string()) {
+            tracing::info!(
+                "Conversation {} already assigned to agent {} (idempotent request)",
+                conversation_id,
+                target_agent_id
+            );
+            return Ok(conversation);
+        }
+
+        // 4. Assign to database with retry logic for optimistic concurrency conflicts
+        const MAX_RETRIES: u32 = 3;
+        const RETRY_DELAYS_MS: [u64; 3] = [50, 100, 200]; // Exponential backoff
+
+        for attempt in 0..=MAX_RETRIES {
+            match self
+                .db
+                .assign_conversation_to_user(conversation_id, target_agent_id, assigning_agent_id)
+                .await
+            {
+                Ok(_) => break, // Success - exit retry loop
+                Err(ApiError::Conflict(_)) if attempt < MAX_RETRIES => {
+                    // Conflict detected - retry with exponential backoff
+                    let delay_ms = RETRY_DELAYS_MS[attempt as usize];
+                    tracing::info!(
+                        "Assignment conflict on attempt {} for conversation {}, retrying in {}ms",
+                        attempt + 1,
+                        conversation_id,
+                        delay_ms
+                    );
+                    tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                    continue;
+                }
+                Err(e) => return Err(e), // Other error or max retries exceeded
+            }
+        }
 
         // 5. Add target agent as participant (ignore if already exists)
         let _ = self
