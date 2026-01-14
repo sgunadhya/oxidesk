@@ -3916,31 +3916,57 @@ impl Database {
         )
         .bind(id)
         .fetch_optional(&self.pool)
-        .await?;
+        .await.map_err(|e| {
+            ApiError::Internal(format!("Database error: {}", e))
+        })?;
 
         if let Some(row) = row {
-            let event_type_str: String = row.try_get("event_type")?;
-            let status_str: String = row.try_get("status")?;
+            let event_type_str: String = row.try_get("event_type").map_err(|e| {
+                ApiError::Internal(format!("Column parsing error event_type: {}", e))
+            })?;
+
+            let status_str: String = row.try_get("status").map_err(|e| {
+                ApiError::Internal(format!("Column parsing error status: {}", e))
+            })?;
+
+            let event_type = event_type_str.parse().map_err(|e: String| {
+                ApiError::Internal(format!("Event type parsing error: {}", e))
+            })?;
+
+            let status = status_str.parse().map_err(|e: String| {
+                ApiError::Internal(format!("Status parsing error: {}", e))
+            })?;
+
             Ok(Some(crate::models::SlaEvent {
-                id: row.try_get("id")?,
-                applied_sla_id: row.try_get("applied_sla_id")?,
-                event_type: event_type_str.parse().map_err(|e: String| {
-                    sqlx::Error::Decode(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        e,
-                    )))
+                id: row.try_get("id").map_err(|e| {
+                    ApiError::Internal(format!("Column parsing error id: {}", e))
                 })?,
-                status: status_str.parse().map_err(|e: String| {
-                    sqlx::Error::Decode(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        e,
-                    )))
+                applied_sla_id: row.try_get("applied_sla_id").map_err(|e| {
+                    ApiError::Internal(format!("Column parsing error applied_sla_id: {}", e))
                 })?,
-                deadline_at: row.try_get("deadline_at")?,
-                met_at: row.try_get("met_at")?,
-                breached_at: row.try_get("breached_at")?,
-                created_at: row.try_get("created_at")?,
-                updated_at: row.try_get("updated_at")?,
+                event_type,
+                status,
+                deadline_at: row.try_get("deadline_at").map_err(|e| {
+                    ApiError::Internal(format!("Column parsing error deadline_at: {}", e))
+                })?,
+                met_at: row
+                    .try_get::<Option<String>, _>("met_at")
+                    .or_else(|_| Ok::<_, sqlx::Error>(None))
+                    .map_err(|e| {
+                        ApiError::Internal(format!("Column parsing error met_at: {}", e))
+                    })?,
+                breached_at: row
+                    .try_get::<Option<String>, _>("breached_at")
+                    .or_else(|_| Ok::<_, sqlx::Error>(None))
+                    .map_err(|e| {
+                        ApiError::Internal(format!("Column parsing error breached_at: {}", e))
+                    })?,
+                created_at: row.try_get("created_at").map_err(|e| {
+                    ApiError::Internal(format!("Column parsing error created_at: {}", e))
+                })?,
+                updated_at: row.try_get("updated_at").map_err(|e| {
+                    ApiError::Internal(format!("Column parsing error updated_at: {}", e))
+                })?,
             }))
         } else {
             Ok(None)
@@ -4102,6 +4128,15 @@ impl Database {
 
     /// Mark SLA event as met
     pub async fn mark_sla_event_met(&self, event_id: &str, met_at: &str) -> ApiResult<()> {
+        // Feature 025: Validate status exclusivity before update
+        // Get existing event to check if it's already breached
+        let existing_event = self.get_sla_event(event_id).await?
+            .ok_or_else(|| ApiError::NotFound("SLA event not found".to_string()))?;
+
+        if existing_event.breached_at.is_some() {
+            return Err(ApiError::BadRequest("SLA event status is exclusive".to_string()));
+        }
+
         let now = chrono::Utc::now().to_rfc3339();
 
         sqlx::query(
@@ -4122,6 +4157,15 @@ impl Database {
         event_id: &str,
         breached_at: &str,
     ) -> ApiResult<()> {
+        // Feature 025: Validate status exclusivity before update
+        // Get existing event to check if it's already met
+        let existing_event = self.get_sla_event(event_id).await?
+            .ok_or_else(|| ApiError::NotFound("SLA event not found".to_string()))?;
+
+        if existing_event.met_at.is_some() {
+            return Err(ApiError::BadRequest("SLA event status is exclusive".to_string()));
+        }
+
         let now = chrono::Utc::now().to_rfc3339();
 
         sqlx::query(

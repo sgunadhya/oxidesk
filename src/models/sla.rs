@@ -132,6 +132,41 @@ impl SlaEvent {
             updated_at: now,
         }
     }
+
+    /// Validate SLA event status exclusivity (Feature 025: Mutual Exclusion Invariants)
+    /// FR-008: SLA event status is exclusive - cannot be both met and breached
+    pub fn validate_status_exclusive(&self) -> Result<(), String> {
+        if self.met_at.is_some() && self.breached_at.is_some() {
+            return Err("SLA event status is exclusive".to_string());
+        }
+
+        // Validate timestamp consistency with status
+        match self.status {
+            SlaEventStatus::Met => {
+                if self.met_at.is_none() {
+                    return Err("Met status requires met_at timestamp".to_string());
+                }
+                if self.breached_at.is_some() {
+                    return Err("SLA event status is exclusive".to_string());
+                }
+            }
+            SlaEventStatus::Breached => {
+                if self.breached_at.is_none() {
+                    return Err("Breached status requires breached_at timestamp".to_string());
+                }
+                if self.met_at.is_some() {
+                    return Err("SLA event status is exclusive".to_string());
+                }
+            }
+            SlaEventStatus::Pending => {
+                if self.met_at.is_some() || self.breached_at.is_some() {
+                    return Err("Pending status cannot have met_at or breached_at timestamps".to_string());
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
