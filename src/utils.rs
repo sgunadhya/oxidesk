@@ -12,6 +12,7 @@ use rand::{distributions::Alphanumeric, Rng};
 /// # Examples
 ///
 /// ```
+/// use oxidesk::utils::generate_reset_token;
 /// let token = generate_reset_token();
 /// assert_eq!(token.len(), 32);
 /// assert!(token.chars().all(|c| c.is_alphanumeric()));
