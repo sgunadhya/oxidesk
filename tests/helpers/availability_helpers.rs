@@ -37,6 +37,12 @@ pub async fn create_test_agent_with_status(
         last_login_at: None,
         last_activity_at: None,
         away_since: None,
+        api_key: None,
+        api_secret_hash: None,
+        api_key_description: None,
+        api_key_created_at: None,
+        api_key_last_used_at: None,
+        api_key_revoked_at: None,
     }
 }
 

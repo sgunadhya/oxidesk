@@ -207,6 +207,12 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         last_login_at: None,
         last_activity_at: None,
         away_since: None,
+        api_key: None,
+        api_secret_hash: None,
+        api_key_description: None,
+        api_key_created_at: None,
+        api_key_last_used_at: None,
+        api_key_revoked_at: None,
     };
     db.create_agent(&agent).await.expect("Failed to create agent");
 
@@ -247,6 +253,7 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         user,
         agent,
         roles: vec![role],
+        permissions: vec!["*".to_string()], // Admin has all permissions
         session,
         token: "test-token".to_string(),
     }
