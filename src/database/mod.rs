@@ -807,7 +807,7 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
                 tags: None,
-                priority: row.try_get::<Option<String>, _>("priority").ok().flatten(),
+                priority: row.try_get::<Option<String>, _>("priority").ok().flatten().map(crate::models::Priority::from),
             };
             Ok(Some(conversation))
         } else {
@@ -846,7 +846,7 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
                 tags: None,
-                priority: row.try_get::<Option<String>, _>("priority").ok().flatten(),
+                priority: row.try_get::<Option<String>, _>("priority").ok().flatten().map(crate::models::Priority::from),
             };
             Ok(Some(conversation))
         } else {
@@ -910,7 +910,7 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
                 tags: None,
-                priority: row.try_get::<Option<String>, _>("priority").ok().flatten(),
+                priority: row.try_get::<Option<String>, _>("priority").ok().flatten().map(crate::models::Priority::from),
             };
             Ok(Some(conversation))
         } else {
@@ -1037,7 +1037,7 @@ impl Database {
     pub async fn set_conversation_priority(
         &self,
         conversation_id: &str,
-        priority: &str,
+        priority: &crate::models::Priority,
     ) -> ApiResult<()> {
         let now = time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
@@ -1048,7 +1048,7 @@ impl Database {
              SET priority = ?, updated_at = ?
              WHERE id = ?"
         )
-        .bind(priority)
+        .bind(priority.to_string())
         .bind(&now)
         .bind(conversation_id)
         .execute(&self.pool)
@@ -1061,6 +1061,37 @@ impl Database {
         tracing::info!(
             "Set priority to '{}' for conversation {}",
             priority,
+            conversation_id
+        );
+
+        Ok(())
+    }
+
+    /// Clear conversation priority (set to null) - Feature 020
+    pub async fn clear_conversation_priority(
+        &self,
+        conversation_id: &str,
+    ) -> ApiResult<()> {
+        let now = time::OffsetDateTime::now_utc()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap();
+
+        sqlx::query(
+            "UPDATE conversations
+             SET priority = NULL, updated_at = ?
+             WHERE id = ?"
+        )
+        .bind(&now)
+        .bind(conversation_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Database error clearing conversation priority: {:?}", e);
+            ApiError::Internal(format!("Database error: {}", e))
+        })?;
+
+        tracing::info!(
+            "Cleared priority for conversation {}",
             conversation_id
         );
 

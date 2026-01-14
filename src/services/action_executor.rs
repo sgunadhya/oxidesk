@@ -118,15 +118,16 @@ impl ActionExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| ActionError::InvalidParameters("Missing 'priority' parameter".to_string()))?;
 
-        // Validate priority value
-        if !["Low", "Medium", "High", "Urgent"].contains(&priority) {
+        // Validate priority value (Feature 020: Only Low, Medium, High)
+        if !["Low", "Medium", "High"].contains(&priority) {
             return Err(ActionError::InvalidParameters(format!(
-                "Invalid priority value: {}. Must be one of: Low, Medium, High, Urgent",
+                "Invalid priority value: {}. Must be one of: Low, Medium, High",
                 priority
             )));
         }
 
-        self.db.set_conversation_priority(conversation_id, priority).await?;
+        let priority_enum = crate::models::Priority::from(priority.to_string());
+        self.db.set_conversation_priority(conversation_id, &priority_enum).await?;
 
         tracing::info!(
             "Set priority to '{}' for conversation {}",

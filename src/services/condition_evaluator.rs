@@ -109,7 +109,7 @@ impl ConditionEvaluator {
                 None => Value::Array(vec![]),
             }),
             "priority" => Ok(match &conversation.priority {
-                Some(p) => Value::String(p.clone()),
+                Some(p) => Value::String(p.to_string()),
                 None => Value::Null,
             }),
             "status" => Ok(Value::String(match conversation.status {
@@ -259,7 +259,7 @@ mod tests {
             updated_at: chrono::Utc::now().to_rfc3339(),
             version: 1,
             tags: Some(vec!["Bug".to_string()]),
-            priority: Some("High".to_string()),
+            priority: Some(crate::models::Priority::High),
         }
     }
 

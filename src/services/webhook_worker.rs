@@ -176,6 +176,22 @@ impl WebhookWorker {
                     "timestamp": timestamp,
                 }),
             ),
+            SystemEvent::ConversationPriorityChanged {
+                conversation_id,
+                previous_priority,
+                new_priority,
+                updated_by,
+                timestamp,
+            } => (
+                "conversation.priority_changed",
+                json!({
+                    "conversation_id": conversation_id,
+                    "previous_priority": previous_priority,
+                    "new_priority": new_priority,
+                    "updated_by": updated_by,
+                    "timestamp": timestamp,
+                }),
+            ),
             SystemEvent::MessageReceived {
                 message_id,
                 conversation_id,

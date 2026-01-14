@@ -155,7 +155,7 @@ impl MacroService {
             team_name,
             contact_email,
             conversation_status: conversation.status.to_string(),
-            conversation_priority: conversation.priority.clone(),
+            conversation_priority: conversation.priority.map(|p| p.to_string()),
         })
     }
 

@@ -58,6 +58,13 @@ pub enum SystemEvent {
         changed_by: String,
         timestamp: String, // ISO 8601
     },
+    ConversationPriorityChanged {
+        conversation_id: String,
+        previous_priority: Option<String>,
+        new_priority: Option<String>,
+        updated_by: String,
+        timestamp: String, // ISO 8601
+    },
     AgentAvailabilityChanged {
         agent_id: String,
         old_status: String,
