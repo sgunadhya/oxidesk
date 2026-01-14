@@ -752,6 +752,7 @@ impl Database {
             contact_id: row.try_get("contact_id")?,
             subject: row.try_get("subject").ok(),
             resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
             snoozed_until: row.try_get("snoozed_until").ok(),
             assigned_user_id: row.try_get("assigned_user_id").ok(),
             assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -777,7 +778,7 @@ impl Database {
     pub async fn get_conversation_by_id(&self, id: &str) -> ApiResult<Option<Conversation>> {
         let row = sqlx::query(
             "SELECT id, reference_number, status, inbox_id, contact_id, subject,
-                    resolved_at, snoozed_until, assigned_user_id, assigned_team_id,
+                    resolved_at, closed_at, snoozed_until, assigned_user_id, assigned_team_id,
                     assigned_at, assigned_by, created_at, updated_at, version, priority
              FROM conversations
              WHERE id = ?",
@@ -796,6 +797,7 @@ impl Database {
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
                 resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
                 assigned_user_id: row.try_get("assigned_user_id").ok(),
                 assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -834,6 +836,7 @@ impl Database {
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
                 resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
                 assigned_user_id: row.try_get("assigned_user_id").ok(),
                 assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -856,24 +859,26 @@ impl Database {
         id: &str,
         status: ConversationStatus,
         resolved_at: Option<String>,
+        closed_at: Option<String>,  // Feature 019
         snoozed_until: Option<String>,
     ) -> ApiResult<Conversation> {
-        // Optimistic locking not strictly enforced here as previous version isn't passed, 
+        // Optimistic locking not strictly enforced here as previous version isn't passed,
         // but can be added if we pass expected_version.
         // For now, simple update.
-        
+
         sqlx::query(
-            "UPDATE conversations 
-             SET status = ?, resolved_at = ?, snoozed_until = ?, version = version + 1
+            "UPDATE conversations
+             SET status = ?, resolved_at = ?, closed_at = ?, snoozed_until = ?, version = version + 1
              WHERE id = ?"
         )
         .bind(status.to_string())
         .bind(resolved_at)
+        .bind(closed_at)
         .bind(snoozed_until)
         .bind(id)
         .execute(&self.pool)
         .await?;
-        
+
         self.get_conversation_by_id(id).await?.ok_or_else(|| {
               crate::api::middleware::ApiError::NotFound("Conversation not found after update".to_string())
         })
@@ -895,6 +900,7 @@ impl Database {
                 status: ConversationStatus::from(row.try_get::<String, _>("status")?),
                 reference_number: row.try_get("reference_number")?,
                 resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
                 assigned_user_id: row.try_get("assigned_user_id").ok(),
                 assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -971,6 +977,7 @@ impl Database {
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
                 resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
                 assigned_user_id: row.try_get("assigned_user_id").ok(),
                 assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -2300,6 +2307,7 @@ impl Database {
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
                 resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
                 assigned_user_id: row.try_get("assigned_user_id").ok(),
                 assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -2355,6 +2363,7 @@ impl Database {
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
                 resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
                 assigned_user_id: row.try_get("assigned_user_id").ok(),
                 assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -2410,6 +2419,7 @@ impl Database {
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
                 resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
                 assigned_user_id: row.try_get("assigned_user_id").ok(),
                 assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -2798,6 +2808,7 @@ impl Database {
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
                 resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
                 snoozed_until: row.try_get("snoozed_until").ok(),
                 assigned_user_id: row.try_get("assigned_user_id").ok(),
                 assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -2885,6 +2896,7 @@ impl Database {
                     contact_id: row.try_get("contact_id")?,
                     subject: row.try_get("subject").ok(),
                     resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
                     snoozed_until: row.try_get("snoozed_until").ok(),
                     assigned_user_id: row.try_get("assigned_user_id").ok(),
                     assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -2948,6 +2960,7 @@ impl Database {
                     contact_id: row.try_get("contact_id")?,
                     subject: row.try_get("subject").ok(),
                     resolved_at: row.try_get("resolved_at").ok(),
+                closed_at: row.try_get("closed_at").ok(),
                     snoozed_until: row.try_get("snoozed_until").ok(),
                     assigned_user_id: row.try_get("assigned_user_id").ok(),
                     assigned_team_id: row.try_get("assigned_team_id").ok(),

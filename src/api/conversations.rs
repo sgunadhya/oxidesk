@@ -14,6 +14,18 @@ pub async fn create_conversation(
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
     Json(request): Json<CreateConversation>,
 ) -> ApiResult<impl IntoResponse> {
+    // Check if user has conversations:create permission
+    let has_create = crate::services::PermissionService::has_permission(
+        &auth_user.roles,
+        "conversations:create",
+    );
+
+    if !has_create {
+        return Err(ApiError::Forbidden(
+            "Missing permission: conversations:create".to_string(),
+        ));
+    }
+
     let conversation = conversation_service::create_conversation(
         &state.db,
         &auth_user,
@@ -30,6 +42,49 @@ pub async fn update_conversation_status(
     Path(id): Path<String>,
     Json(request): Json<UpdateStatusRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    // Check if user has conversations:update_all (admin access)
+    let has_update_all = crate::services::PermissionService::has_permission(
+        &auth_user.roles,
+        "conversations:update_all",
+    );
+
+    // Check if user has conversations:update_assigned (restricted access)
+    let has_update_assigned = crate::services::PermissionService::has_permission(
+        &auth_user.roles,
+        "conversations:update_assigned",
+    );
+
+    // User must have at least one of these permissions
+    if !has_update_all && !has_update_assigned {
+        return Err(ApiError::Forbidden(
+            "Missing permission: conversations:update_all or conversations:update_assigned".to_string(),
+        ));
+    }
+
+    // If user has update_assigned (not update_all), verify assignment
+    if !has_update_all && has_update_assigned {
+        // Get the conversation first to check assignment
+        let conversation = conversation_service::get_conversation(&state.db, &id).await?;
+
+        let is_assigned = conversation.assigned_user_id.as_ref() == Some(&auth_user.user.id)
+            || {
+                if let Some(team_id) = &conversation.assigned_team_id {
+                    // Check if user is member of assigned team
+                    let user_teams = state.db.get_user_teams(&auth_user.user.id).await?;
+                    user_teams.iter().any(|team| &team.id == team_id)
+                } else {
+                    false
+                }
+            };
+
+        if !is_assigned {
+            return Err(ApiError::Forbidden(format!(
+                "Conversation {} not assigned to you",
+                id
+            )));
+        }
+    }
+
     let conversation = conversation_service::update_conversation_status(
         &state.db,
         &id,

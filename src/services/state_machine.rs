@@ -48,6 +48,7 @@ pub fn validate_transition(
         (Open, Resolved) => Ok(()),
         (Snoozed, Open) => Ok(()),
         (Resolved, Open) => Ok(()),
+        (Resolved, Closed) => Ok(()),  // Feature 019: Allow closing resolved conversations
 
         // All other transitions are invalid
         _ => Err(TransitionError::InvalidTransition { from, to }),

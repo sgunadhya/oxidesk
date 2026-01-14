@@ -105,6 +105,7 @@ pub async fn create_test_conversation(
         contact_id: row.try_get("contact_id").unwrap(),
         subject: row.try_get("subject").ok(),
         resolved_at: row.try_get("resolved_at").ok(),
+        closed_at: row.try_get("closed_at").ok(),  // Feature 019
         snoozed_until: row.try_get("snoozed_until").ok(),
         assigned_user_id: row.try_get("assigned_user_id").ok(),
         assigned_team_id: row.try_get("assigned_team_id").ok(),
@@ -168,6 +169,7 @@ pub async fn create_snoozed_conversation(
         contact_id: row.try_get("contact_id").unwrap(),
         subject: row.try_get("subject").ok(),
         resolved_at: row.try_get("resolved_at").ok(),
+        closed_at: row.try_get("closed_at").ok(),  // Feature 019
         snoozed_until: row.try_get("snoozed_until").ok(),
         assigned_user_id: row.try_get("assigned_user_id").ok(),
         assigned_team_id: row.try_get("assigned_team_id").ok(),

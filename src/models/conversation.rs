@@ -58,6 +58,7 @@ pub struct Conversation {
     pub contact_id: String,
     pub subject: Option<String>,
     pub resolved_at: Option<String>, // ISO8601 string from DB
+    pub closed_at: Option<String>, // ISO8601 string from DB (Feature 019)
     pub snoozed_until: Option<String>, // ISO8601 string from DB
     pub assigned_user_id: Option<String>,
     pub assigned_team_id: Option<String>,
@@ -87,6 +88,7 @@ pub struct ConversationResponse {
     pub contact_id: String,
     pub subject: Option<String>,
     pub resolved_at: Option<String>,
+    pub closed_at: Option<String>, // Feature 019
     pub snoozed_until: Option<String>,
     pub assigned_user_id: Option<String>,
     pub assigned_team_id: Option<String>,
@@ -94,7 +96,7 @@ pub struct ConversationResponse {
     pub assigned_by: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub tags: Option<Vec<String>>,
+    pub tags: Option<Vec<String>>,  // Fixed: should match Conversation type
     pub priority: Option<String>,
 }
 
@@ -108,6 +110,7 @@ impl From<Conversation> for ConversationResponse {
             contact_id: conv.contact_id,
             subject: conv.subject,
             resolved_at: conv.resolved_at,
+            closed_at: conv.closed_at,  // Feature 019
             snoozed_until: conv.snoozed_until,
             assigned_user_id: conv.assigned_user_id,
             assigned_team_id: conv.assigned_team_id,

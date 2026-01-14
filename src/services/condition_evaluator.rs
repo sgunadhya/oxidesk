@@ -249,6 +249,7 @@ mod tests {
             contact_id: "contact-001".to_string(),
             subject: Some("Test".to_string()),
             resolved_at: None,
+            closed_at: None,  // Feature 019
             snoozed_until: None,
             assigned_user_id: None,
             assigned_team_id: None,
