@@ -25,11 +25,50 @@ pub struct AppState {
 }
 
 /// Extract and validate session token from Authorization header
+/// Also checks if agent was already authenticated via API key
 pub async fn require_auth(
     State(state): State<AppState>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
+    // Check if agent was already authenticated via API key
+    if let Some(agent) = request.extensions().get::<Agent>().cloned() {
+        // Agent authenticated via API key
+        // Get user and roles to build AuthenticatedUser
+        let user = state
+            .db
+            .get_user_by_id(&agent.user_id)
+            .await?
+            .ok_or(ApiError::Unauthorized)?;
+
+        let roles = state.db.get_user_roles(&user.id).await?;
+
+        // Compute permissions from all roles
+        let permissions = compute_permissions(&roles);
+
+        // Create a dummy session for API key auth (no actual session exists)
+        // Use a long duration since API keys don't expire like sessions
+        let session = Session::new_with_method(
+            user.id.clone(),
+            "api-key-auth".to_string(),
+            24 * 365, // 1 year (API keys don't expire)
+            AuthMethod::ApiKey,
+            None,
+        );
+
+        request.extensions_mut().insert(AuthenticatedUser {
+            user,
+            agent,
+            roles,
+            permissions,
+            session,
+            token: "api-key-auth".to_string(),
+        });
+
+        return Ok(next.run(request).await);
+    }
+
+    // Fall back to session-based auth
     let auth_header = request
         .headers()
         .get("Authorization")
@@ -83,6 +122,9 @@ pub async fn require_auth(
     // Get roles
     let roles = state.db.get_user_roles(&user.id).await?;
 
+    // Compute permissions from all roles
+    let permissions = compute_permissions(&roles);
+
     // Clone token before using it (to avoid borrow checker issues)
     let token_owned = token.to_string();
 
@@ -91,11 +133,25 @@ pub async fn require_auth(
         user,
         agent,
         roles,
+        permissions,
         session: session.clone(),
         token: token_owned,
     });
 
     Ok(next.run(request).await)
+}
+
+/// Compute unique permissions from all roles
+fn compute_permissions(roles: &[Role]) -> Vec<String> {
+    let mut permissions = std::collections::HashSet::new();
+
+    for role in roles {
+        for permission in &role.permissions {
+            permissions.insert(permission.clone());
+        }
+    }
+
+    permissions.into_iter().collect()
 }
 
 /// Check if user has required permission
@@ -127,6 +183,7 @@ pub struct AuthenticatedUser {
     pub user: User,
     pub agent: Agent,
     pub roles: Vec<Role>,
+    pub permissions: Vec<String>,
     pub session: Session,
     pub token: String,
 }

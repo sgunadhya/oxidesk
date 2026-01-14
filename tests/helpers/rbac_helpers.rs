@@ -54,6 +54,12 @@ pub async fn create_test_agent(db: &Database, email: &str, first_name: &str) -> 
         last_login_at: None,
         last_activity_at: None,
         away_since: None,
+        api_key: None,
+        api_secret_hash: None,
+        api_key_description: None,
+        api_key_created_at: None,
+        api_key_last_used_at: None,
+        api_key_revoked_at: None,
     };
     db.create_agent(&agent).await.expect("Failed to create agent");
 
@@ -99,10 +105,20 @@ pub async fn create_auth_user_with_roles(
         provider_name: None,
     };
 
+    // Compute permissions from all roles
+    let mut permissions_set = std::collections::HashSet::new();
+    for role in &roles {
+        for permission in &role.permissions {
+            permissions_set.insert(permission.clone());
+        }
+    }
+    let permissions: Vec<String> = permissions_set.into_iter().collect();
+
     AuthenticatedUser {
         user,
         agent,
         roles,
+        permissions,
         session,
         token: format!("test-token-{}", Uuid::new_v4()),
     }

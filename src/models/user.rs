@@ -72,6 +72,14 @@ pub struct Agent {
     pub last_login_at: Option<String>,
     pub last_activity_at: Option<String>,
     pub away_since: Option<String>,
+    // API Key Authentication fields (Feature 015)
+    pub api_key: Option<String>,
+    #[serde(skip_serializing)]
+    pub api_secret_hash: Option<String>,
+    pub api_key_description: Option<String>,
+    pub api_key_created_at: Option<String>,
+    pub api_key_last_used_at: Option<String>,
+    pub api_key_revoked_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,6 +235,12 @@ impl Agent {
             last_login_at: None,
             last_activity_at: None,
             away_since: None,
+            api_key: None,
+            api_secret_hash: None,
+            api_key_description: None,
+            api_key_created_at: None,
+            api_key_last_used_at: None,
+            api_key_revoked_at: None,
         }
     }
 }

@@ -659,6 +659,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/agents/:id", patch(api::agents::update_agent))
         .route("/api/agents/:id", delete(api::agents::delete_agent))
         .route("/api/agents/:id/password", post(api::agents::change_agent_password))
+        // API Key routes (Feature 015)
+        .route("/api/agents/:id/api-key", post(api::api_keys::generate_api_key_handler))
+        .route("/api/agents/:id/api-key", delete(api::api_keys::revoke_api_key_handler))
+        .route("/api/api-keys", get(api::api_keys::list_api_keys_handler))
         .route("/api/contacts", get(api::contacts::list_contacts))
         .route("/api/contacts", post(api::contacts::create_contact))
         .route("/api/contacts/:id", get(api::contacts::get_contact))
@@ -761,6 +765,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             api::middleware::require_auth,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            api::middleware::api_key_auth_middleware,
         ));
 
     // Build web routes (require auth via cookie)
@@ -904,11 +912,21 @@ async fn web_auth_middleware(
         _ => return Err(axum::response::Redirect::to("/login")),
     };
 
+    // Compute permissions from all roles
+    let mut permissions = std::collections::HashSet::new();
+    for role in &roles {
+        for permission in &role.permissions {
+            permissions.insert(permission.clone());
+        }
+    }
+    let permissions: Vec<String> = permissions.into_iter().collect();
+
     // Store authenticated user in request extensions
     request.extensions_mut().insert(api::middleware::AuthenticatedUser {
         user,
         agent,
         roles,
+        permissions,
         session,
         token,
     });

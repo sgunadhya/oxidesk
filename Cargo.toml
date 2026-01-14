@@ -30,6 +30,7 @@ uuid = { version = "1.6", features = ["serde", "v4"] }
 
 # Password hashing
 argon2 = "0.5"
+bcrypt = "0.15"
 
 # Email validation
 email_address = "0.2"
@@ -53,6 +54,7 @@ anyhow = "1.0"
 # Random number generation (for session tokens)
 rand = "0.8"
 hex = "0.4"
+base64 = "0.22"
 
 # Regular expressions (for duration parsing)
 regex = "1.10"

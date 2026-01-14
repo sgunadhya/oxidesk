@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub enum AuthMethod {
     Password,
     Oidc,
+    ApiKey,
 }
 
 impl Default for AuthMethod {
