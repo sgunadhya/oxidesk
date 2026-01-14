@@ -66,6 +66,7 @@ pub struct Agent {
     pub id: String,
     pub user_id: String,
     pub first_name: String,
+    pub last_name: Option<String>, // Feature 016: Added for agent creation
     #[serde(skip_serializing)]
     pub password_hash: String,
     pub availability_status: AgentAvailability,
@@ -100,12 +101,32 @@ pub struct ContactChannel {
 }
 
 // DTOs for API requests/responses
-#[derive(Debug, Deserialize)]
+
+/// Create Agent Request (Feature 016: User Creation)
+/// Administrator creates agent with automatically generated password
+#[derive(Debug, Clone, Deserialize)]
 pub struct CreateAgentRequest {
     pub email: String,
     pub first_name: String,
-    pub password: String,
-    pub role_ids: Vec<String>,
+    pub last_name: Option<String>,
+    pub role_id: Option<String>, // Optional, defaults to "Agent" role if not provided
+}
+
+/// Create Agent Response (Feature 016: User Creation)
+/// Returns agent details with plaintext password (shown only once)
+#[derive(Debug, Serialize)]
+pub struct CreateAgentResponse {
+    pub agent_id: String,
+    pub user_id: String,
+    pub email: String,
+    pub first_name: String,
+    pub last_name: Option<String>,
+    pub password: String, // Plaintext password - shown only once, never stored
+    pub password_note: String, // Warning message about one-time display
+    pub availability_status: String, // Always "offline" initially
+    pub enabled: bool, // Always true initially
+    pub role_id: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -225,11 +246,12 @@ impl User {
 }
 
 impl Agent {
-    pub fn new(user_id: String, first_name: String, password_hash: String) -> Self {
+    pub fn new(user_id: String, first_name: String, last_name: Option<String>, password_hash: String) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             user_id,
             first_name,
+            last_name,
             password_hash,
             availability_status: AgentAvailability::default(),
             last_login_at: None,

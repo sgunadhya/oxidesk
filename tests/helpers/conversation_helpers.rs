@@ -37,7 +37,7 @@ pub async fn create_test_contact(db: &Database, email: &str) -> Contact {
 pub async fn create_test_agent(db: &Database, email: &str, first_name: &str) -> Agent {
     let normalized_email = validate_and_normalize_email(email).expect("Invalid email");
     let user = User::new(normalized_email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), first_name.to_string(), "test-password-hash".to_string());
+    let agent = Agent::new(user.id.clone(), first_name.to_string(), None, "test-password-hash".to_string());
 
     db.create_user(&user).await.expect("Failed to create user");
     db.create_agent(&agent).await.expect("Failed to create agent");
@@ -202,6 +202,7 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         id: Uuid::new_v4().to_string(),
         user_id: user.id.clone(),
         first_name: "Test Agent".to_string(),
+        last_name: None,
         password_hash: "hash".to_string(),
         availability_status: oxidesk::models::AgentAvailability::Online,
         last_login_at: None,

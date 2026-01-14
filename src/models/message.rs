@@ -166,12 +166,21 @@ pub struct SendMessageRequest {
 }
 
 /// Request to receive an incoming message (webhook)
+///
+/// Feature 016: Supports automatic contact creation via from_header field.
+/// Either contact_id OR from_header must be provided.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IncomingMessageRequest {
     pub conversation_id: String,
     pub content: String,
-    pub contact_id: String,
+    /// Contact ID (if already known). If not provided, from_header must be present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contact_id: Option<String>,
     pub inbox_id: String,
+    /// Email header for automatic contact creation (Feature 016)
+    /// Format: "Display Name <email@example.com>" or just "email@example.com"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_header: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

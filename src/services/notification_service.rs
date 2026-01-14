@@ -532,13 +532,14 @@ mod tests {
         let user = User::new(format!("{}@test.com", username), UserType::Agent);
         test_db.db.create_user(&user).await.expect("Failed to create user");
 
-        let agent = Agent::new(user.id.clone(), username.to_string(), "hash".to_string());
+        let agent = Agent::new(user.id.clone(), username.to_string(), None, "hash".to_string());
         sqlx::query(
-            "INSERT INTO agents (id, user_id, first_name, password_hash, availability_status) VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO agents (id, user_id, first_name, last_name, password_hash, availability_status) VALUES (?, ?, ?, ?, ?, ?)"
         )
         .bind(&agent.id)
         .bind(&agent.user_id)
         .bind(&agent.first_name)
+        .bind(&agent.last_name)
         .bind(&agent.password_hash)
         .bind("offline")
         .execute(test_db.db.pool())

@@ -59,10 +59,18 @@ impl From<sqlx::Error> for ApiError {
         match err {
             sqlx::Error::RowNotFound => ApiError::NotFound("Resource not found".to_string()),
             sqlx::Error::Database(db_err) => {
-                // Check for unique constraint violations
+                // Check for unique constraint violations (Feature 016: Per-type email uniqueness)
                 let message = db_err.message();
                 if message.contains("UNIQUE") || message.contains("unique") {
-                    ApiError::Conflict("Email already exists".to_string())
+                    // Check for specific per-type email constraint violations (migration 058)
+                    if message.contains("idx_users_email_unique_agent") || message.contains("agent") {
+                        ApiError::Conflict("An agent with this email already exists".to_string())
+                    } else if message.contains("idx_users_email_unique_contact") || message.contains("contact") {
+                        ApiError::Conflict("A contact with this email already exists".to_string())
+                    } else {
+                        // Generic unique constraint violation
+                        ApiError::Conflict("Email already exists".to_string())
+                    }
                 } else {
                     ApiError::Internal(format!("Database error: {}", message))
                 }

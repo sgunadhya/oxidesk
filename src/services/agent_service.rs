@@ -1,14 +1,20 @@
 use crate::api::middleware::{ApiResult, ApiError, AuthenticatedUser};
 use crate::database::Database;
 use crate::models::*;
-use crate::services::{validate_and_normalize_email, validate_password_complexity, hash_password};
+use crate::services::{validate_and_normalize_email, hash_password, generate_random_password, validate_password_complexity};
 
-/// Create a new agent with roles
+/// Default Agent role ID (seeded in migration 002)
+const DEFAULT_AGENT_ROLE_ID: &str = "00000000-0000-0000-0000-000000000002";
+
+/// Create a new agent with auto-generated password (Feature 016: User Creation)
+///
+/// Administrator creates agent with randomly generated 16-character password.
+/// Password is returned once in response and must be saved by admin.
 pub async fn create_agent(
     db: &Database,
     auth_user: &AuthenticatedUser,
     request: CreateAgentRequest,
-) -> ApiResult<AgentResponse> {
+) -> ApiResult<CreateAgentResponse> {
     // Check permission (admin only)
     if !auth_user.is_admin() {
         return Err(ApiError::Forbidden(
@@ -21,60 +27,49 @@ pub async fn create_agent(
 
     // Check if email already exists for agents (per-type uniqueness)
     if let Some(_) = db.get_user_by_email_and_type(&email, &UserType::Agent).await? {
-        return Err(ApiError::Conflict("Email already exists".to_string()));
+        return Err(ApiError::Conflict("Email already exists for this user type".to_string()));
     }
 
-    // Validate password complexity
-    validate_password_complexity(&request.password)?;
+    // Generate random password (16 characters with mixed complexity)
+    let password = generate_random_password();
+    let password_hash = hash_password(&password)?;
 
-    // Validate at least one role (FR-007)
-    if request.role_ids.is_empty() {
-        return Err(ApiError::BadRequest(
-            "Agent must be assigned at least one role".to_string(),
-        ));
-    }
+    // Use provided role_id or default to Agent role
+    let role_id = request.role_id.as_deref().unwrap_or(DEFAULT_AGENT_ROLE_ID);
 
-    // Hash password
-    let password_hash = hash_password(&request.password)?;
+    // Verify role exists
+    let role = db.get_role_by_id(role_id).await?
+        .ok_or_else(|| ApiError::BadRequest(format!("Role not found: {}", role_id)))?;
 
-    // Create user
-    let user = User::new(email, UserType::Agent);
-    db.create_user(&user).await?;
+    // Create agent with role in transaction
+    let (agent_id, user_id) = db.create_agent_with_role(
+        &email,
+        &request.first_name,
+        request.last_name.as_deref(),
+        &password_hash,
+        role_id,
+    ).await?;
 
-    // Create agent
-    let agent = Agent::new(user.id.clone(), request.first_name.clone(), password_hash);
-    db.create_agent(&agent).await?;
+    // Get created user for timestamp
+    let user = db.get_user_by_id(&user_id).await?
+        .ok_or_else(|| ApiError::Internal("Failed to retrieve created user".to_string()))?;
 
-    // Assign roles
-    for role_id in &request.role_ids {
-        let user_role = UserRole::new(user.id.clone(), role_id.clone());
-        db.assign_role_to_user(&user_role).await?;
-    }
+    // Get agent details for created_at timestamp
+    let agent = db.get_agent_by_user_id(&user_id).await?
+        .ok_or_else(|| ApiError::Internal("Failed to retrieve created agent".to_string()))?;
 
-    // Get assigned roles for response
-    let roles = db.get_user_roles(&user.id).await?;
-
-    let role_responses: Vec<RoleResponse> = roles
-        .iter()
-        .map(|r| RoleResponse {
-            id: r.id.clone(),
-            name: r.name.clone(),
-            description: r.description.clone(),
-            permissions: r.permissions.clone(),
-            is_protected: r.is_protected,
-            created_at: r.created_at.clone(),
-            updated_at: r.updated_at.clone(),
-        })
-        .collect();
-
-    Ok(AgentResponse {
-        id: user.id.clone(),
-        email: user.email.clone(),
-        user_type: user.user_type.clone(),
-        first_name: agent.first_name.clone(),
-        roles: role_responses,
-        created_at: user.created_at.clone(),
-        updated_at: user.updated_at.clone(),
+    Ok(CreateAgentResponse {
+        agent_id,
+        user_id: user_id.clone(),
+        email,
+        first_name: request.first_name,
+        last_name: request.last_name,
+        password, // Plaintext password - shown only once
+        password_note: "IMPORTANT: Save this password now. It will not be shown again.".to_string(),
+        availability_status: agent.availability_status.to_string(),
+        enabled: true,
+        role_id: role.id.clone(),
+        created_at: user.created_at,
     })
 }
 

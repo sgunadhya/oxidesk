@@ -49,6 +49,7 @@ pub async fn create_test_agent(db: &Database, email: &str, first_name: &str) -> 
         id: Uuid::new_v4().to_string(),
         user_id: user.id.clone(),
         first_name: first_name.to_string(),
+        last_name: None,
         password_hash: "$argon2id$v=19$m=19456,t=2,p=1$test$test".to_string(), // test hash
         availability_status: oxidesk::models::AgentAvailability::Online,
         last_login_at: None,
