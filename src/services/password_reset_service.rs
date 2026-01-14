@@ -11,7 +11,7 @@ use crate::{
     database::Database,
     models::*,
     services::{
-        email_service::{send_password_reset_email, SmtpConfig},
+        password_reset_email_service::{send_password_reset_email, SmtpConfig},
         auth::{validate_password_complexity, hash_password},
     },
     utils::generate_reset_token,

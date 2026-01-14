@@ -1,3 +1,6 @@
+/// Utility modules
+pub mod encryption;
+
 /// Utility functions for password reset feature
 use rand::{distributions::Alphanumeric, Rng};
 
