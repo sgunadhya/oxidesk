@@ -1,6 +1,6 @@
 # oxidesk Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-01-14 (016-user-creation)
+Auto-generated from all feature plans. Last updated: 2026-01-14 (017-password-reset)
 
 ## Active Technologies
 
@@ -11,6 +11,7 @@ Auto-generated from all feature plans. Last updated: 2026-01-14 (016-user-creati
 - reqwest 0.11 (async HTTP client with rustls-tls), hmac 0.12 + sha2 0.10 (HMAC-SHA256 signing), hex 0.4 (signature encoding), exponential backoff retry (1min, 2min, 4min, 8min, 16min) (012-webhook-system)
 - bcrypt 0.15 (secret hashing with cost factor 12), rand 0.8 (cryptographic random generation for API keys/secrets), Axum middleware (API key authentication via X-API-Key/X-API-Secret headers or HTTP Basic Auth) (015-api-key-auth)
 - regex 1.10 (email display name parsing for contact creation), rand 0.8 (16-character random password generation with mixed complexity), partial unique indexes (email uniqueness per user type), database transactions (atomic user + agent/contact + channel creation) (016-user-creation)
+- lettre 0.11 (SMTP email client for password reset emails), rand 0.8 (cryptographically secure 32-char alphanumeric token generation), chrono 0.4 (timestamp handling for 1-hour token expiry), database-based rate limiting (5 requests/hour per email), synchronous session destruction in transaction (017-password-reset)
 
 ## Project Structure
 
@@ -38,6 +39,7 @@ Rust 1.75+: Follow standard conventions
 - 012-webhook-system: Added webhook system for external integrations (event subscription model, HMAC-SHA256 payload signing, HTTP delivery with exponential backoff retry, test webhooks, delivery logging)
 - 015-api-key-auth: Added API key authentication for programmatic access (32-char API keys, 64-char secrets with bcrypt hashing, authentication via custom headers or HTTP Basic Auth, immediate revocation support)
 - 016-user-creation: Added user creation flows (admin creates agents with random passwords, automatic contact creation from messages, email uniqueness per user type with partial indexes, display name parsing from email headers)
+- 017-password-reset: Added password reset system (secure 32-char token generation via email, 1-hour token expiry enforcement, single-use tokens, SMTP email delivery with lettre, email enumeration prevention, database-based rate limiting at 5 req/hour, synchronous atomic transaction for password update + token marking + session destruction)
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

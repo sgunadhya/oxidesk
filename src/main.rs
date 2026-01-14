@@ -796,6 +796,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/auth/oidc/providers", get(api::oidc_providers::list_enabled_oidc_providers))
         .route("/api/auth/oidc/:provider_name/login", get(api::auth::oidc_login))
         .route("/api/auth/oidc/callback", get(api::auth::oidc_callback))
+        // Password Reset routes (Feature 017) - Public endpoints
+        .route("/api/password-reset/request", post(api::password_reset::request_password_reset))
+        .route("/api/password-reset/reset", post(api::password_reset::reset_password))
         .merge(protected)
         .merge(web_protected)
         .merge(api::messages::routes())

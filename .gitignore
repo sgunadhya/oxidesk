@@ -52,3 +52,4 @@ target/doc/
 # Uncomment if this is a library
 # Cargo.lock
 *.db-journal
+.aider*

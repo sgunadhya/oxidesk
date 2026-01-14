@@ -32,6 +32,8 @@ pub mod permission_service;
 pub mod api_key_service;
 pub mod password_service;
 pub mod user_service;
+pub mod email_service;
+pub mod password_reset_service;
 
 pub use auth::*;
 pub use email_validator::*;

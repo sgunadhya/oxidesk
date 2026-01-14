@@ -377,6 +377,17 @@ HOST=0.0.0.0
 PORT=8080
 SESSION_DURATION_HOURS=24
 RUST_LOG=oxidesk=info,tower_http=warn
+
+# Password Reset / SMTP Email (required for password reset feature)
+SMTP_HOST=smtp.example.com           # SMTP server hostname
+SMTP_PORT=587                        # SMTP port (587 for TLS, 465 for SSL)
+SMTP_USERNAME=noreply@example.com    # SMTP authentication username
+SMTP_PASSWORD=smtp_password          # SMTP authentication password
+SMTP_FROM_EMAIL=noreply@example.com  # Sender email address
+SMTP_FROM_NAME=Oxidesk Support       # Sender name in email
+RESET_PASSWORD_BASE_URL=http://localhost:3000  # Base URL for reset links
+PASSWORD_RESET_TOKEN_EXPIRY=3600     # Token expiry in seconds (default: 1 hour)
+PASSWORD_RESET_RATE_LIMIT=5          # Max requests per hour per email
 ```
 
 ### Build & Run
