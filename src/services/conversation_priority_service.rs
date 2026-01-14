@@ -108,7 +108,7 @@ impl<'a> ConversationPriorityService<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+
 
     #[test]
     fn test_validate_priority_values() {

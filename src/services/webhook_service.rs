@@ -198,7 +198,7 @@ mod tests {
     #[tokio::test]
     async fn test_service_creation() {
         let db = Database::connect("sqlite::memory:").await.unwrap();
-        let service = WebhookService::new(db);
+        let _service = WebhookService::new(db);
 
         // Verify service is created
         assert!(true);

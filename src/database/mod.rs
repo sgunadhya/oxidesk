@@ -788,11 +788,11 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
-            let status_str: String = row.try_get("status")?;
+
             let conversation = Conversation {
                 id: row.try_get("id")?,
                 reference_number: row.try_get("reference_number")?,
-                status: ConversationStatus::from(status_str),
+                status: row.try_get("status")?,
                 inbox_id: row.try_get("inbox_id")?,
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
@@ -827,11 +827,11 @@ impl Database {
         .await?;
 
         if let Some(row) = row {
-            let status_str: String = row.try_get("status")?;
+
             let conversation = Conversation {
                 id: row.try_get("id")?,
                 reference_number: row.try_get("reference_number")?,
-                status: ConversationStatus::from(status_str),
+                status: row.try_get("status")?,
                 inbox_id: row.try_get("inbox_id")?,
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
@@ -897,7 +897,7 @@ impl Database {
                 inbox_id: row.try_get("inbox_id")?,
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
-                status: ConversationStatus::from(row.try_get::<String, _>("status")?),
+                status: row.try_get("status")?,
                 reference_number: row.try_get("reference_number")?,
                 resolved_at: row.try_get("resolved_at").ok(),
                 closed_at: row.try_get("closed_at").ok(),
@@ -929,7 +929,7 @@ impl Database {
     ) -> ApiResult<Vec<Conversation>> {
         let mut query = String::from(
             "SELECT id, reference_number, status, inbox_id, contact_id, subject,
-                    resolved_at, snoozed_until, created_at, updated_at, version
+                    resolved_at, snoozed_until, created_at, updated_at, version, priority
              FROM conversations
              WHERE 1=1"
         );
@@ -968,11 +968,11 @@ impl Database {
         let mut conversations = Vec::new();
         for row in rows {
             use sqlx::Row;
-            let status_str: String = row.try_get("status")?;
+
             let conversation = Conversation {
                 id: row.try_get("id")?,
                 reference_number: row.try_get("reference_number")?,
-                status: ConversationStatus::from(status_str),
+                status: row.try_get("status")?,
                 inbox_id: row.try_get("inbox_id")?,
                 contact_id: row.try_get("contact_id")?,
                 subject: row.try_get("subject").ok(),
@@ -987,7 +987,7 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
                 version: row.try_get("version")?,
                 tags: None,
-                priority: None,
+                priority: row.try_get::<Option<String>, _>("priority").ok().flatten().map(crate::models::Priority::from),
             };
             conversations.push(conversation);
         }

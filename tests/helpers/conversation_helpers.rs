@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use oxidesk::models::conversation::{Conversation, ConversationStatus};
 use oxidesk::models::{User, UserType, Contact};
 use oxidesk::services::validate_and_normalize_email;

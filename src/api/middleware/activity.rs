@@ -9,7 +9,7 @@ use crate::api::middleware::AppState;
 /// Updates last_activity_at timestamp for agents
 pub async fn track_activity_middleware(
     State(state): State<AppState>,
-    mut request: Request,
+    request: Request,
     next: Next,
 ) -> Response {
     // Check if this is an authenticated agent request

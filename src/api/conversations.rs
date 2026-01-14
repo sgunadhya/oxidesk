@@ -7,7 +7,7 @@ use serde::Deserialize;
 use crate::api::middleware::{AppState, ApiError, ApiResult, AuthenticatedUser};
 use crate::models::{
     CreateConversation, UpdateStatusRequest, ConversationStatus, ConversationListResponse, PaginationMetadata,
-    UpdatePriorityRequest, Priority
+    UpdatePriorityRequest,
 };
 use crate::services::conversation_service;
 

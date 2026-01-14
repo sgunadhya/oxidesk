@@ -10,7 +10,7 @@ use std::sync::Arc;
 pub struct AssignmentService {
     db: Database,
     event_bus: EventBus,
-    notification_service: NotificationService,
+    _notification_service: NotificationService,
     connection_manager: Arc<dyn ConnectionManager>,
     sla_service: Option<SlaService>,
 }
@@ -25,7 +25,7 @@ impl AssignmentService {
         Self {
             db,
             event_bus,
-            notification_service,
+            _notification_service: notification_service,
             connection_manager,
             sla_service: None,
         }
@@ -56,7 +56,7 @@ impl AssignmentService {
         }
 
         // 2. Verify conversation exists
-        let conversation = self
+        let _conversation = self
             .db
             .get_conversation_by_id(conversation_id)
             .await?
@@ -145,7 +145,7 @@ impl AssignmentService {
         }
 
         // 2. Verify conversation exists
-        let conversation = self
+        let _conversation = self
             .db
             .get_conversation_by_id(conversation_id)
             .await?
@@ -154,7 +154,7 @@ impl AssignmentService {
             })?;
 
         // 3. Verify target agent exists
-        let target_agent = self
+        let _target_agent = self
             .db
             .get_agent_by_user_id(target_agent_id)
             .await?
@@ -243,7 +243,7 @@ impl AssignmentService {
         }
 
         // 2. Verify conversation exists
-        let conversation = self
+        let _conversation = self
             .db
             .get_conversation_by_id(conversation_id)
             .await?
@@ -252,7 +252,7 @@ impl AssignmentService {
             })?;
 
         // 3. Verify team exists
-        let team = self.db.get_team_by_id(team_id).await?.ok_or_else(|| {
+        let _team = self.db.get_team_by_id(team_id).await?.ok_or_else(|| {
             ApiError::NotFound(format!("Team {} not found", team_id))
         })?;
 

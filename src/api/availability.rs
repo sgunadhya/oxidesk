@@ -1,13 +1,13 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+
     Json,
 };
 use serde::Deserialize;
 use crate::{
     api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
     models::*,
-    services::*,
+
 };
 
 /// POST /api/agents/:id/availability - Set agent availability

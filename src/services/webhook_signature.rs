@@ -226,7 +226,7 @@ mod tests {
         // Generated using: echo -n '{"test":"value"}' | openssl dgst -sha256 -hmac 'secret'
         let payload = r#"{"test":"value"}"#;
         let secret = "secret";
-        let expected = "sha256=e5b1b0ef0e4f7c2ff8c74c6f89f5e7d6a3c2b1f0e9d8c7b6a5f4e3d2c1b0a9f8";
+        let _expected = "sha256=e5b1b0ef0e4f7c2ff8c74c6f89f5e7d6a3c2b1f0e9d8c7b6a5f4e3d2c1b0a9f8";
 
         let signature = sign_payload(payload, secret);
 

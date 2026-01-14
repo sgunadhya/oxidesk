@@ -1025,7 +1025,7 @@ async fn test_full_sla_application_workflow() {
 
     // Verify business hours were applied (deadlines should skip non-working hours)
     let first_response_deadline = chrono::DateTime::parse_from_rfc3339(&applied_sla.first_response_deadline_at).unwrap();
-    let base = chrono::DateTime::parse_from_rfc3339(base_timestamp).unwrap();
+    let _base = chrono::DateTime::parse_from_rfc3339(base_timestamp).unwrap();
 
     // 2 hours during business hours should still be on Monday
     assert_eq!(first_response_deadline.weekday(), chrono::Weekday::Mon);

@@ -4,7 +4,7 @@ use helpers::*;
 use oxidesk::{
     models::{
         AutomationRule, RuleType, RuleCondition, RuleAction, ActionType, ComparisonOperator,
-        ConversationStatus,
+        ConversationStatus, Priority,
     },
     services::automation_service::{AutomationService, AutomationConfig},
 };
@@ -97,7 +97,7 @@ async fn test_multiple_rules_priority_order() {
 
     // Verify: Highest priority rule (rule1) should win (executes last)
     let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
-    assert_eq!(updated.priority, Some("High".to_string()));
+    assert_eq!(updated.priority, Some(Priority::High));
 
     // Verify: All three rules were evaluated
     let logs1 = db.get_rule_evaluation_logs_by_rule(&rule1.id, 10, 0).await.unwrap();
@@ -437,7 +437,7 @@ async fn test_condition_timeout_handling() {
     // Setup: Create a rule with deeply nested conditions
     // This creates a complex evaluation that might take time
     let mut nested_conditions = vec![];
-    for i in 0..50 {
+    for _i in 0..50 {
         nested_conditions.push(RuleCondition::Simple {
             attribute: "status".to_string(),
             comparison: ComparisonOperator::Equals,

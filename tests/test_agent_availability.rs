@@ -202,7 +202,7 @@ async fn test_conversations_remain_assigned_on_away() {
     // Create contact
     let pool = db.pool();
     let contact_id = "contact-005";
-    let now = chrono::Utc::now().to_rfc3339();
+    let _now = chrono::Utc::now().to_rfc3339();
     sqlx::query("INSERT INTO contacts (id, user_id, first_name) VALUES (?, ?, 'Contact Five')")
         .bind(contact_id)
         .bind(contact_user_id)
@@ -613,7 +613,7 @@ async fn test_only_away_agents_transition_to_offline() {
 
     let user_id_online = "test-user-019";
     create_test_user(&db, user_id_online, "online19@example.com").await;
-    let agent_online = create_test_agent_with_status(&db, user_id_online, "Online Agent", AgentAvailability::Online).await;
+    let _agent_online = create_test_agent_with_status(&db, user_id_online, "Online Agent", AgentAvailability::Online).await;
 
     // Run max idle check
     let affected = availability_service

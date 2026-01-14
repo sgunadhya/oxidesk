@@ -113,7 +113,7 @@ impl AuthRateLimiter {
         let mut limiters = self.limiters.write().await;
 
         // Keep only limiters that are still rate limiting
-        limiters.retain(|email, limiter| {
+        limiters.retain(|_email, limiter| {
             // If check succeeds, the limiter has expired and can be removed
             // We need to drop the lock temporarily
             let result = limiter.check();
@@ -147,7 +147,7 @@ impl RateLimitError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::sleep;
+
 
     #[tokio::test]
     async fn test_rate_limiter_allows_within_limit() {

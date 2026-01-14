@@ -8,6 +8,7 @@ use oxidesk::models::{
 };
 
 // Helper to create test user (agent or contact)
+#[allow(dead_code)]
 async fn create_test_user(db: &Database, email: &str, user_type: UserType) -> User {
     let is_contact = matches!(user_type, UserType::Contact);
 
@@ -537,7 +538,7 @@ async fn test_e2e_incoming_message_flow() {
     let conversation_id = "test_conv_456";
 
     // Create message service
-    let message_service = MessageService::new(db.clone());
+    let _message_service = MessageService::new(db.clone());
 
     // Simulate incoming message via webhook
     let request = IncomingMessageRequest {
@@ -571,7 +572,7 @@ async fn test_e2e_outgoing_message_flow() {
     let delivery_service = DeliveryService::new(db.clone(), provider);
 
     // Create message service with delivery
-    let message_service = MessageService::with_delivery(db.clone(), delivery_service);
+    let _message_service = MessageService::with_delivery(db.clone(), delivery_service);
 
     // Agent sends message
     let agent_id = "agent_123";

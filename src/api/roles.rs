@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use crate::{
-    api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
+    api::middleware::{ApiResult, AppState, AuthenticatedUser},
     models::*,
 };
 

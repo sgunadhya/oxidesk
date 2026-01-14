@@ -2,10 +2,7 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{
-        AutomationRule, RuleType, RuleCondition, RuleAction, ActionType, ComparisonOperator,
-        ConversationStatus,
-    },
+    models::{RuleAction, ActionType, ConversationStatus, Priority},
     services::action_executor::ActionExecutor,
 };
 use serde_json::json;
@@ -40,7 +37,7 @@ async fn test_execute_set_priority_action() {
 
     // Verify priority was set
     let updated_conv = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
-    assert_eq!(updated_conv.priority, Some("High".to_string()));
+    assert_eq!(updated_conv.priority, Some(Priority::High));
 
     teardown_test_db(test_db).await;
 }

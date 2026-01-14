@@ -1,5 +1,5 @@
-use oxidesk::models::conversation::{Conversation, ConversationStatus, CreateConversation};
-use oxidesk::models::user::Contact;
+use oxidesk::models::conversation::ConversationStatus;
+
 
 mod helpers;
 use helpers::*;

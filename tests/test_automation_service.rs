@@ -4,7 +4,7 @@ use helpers::*;
 use oxidesk::{
     models::{
         AutomationRule, RuleType, RuleCondition, RuleAction, ActionType, ComparisonOperator,
-        ConversationStatus,
+        ConversationStatus, Priority,
     },
     services::automation_service::{AutomationService, AutomationConfig},
 };
@@ -60,7 +60,7 @@ async fn test_rule_matching_by_event_type() {
 
     // Verify action was executed
     let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
-    assert_eq!(updated.priority, Some("High".to_string()));
+    assert_eq!(updated.priority, Some(Priority::High));
 
     teardown_test_db(test_db).await;
 }
@@ -141,7 +141,7 @@ async fn test_priority_based_rule_ordering() {
 
     // Verify high priority rule's action was applied (executed last)
     let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
-    assert_eq!(updated.priority, Some("High".to_string()));
+    assert_eq!(updated.priority, Some(Priority::High));
 
     teardown_test_db(test_db).await;
 }
@@ -248,7 +248,7 @@ async fn test_condition_true_executes_action() {
 
     // Verify action was executed
     let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
-    assert_eq!(updated.priority, Some("Medium".to_string()));
+    assert_eq!(updated.priority, Some(Priority::Medium));
 
     teardown_test_db(test_db).await;
 }
@@ -486,7 +486,7 @@ async fn test_multiple_rules_matching_same_event() {
 
     // Verify both actions were executed
     let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
-    assert_eq!(updated.priority, Some("Medium".to_string()));
+    assert_eq!(updated.priority, Some(Priority::Medium));
     assert_eq!(updated.status, ConversationStatus::Resolved);
 
     // Verify both logs were created

@@ -1,6 +1,6 @@
 use openidconnect::{
     core::{
-        CoreAuthenticationFlow, CoreClient, CoreProviderMetadata, CoreResponseType,
+        CoreAuthenticationFlow, CoreClient, CoreProviderMetadata,
     },
     reqwest::async_http_client,
     AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, PkceCodeChallenge,

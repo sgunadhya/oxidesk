@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use oxidesk::database::Database;
 use oxidesk::models::{User, UserType, Agent, Role};
 use oxidesk::api::middleware::AuthenticatedUser;

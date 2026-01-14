@@ -4,10 +4,10 @@ use crate::{
     events::{EventBus, SystemEvent},
     models::*,
 };
-use chrono::{Datelike, Timelike, Utc};
+use chrono::Timelike;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{error, info};
+use tracing::info;
 
 /// Service for managing SLA policies, applied SLAs, and SLA events
 pub struct SlaService {

@@ -1,6 +1,6 @@
 use crate::models::conversation::ConversationStatus;
 use tokio::sync::broadcast;
-use uuid::Uuid;
+
 
 /// System events that can trigger automation rules
 #[derive(Debug, Clone)]

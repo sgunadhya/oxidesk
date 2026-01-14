@@ -49,6 +49,25 @@ impl sqlx::Type<sqlx::Sqlite> for ConversationStatus {
     }
 }
 
+impl sqlx::Type<sqlx::Any> for ConversationStatus {
+    fn type_info() -> sqlx::any::AnyTypeInfo {
+        <String as sqlx::Type<sqlx::Any>>::type_info()
+    }
+
+    fn compatible(ty: &sqlx::any::AnyTypeInfo) -> bool {
+        <String as sqlx::Type<sqlx::Any>>::compatible(ty)
+    }
+}
+
+impl<'r> sqlx::Decode<'r, sqlx::Any> for ConversationStatus {
+    fn decode(value: sqlx::any::AnyValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let s = <String as sqlx::Decode<sqlx::Any>>::decode(value)?;
+        Ok(ConversationStatus::from(s))
+    }
+}
+
+
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum Priority {
@@ -99,6 +118,23 @@ impl sqlx::Type<sqlx::Sqlite> for Priority {
         <String as sqlx::Type<sqlx::Sqlite>>::type_info()
     }
 }
+
+impl sqlx::Type<sqlx::Any> for Priority {
+    fn type_info() -> sqlx::any::AnyTypeInfo {
+        <String as sqlx::Type<sqlx::Any>>::type_info()
+    }
+
+
+}
+
+impl<'r> sqlx::Decode<'r, sqlx::Any> for Priority {
+    fn decode(value: sqlx::any::AnyValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let s = <String as sqlx::Decode<sqlx::Any>>::decode(value)?;
+        Ok(Priority::from(s))
+    }
+}
+
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Conversation {

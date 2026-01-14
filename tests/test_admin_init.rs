@@ -102,7 +102,7 @@ async fn test_admin_email_uniqueness_per_type() {
 #[tokio::test]
 async fn test_admin_initialization_validates_password_complexity() {
     let test_db = setup_test_db().await;
-    let db = test_db.db();
+    let _db = test_db.db();
 
     // Try with weak password
     let weak_passwords = vec![

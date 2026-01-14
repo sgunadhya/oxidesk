@@ -4,7 +4,7 @@ use crate::{
     models::*,
 };
 use regex::Regex;
-use std::sync::Arc;
+
 use time::OffsetDateTime;
 
 /// Context for variable substitution

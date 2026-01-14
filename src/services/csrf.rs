@@ -73,7 +73,7 @@ pub fn method_requires_csrf(method: &str, validate_get: bool) -> bool {
 /// It expects the authenticated user extension to be present (from auth middleware).
 pub async fn csrf_middleware(
     headers: HeaderMap,
-    mut request: Request,
+    request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
     use crate::api::middleware::AuthenticatedUser;
