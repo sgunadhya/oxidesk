@@ -19,6 +19,7 @@ pub mod oidc_provider;
 pub mod auth_event;
 pub mod oidc_state;
 pub mod api_key;
+pub mod email;
 
 pub use user::*;
 pub use role::*;
@@ -41,3 +42,4 @@ pub use oidc_provider::*;
 pub use auth_event::*;
 pub use oidc_state::*;
 pub use api_key::*;
+pub use email::*;

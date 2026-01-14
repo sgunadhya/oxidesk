@@ -775,6 +775,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/notifications/stream", get(api::notifications::notification_stream))
         .route("/api/notifications/:id/read", put(api::notifications::mark_notification_as_read))
         .route("/api/notifications/read-all", put(api::notifications::mark_all_notifications_as_read))
+        // Inbox email configuration routes (Feature 021)
+        .route("/api/inboxes/:inbox_id/email-config", post(api::inbox_email_configs::create_inbox_email_config))
+        .route("/api/inboxes/:inbox_id/email-config", get(api::inbox_email_configs::get_inbox_email_config))
+        .route("/api/inboxes/:inbox_id/email-config", put(api::inbox_email_configs::update_inbox_email_config))
+        .route("/api/inboxes/:inbox_id/email-config", delete(api::inbox_email_configs::delete_inbox_email_config))
+        .route("/api/inboxes/email-config/test", post(api::inbox_email_configs::test_inbox_email_config))
         // Webhook routes (admin only)
         .route("/api/webhooks", post(api::webhooks::create_webhook))
         .route("/api/webhooks", get(api::webhooks::list_webhooks))
@@ -854,6 +860,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
+
+    // Spawn email polling worker (Feature 021)
+    let attachment_storage_path = std::env::var("ATTACHMENT_STORAGE_PATH")
+        .unwrap_or_else(|_| "./attachments".to_string());
+    std::fs::create_dir_all(&attachment_storage_path)?;
+    let _email_polling_handle = oxidesk::spawn_email_polling_worker(
+        db.clone(),
+        attachment_storage_path,
+    );
+    tracing::info!("Email polling worker started");
 
     // Start server
     let addr = config.server_address();

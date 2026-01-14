@@ -19,5 +19,6 @@ pub mod webhooks;
 pub mod oidc_providers;
 pub mod api_keys;
 pub mod password_reset;
+pub mod inbox_email_configs;
 
 pub use middleware::*;
