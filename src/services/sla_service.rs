@@ -411,18 +411,16 @@ impl SlaService {
         _contact_id: &str,
         message_timestamp: &str,
     ) -> ApiResult<()> {
-        // Get applied SLA for this conversation
-        let applied_sla = match self
+        // Get applied SLA for this conversation (must be applied before creating events)
+        let applied_sla = self
             .db
             .get_applied_sla_by_conversation(conversation_id)
             .await?
-        {
-            Some(sla) => sla,
-            None => {
-                // No SLA applied to this conversation
-                return Ok(());
-            }
-        };
+            .ok_or_else(|| {
+                ApiError::BadRequest(
+                    "SLA must be applied before event creation".to_string()
+                )
+            })?;
 
         // Get the SLA policy to know the next_response_time
         let policy = self
