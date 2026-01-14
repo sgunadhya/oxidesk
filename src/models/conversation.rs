@@ -160,6 +160,18 @@ pub struct CreateConversation {
     pub subject: Option<String>,
 }
 
+impl CreateConversation {
+    /// Validate cardinality invariants for conversation creation
+    /// Feature 023: Cardinality Invariants
+    pub fn validate(&self) -> Result<(), String> {
+        // FR-004, FR-005, FR-006: Conversation must have exactly one contact
+        if self.contact_id.trim().is_empty() {
+            return Err("Conversation must have exactly one contact".to_string());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationResponse {
     pub id: String,

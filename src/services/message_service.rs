@@ -84,10 +84,11 @@ impl MessageService {
                 ))
             })?;
 
-        // Contact ID must be resolved by this point (Feature 016)
+        // Feature 023: Contact ID must be resolved by this point (cardinality invariant)
+        // FR-007, FR-008: Message must have exactly one sender
         let contact_id = request
             .contact_id
-            .ok_or_else(|| ApiError::BadRequest("contact_id is required".to_string()))?;
+            .ok_or_else(|| ApiError::BadRequest("Message must have exactly one sender".to_string()))?;
 
         // Create incoming message
         let message =
