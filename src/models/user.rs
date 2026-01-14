@@ -243,6 +243,15 @@ impl User {
             updated_at: now,
         }
     }
+
+    /// Validate user type immutability (Feature 025: Mutual Exclusion Invariants)
+    /// FR-004: User type is immutable after creation
+    pub fn validate_type_immutable(&self, new_type: &UserType) -> Result<(), String> {
+        if std::mem::discriminant(&self.user_type) != std::mem::discriminant(new_type) {
+            return Err("User type is immutable after creation".to_string());
+        }
+        Ok(())
+    }
 }
 
 impl Agent {

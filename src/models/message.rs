@@ -152,6 +152,15 @@ impl Message {
         }
         Ok(())
     }
+
+    /// Validate message type immutability (Feature 025: Mutual Exclusion Invariants)
+    /// FR-012: Message type cannot be changed after creation
+    pub fn validate_type_immutable(&self, new_type: &MessageType) -> Result<(), String> {
+        if std::mem::discriminant(&self.message_type) != std::mem::discriminant(new_type) {
+            return Err("Message type cannot be changed after creation".to_string());
+        }
+        Ok(())
+    }
 }
 
 /// Request to send a message
