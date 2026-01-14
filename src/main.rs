@@ -962,7 +962,7 @@ async fn initialize_admin(db: &Database, config: &Config) -> Result<(), ApiError
     db.create_user(&user).await?;
 
     // Create agent
-    let agent = Agent::new(user.id.clone(), "Admin".to_string(), password_hash);
+    let agent = Agent::new(user.id.clone(), "Admin".to_string(), None, password_hash);
     db.create_agent(&agent).await?;
 
     // Get Admin role

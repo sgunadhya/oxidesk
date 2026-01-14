@@ -14,7 +14,7 @@ pub async fn create_agent(
     State(state): State<AppState>,
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
     Json(request): Json<CreateAgentRequest>,
-) -> ApiResult<(StatusCode, Json<AgentResponse>)> {
+) -> ApiResult<(StatusCode, Json<CreateAgentResponse>)> {
     let response = crate::services::agent_service::create_agent(&state.db, &auth_user, request).await?;
     Ok((StatusCode::CREATED, Json(response)))
 }

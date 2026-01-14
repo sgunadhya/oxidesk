@@ -19,7 +19,7 @@ async fn test_admin_initialization_creates_user_with_uuid() {
     let password_hash = hash_password(password).unwrap();
 
     let user = User::new(email, UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Admin".to_string(), password_hash);
+    let agent = Agent::new(user.id.clone(), "Admin".to_string(), None, password_hash);
 
     // Store in database
     db.create_user(&user).await.unwrap();
@@ -46,7 +46,7 @@ async fn test_admin_initialization_assigns_admin_role() {
     let password_hash = hash_password("SecureAdmin123!").unwrap();
 
     let user = User::new(email, UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Admin".to_string(), password_hash);
+    let agent = Agent::new(user.id.clone(), "Admin".to_string(), None, password_hash);
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -78,7 +78,7 @@ async fn test_admin_email_uniqueness_per_type() {
     let password_hash = hash_password("SecureAdmin123!").unwrap();
 
     let user1 = User::new(normalized_email.clone(), UserType::Agent);
-    let agent1 = Agent::new(user1.id.clone(), "Admin".to_string(), password_hash.clone());
+    let agent1 = Agent::new(user1.id.clone(), "Admin".to_string(), None, password_hash.clone());
 
     db.create_user(&user1).await.unwrap();
     db.create_agent(&agent1).await.unwrap();
@@ -136,7 +136,7 @@ async fn test_admin_initialization_idempotent() {
     let user = User::new(email.clone(), UserType::Agent);
     db.create_user(&user).await.unwrap();
 
-    let agent = Agent::new(user.id.clone(), "Admin".to_string(), password_hash.clone());
+    let agent = Agent::new(user.id.clone(), "Admin".to_string(), None, password_hash.clone());
     db.create_agent(&agent).await.unwrap();
 
     // Check if user exists

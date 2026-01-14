@@ -125,12 +125,13 @@ impl Database {
     // Agent operations
     pub async fn create_agent(&self, agent: &Agent) -> ApiResult<()> {
         sqlx::query(
-            "INSERT INTO agents (id, user_id, first_name, password_hash)
-             VALUES (?, ?, ?, ?)",
+            "INSERT INTO agents (id, user_id, first_name, last_name, password_hash)
+             VALUES (?, ?, ?, ?, ?)",
         )
         .bind(&agent.id)
         .bind(&agent.user_id)
         .bind(&agent.first_name)
+        .bind(&agent.last_name)
         .bind(&agent.password_hash)
         .execute(&self.pool)
         .await?;
@@ -138,9 +139,75 @@ impl Database {
         Ok(())
     }
 
+    /// Create agent with role assignment in transaction (Feature 016: User Creation)
+    /// Creates user + agent + role assignment atomically
+    /// Returns the created agent_id and user_id
+    pub async fn create_agent_with_role(
+        &self,
+        email: &str,
+        first_name: &str,
+        last_name: Option<&str>,
+        password_hash: &str,
+        role_id: &str,
+    ) -> ApiResult<(String, String)> {
+        let mut tx = self.pool.begin().await?;
+
+        // Create user
+        let user = User::new(email.to_string(), UserType::Agent);
+        sqlx::query(
+            "INSERT INTO users (id, email, user_type, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(&user.id)
+        .bind(&user.email)
+        .bind("agent")
+        .bind(&user.created_at)
+        .bind(&user.updated_at)
+        .execute(&mut *tx)
+        .await?;
+
+        // Create agent
+        let agent = Agent::new(
+            user.id.clone(),
+            first_name.to_string(),
+            last_name.map(|s| s.to_string()),
+            password_hash.to_string(),
+        );
+        sqlx::query(
+            "INSERT INTO agents (id, user_id, first_name, last_name, password_hash, availability_status)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&agent.id)
+        .bind(&agent.user_id)
+        .bind(&agent.first_name)
+        .bind(&agent.last_name)
+        .bind(&agent.password_hash)
+        .bind("offline")
+        .execute(&mut *tx)
+        .await?;
+
+        // Assign role
+        let now = time::OffsetDateTime::now_utc()
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO user_roles (user_id, role_id, created_at)
+             VALUES (?, ?, ?)",
+        )
+        .bind(&user.id)
+        .bind(role_id)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok((agent.id, user.id))
+    }
+
     pub async fn get_agent_by_user_id(&self, user_id: &str) -> ApiResult<Option<Agent>> {
         let row = sqlx::query(
-            "SELECT id, user_id, first_name, password_hash, availability_status,
+            "SELECT id, user_id, first_name, last_name, password_hash, availability_status,
                     last_login_at, last_activity_at, away_since,
                     api_key, api_secret_hash, api_key_description,
                     api_key_created_at, api_key_last_used_at, api_key_revoked_at
@@ -159,6 +226,7 @@ impl Database {
                 id: row.try_get("id")?,
                 user_id: row.try_get("user_id")?,
                 first_name: row.try_get("first_name")?,
+                last_name: row.try_get("last_name").ok(), // Feature 016: Added last_name
                 password_hash: row.try_get("password_hash")?,
                 availability_status: status,
                 last_login_at: row.try_get("last_login_at").ok(),
@@ -338,7 +406,7 @@ impl Database {
     pub async fn list_agents(&self, limit: i64, offset: i64) -> ApiResult<Vec<(User, Agent)>> {
         let rows = sqlx::query(
             "SELECT u.id, u.email, u.user_type, u.created_at, u.updated_at,
-                    a.id as agent_id, a.user_id as agent_user_id, a.first_name, a.password_hash,
+                    a.id as agent_id, a.user_id as agent_user_id, a.first_name, a.last_name, a.password_hash,
                     a.availability_status, a.last_login_at, a.last_activity_at, a.away_since
              FROM users u
              INNER JOIN agents a ON a.user_id = u.id
@@ -368,6 +436,7 @@ impl Database {
                 id: row.try_get("agent_id")?,
                 user_id: row.try_get("agent_user_id")?,
                 first_name: row.try_get("first_name")?,
+                last_name: row.try_get("last_name").ok(), // Feature 016: Added last_name
                 password_hash: row.try_get("password_hash")?,
                 availability_status: status,
                 last_login_at: row.try_get("last_login_at").ok(),
@@ -471,6 +540,87 @@ impl Database {
         .await?;
 
         Ok(())
+    }
+
+    /// Get contact by email (Feature 016: User Creation)
+    /// Used for idempotent contact creation - check if contact exists before creating
+    pub async fn get_contact_by_email(&self, email: &str) -> ApiResult<Option<Contact>> {
+        let row = sqlx::query(
+            "SELECT c.id, c.user_id, c.first_name
+             FROM contacts c
+             JOIN users u ON u.id = c.user_id
+             WHERE u.email = ? AND u.user_type = 'contact'",
+        )
+        .bind(email)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            Ok(Some(Contact {
+                id: row.try_get("id")?,
+                user_id: row.try_get("user_id")?,
+                first_name: row.try_get("first_name").ok(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Create contact from incoming message (Feature 016: User Creation)
+    /// Creates user + contact + contact_channel in a single transaction
+    /// Returns the created contact_id
+    pub async fn create_contact_from_message(
+        &self,
+        email: &str,
+        full_name: Option<&str>,
+        inbox_id: &str,
+    ) -> ApiResult<String> {
+        let mut tx = self.pool.begin().await?;
+
+        // Create user
+        let user = User::new(email.to_string(), UserType::Contact);
+        sqlx::query(
+            "INSERT INTO users (id, email, user_type, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(&user.id)
+        .bind(&user.email)
+        .bind("contact")
+        .bind(&user.created_at)
+        .bind(&user.updated_at)
+        .execute(&mut *tx)
+        .await?;
+
+        // Create contact
+        let contact = Contact::new(user.id.clone(), full_name.map(|s| s.to_string()));
+        sqlx::query(
+            "INSERT INTO contacts (id, user_id, first_name)
+             VALUES (?, ?, ?)",
+        )
+        .bind(&contact.id)
+        .bind(&contact.user_id)
+        .bind(&contact.first_name)
+        .execute(&mut *tx)
+        .await?;
+
+        // Create contact channel
+        let channel = ContactChannel::new(contact.id.clone(), inbox_id.to_string(), email.to_string());
+        sqlx::query(
+            "INSERT INTO contact_channels (id, contact_id, inbox_id, email, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&channel.id)
+        .bind(&channel.contact_id)
+        .bind(&channel.inbox_id)
+        .bind(&channel.email)
+        .bind(&channel.created_at)
+        .bind(&channel.updated_at)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(contact.id)
     }
 
     pub async fn get_contact_channels(&self, contact_id: &str) -> ApiResult<Vec<ContactChannel>> {
@@ -2885,7 +3035,7 @@ impl Database {
         let threshold_str = threshold_time.to_rfc3339();
 
         let rows = sqlx::query(
-            "SELECT id, user_id, first_name, password_hash, availability_status,
+            "SELECT id, user_id, first_name, last_name, password_hash, availability_status,
                     last_login_at, last_activity_at, away_since
              FROM agents
              WHERE availability_status = ?
@@ -2907,6 +3057,7 @@ impl Database {
                     id: row.try_get("id")?,
                     user_id: row.try_get("user_id")?,
                     first_name: row.try_get("first_name")?,
+                    last_name: row.try_get("last_name").ok(), // Feature 016: Added last_name
                     password_hash: row.try_get("password_hash")?,
                     availability_status: status,
                     last_login_at: row.try_get("last_login_at").ok(),
@@ -2934,7 +3085,7 @@ impl Database {
         let threshold_str = threshold_time.to_rfc3339();
 
         let rows = sqlx::query(
-            "SELECT id, user_id, first_name, password_hash, availability_status,
+            "SELECT id, user_id, first_name, last_name, password_hash, availability_status,
                     last_login_at, last_activity_at, away_since
              FROM agents
              WHERE availability_status IN (?, ?)
@@ -2957,6 +3108,7 @@ impl Database {
                     id: row.try_get("id")?,
                     user_id: row.try_get("user_id")?,
                     first_name: row.try_get("first_name")?,
+                    last_name: row.try_get("last_name").ok(), // Feature 016: Added last_name
                     password_hash: row.try_get("password_hash")?,
                     availability_status: status,
                     last_login_at: row.try_get("last_login_at").ok(),
@@ -5457,6 +5609,7 @@ impl Database {
                 id: row.try_get("id")?,
                 user_id: row.try_get("user_id")?,
                 first_name: row.try_get("first_name")?,
+                last_name: row.try_get("last_name").ok(), // Feature 016: Added last_name
                 password_hash: row.try_get("password_hash")?,
                 availability_status: status,
                 last_login_at: row.try_get("last_login_at").ok(),
@@ -5570,7 +5723,7 @@ impl Database {
     /// Get agent by ID (for API key operations)
     pub async fn get_agent_by_id(&self, agent_id: &str) -> ApiResult<Option<Agent>> {
         let row = sqlx::query(
-            "SELECT id, user_id, first_name, password_hash, availability_status,
+            "SELECT id, user_id, first_name, last_name, password_hash, availability_status,
                     last_login_at, last_activity_at, away_since,
                     api_key, api_secret_hash, api_key_description,
                     api_key_created_at, api_key_last_used_at, api_key_revoked_at
@@ -5589,6 +5742,7 @@ impl Database {
                 id: row.try_get("id")?,
                 user_id: row.try_get("user_id")?,
                 first_name: row.try_get("first_name")?,
+                last_name: row.try_get("last_name").ok(), // Feature 016: Added last_name
                 password_hash: row.try_get("password_hash")?,
                 availability_status: status,
                 last_login_at: row.try_get("last_login_at").ok(),

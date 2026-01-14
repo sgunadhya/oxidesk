@@ -62,6 +62,9 @@ impl MessageService {
 
     /// Create an incoming message from external source (webhook)
     /// Validates content, creates message, and updates conversation timestamps
+    ///
+    /// Feature 016: contact_id must be resolved before calling this method
+    /// (either provided directly or via automatic contact creation from from_header)
     pub async fn create_incoming_message(
         &self,
         request: IncomingMessageRequest,
@@ -78,11 +81,15 @@ impl MessageService {
                 ApiError::NotFound(format!("Conversation {} not found", request.conversation_id))
             })?;
 
+        // Contact ID must be resolved by this point (Feature 016)
+        let contact_id = request.contact_id
+            .ok_or_else(|| ApiError::BadRequest("contact_id is required".to_string()))?;
+
         // Create incoming message
         let message = Message::new_incoming(
             request.conversation_id.clone(),
             request.content,
-            request.contact_id,
+            contact_id,
         );
 
         // Save to database

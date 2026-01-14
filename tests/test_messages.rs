@@ -542,8 +542,9 @@ async fn test_e2e_incoming_message_flow() {
     let request = IncomingMessageRequest {
         conversation_id: conversation_id.to_string(),
         content: "Hello, I need help with my order".to_string(),
-        contact_id: contact_id.to_string(),
+        contact_id: Some(contact_id.to_string()),
         inbox_id: "inbox_789".to_string(),
+        from_header: None, // Feature 016: Optional email header for auto contact creation
         external_id: Some("ext_msg_001".to_string()),
         received_at: None,
     };
@@ -552,7 +553,7 @@ async fn test_e2e_incoming_message_flow() {
     // For now, just verify the structure compiles
     // Full integration would require conversation setup
     assert!(request.content.len() > 0);
-    assert_eq!(request.contact_id, contact_id);
+    assert_eq!(request.contact_id, Some(contact_id.to_string()));
 }
 
 // T082: End-to-end outgoing message flow

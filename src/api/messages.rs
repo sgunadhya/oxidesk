@@ -14,10 +14,32 @@ use crate::{
 };
 
 /// Webhook endpoint for receiving incoming messages from external sources
+///
+/// Feature 016: Automatically creates contacts from from_header if not exists.
+/// Either contact_id or from_header must be provided.
 pub async fn receive_incoming_message(
     State(state): State<AppState>,
-    Json(request): Json<IncomingMessageRequest>,
+    Json(mut request): Json<IncomingMessageRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    // Feature 016: Automatic contact creation from from_header
+    if request.contact_id.is_none() {
+        if let Some(ref from_header) = request.from_header {
+            // Create or get existing contact
+            let contact_id = crate::services::user_service::create_contact_from_message(
+                &state.db,
+                &request.inbox_id,
+                from_header,
+            )
+            .await?;
+
+            request.contact_id = Some(contact_id);
+        } else {
+            return Err(crate::api::middleware::ApiError::BadRequest(
+                "Either contact_id or from_header must be provided".to_string(),
+            ));
+        }
+    }
+
     let message_service = MessageService::new(state.db.clone());
 
     let message = message_service

@@ -30,6 +30,8 @@ pub mod auth_logger;
 pub mod oidc_service;
 pub mod permission_service;
 pub mod api_key_service;
+pub mod password_service;
+pub mod user_service;
 
 pub use auth::*;
 pub use email_validator::*;
@@ -56,3 +58,5 @@ pub use auth_logger::*;
 pub use oidc_service::*;
 pub use permission_service::*;
 pub use api_key_service::*;
+pub use password_service::*;
+pub use user_service::*;

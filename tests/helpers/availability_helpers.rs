@@ -17,8 +17,8 @@ pub async fn create_test_agent_with_status(
     let agent_id = uuid::Uuid::new_v4().to_string();
 
     sqlx::query(
-        "INSERT INTO agents (id, user_id, first_name, password_hash, availability_status)
-         VALUES (?, ?, ?, 'test_hash', ?)"
+        "INSERT INTO agents (id, user_id, first_name, last_name, password_hash, availability_status)
+         VALUES (?, ?, ?, NULL, 'test_hash', ?)"
     )
     .bind(&agent_id)
     .bind(user_id)
@@ -32,6 +32,7 @@ pub async fn create_test_agent_with_status(
         id: agent_id,
         user_id: user_id.to_string(),
         first_name: first_name.to_string(),
+        last_name: None,
         password_hash: "test_hash".to_string(),
         availability_status: status,
         last_login_at: None,
