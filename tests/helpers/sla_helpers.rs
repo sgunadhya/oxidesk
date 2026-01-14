@@ -1,9 +1,9 @@
 #![allow(dead_code)]
+use chrono::{DateTime, Duration, Utc};
 use oxidesk::{
     database::Database,
-    models::{SlaPolicy, AppliedSla, SlaEvent, SlaEventType, SlaEventStatus},
+    models::{AppliedSla, SlaEvent, SlaEventStatus, SlaEventType, SlaPolicy},
 };
-use chrono::{DateTime, Utc, Duration};
 
 /// Create a test SLA policy with custom times
 pub async fn create_test_sla_policy(
@@ -21,7 +21,9 @@ pub async fn create_test_sla_policy(
         next_response.to_string(),
     );
 
-    db.create_sla_policy(&policy).await.expect("Failed to create SLA policy");
+    db.create_sla_policy(&policy)
+        .await
+        .expect("Failed to create SLA policy");
     policy
 }
 
@@ -40,7 +42,9 @@ pub async fn create_test_applied_sla(
         resolution_deadline.to_rfc3339(),
     );
 
-    db.create_applied_sla(&applied_sla).await.expect("Failed to create applied SLA");
+    db.create_applied_sla(&applied_sla)
+        .await
+        .expect("Failed to create applied SLA");
     applied_sla
 }
 
@@ -57,7 +61,9 @@ pub async fn create_test_sla_event(
         deadline.to_rfc3339(),
     );
 
-    db.create_sla_event(&event).await.expect("Failed to create SLA event");
+    db.create_sla_event(&event)
+        .await
+        .expect("Failed to create SLA event");
     event
 }
 
@@ -77,7 +83,8 @@ pub async fn get_sla_events(db: &Database, applied_sla_id: &str) -> Vec<SlaEvent
 
 /// Count pending events past deadline
 pub async fn count_breached_events(db: &Database) -> i64 {
-    let events = db.get_pending_events_past_deadline()
+    let events = db
+        .get_pending_events_past_deadline()
         .await
         .expect("Failed to get pending events");
     events.len() as i64
@@ -118,7 +125,9 @@ pub fn calculate_deadline(base: DateTime<Utc>, duration_str: &str) -> DateTime<U
 pub async fn wait_until(target: DateTime<Utc>) {
     let now = Utc::now();
     if target > now {
-        let wait_duration = (target - now).to_std().unwrap_or(std::time::Duration::from_secs(0));
+        let wait_duration = (target - now)
+            .to_std()
+            .unwrap_or(std::time::Duration::from_secs(0));
         tokio::time::sleep(wait_duration).await;
     }
 }

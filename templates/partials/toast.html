@@ -1,0 +1,31 @@
+<div x-data="{ 
+    show: false, 
+    message: '', 
+    type: 'info',
+    showToast(event) {
+        this.message = event.detail.message || event.detail.value;
+        this.type = event.detail.type || 'info';
+        this.show = true;
+        setTimeout(() => this.show = false, 3000);
+    }
+}" @toast.window="showToast($event)"
+    @htmx-trigger.window="if($event.detail.trigger === 'toast') showToast({detail: $event.detail.value})" x-show="show"
+    x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 transform translate-y-2"
+    x-transition:enter-end="opacity-100 transform translate-y-0" x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="opacity-100 transform translate-y-0"
+    x-transition:leave-end="opacity-0 transform translate-y-2" x-cloak
+    class="fixed bottom-4 right-4 z-50 min-w-[300px] max-w-sm rounded-lg shadow-lg p-4 text-white" :class="{
+    'bg-green-600': type === 'success',
+    'bg-red-600': type === 'error',
+    'bg-blue-600': type === 'info',
+    'bg-yellow-500': type === 'warning'
+}">
+    <div class="flex items-center justify-between">
+        <span x-text="message" class="font-medium"></span>
+        <button @click="show = false" class="ml-4 text-white hover:text-gray-200">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
+</div>

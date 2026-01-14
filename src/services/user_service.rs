@@ -4,7 +4,6 @@
 /// Provides user creation business logic including:
 /// - Email display name parsing for contact creation
 /// - Contact creation from incoming messages (idempotent)
-
 use crate::api::middleware::error::ApiError;
 use crate::database::Database;
 use regex::Regex;
@@ -175,7 +174,8 @@ mod tests {
 
     #[test]
     fn test_parse_email_with_multi_word_display_name() {
-        let (first, last, email) = parse_email_display_name("Dr. Robert Smith Jr. <robert@example.com>");
+        let (first, last, email) =
+            parse_email_display_name("Dr. Robert Smith Jr. <robert@example.com>");
         assert_eq!(first, Some("Dr.".to_string()));
         assert_eq!(last, Some("Robert Smith Jr.".to_string()));
         assert_eq!(email, "robert@example.com");
@@ -191,7 +191,8 @@ mod tests {
 
     #[test]
     fn test_parse_email_with_extra_whitespace() {
-        let (first, last, email) = parse_email_display_name("  Charlie Brown  <charlie@example.com>  ");
+        let (first, last, email) =
+            parse_email_display_name("  Charlie Brown  <charlie@example.com>  ");
         assert_eq!(first, Some("Charlie".to_string()));
         assert_eq!(last, Some("Brown".to_string()));
         assert_eq!(email, "charlie@example.com");

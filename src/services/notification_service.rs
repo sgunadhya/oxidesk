@@ -2,9 +2,9 @@ use regex::Regex;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::models::UserNotification;
-use crate::database::Database;
 use super::connection_manager::{ConnectionManager, NotificationEvent};
+use crate::database::Database;
+use crate::models::UserNotification;
 
 /// Notification service for handling user notifications
 #[derive(Clone)]
@@ -181,10 +181,7 @@ impl NotificationService {
 
     /// Mark all notifications as read for a user
     /// Returns the count of notifications marked as read
-    pub async fn mark_all_as_read(
-        db: &Database,
-        user_id: &str,
-    ) -> Result<i32, String> {
+    pub async fn mark_all_as_read(db: &Database, user_id: &str) -> Result<i32, String> {
         // Call db.mark_all_notifications_as_read which handles the transaction
         let count = db
             .mark_all_notifications_as_read(user_id)
@@ -211,7 +208,11 @@ impl NotificationService {
             .await
             .map_err(|e| format!("Failed to cleanup old notifications: {}", e))?;
 
-        tracing::info!("Cleaned up {} old notifications (older than {} days)", count, days);
+        tracing::info!(
+            "Cleaned up {} old notifications (older than {} days)",
+            count,
+            days
+        );
 
         Ok(count)
     }
@@ -283,7 +284,11 @@ mod tests {
             // Mock implementation
         }
 
-        async fn send_to_user(&self, _user_id: &str, _event: NotificationEvent) -> Result<(), String> {
+        async fn send_to_user(
+            &self,
+            _user_id: &str,
+            _event: NotificationEvent,
+        ) -> Result<(), String> {
             if self.should_succeed {
                 Ok(())
             } else {
@@ -309,11 +314,9 @@ mod tests {
             should_succeed: true,
         }) as Arc<dyn ConnectionManager>;
 
-        let result = NotificationService::send_realtime_notification(
-            &notification,
-            &connection_manager,
-        )
-        .await;
+        let result =
+            NotificationService::send_realtime_notification(&notification, &connection_manager)
+                .await;
 
         assert!(result.is_ok());
     }
@@ -330,11 +333,9 @@ mod tests {
             should_succeed: false,
         }) as Arc<dyn ConnectionManager>;
 
-        let result = NotificationService::send_realtime_notification(
-            &notification,
-            &connection_manager,
-        )
-        .await;
+        let result =
+            NotificationService::send_realtime_notification(&notification, &connection_manager)
+                .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Connection failed");
@@ -376,9 +377,7 @@ mod tests {
             .await
             .expect("Failed to connect to database");
 
-        db.run_migrations()
-            .await
-            .expect("Failed to run migrations");
+        db.run_migrations().await.expect("Failed to run migrations");
 
         TestDb { db, db_file }
     }
@@ -391,25 +390,35 @@ mod tests {
 
         // Create users first to satisfy foreign key constraints
         let user = User::new("user123@test.com".to_string(), UserType::Agent);
-        test_db.db.create_user(&user).await.expect("Failed to create user");
+        test_db
+            .db
+            .create_user(&user)
+            .await
+            .expect("Failed to create user");
 
         let actor = User::new("actor789@test.com".to_string(), UserType::Agent);
-        test_db.db.create_user(&actor).await.expect("Failed to create actor");
+        test_db
+            .db
+            .create_user(&actor)
+            .await
+            .expect("Failed to create actor");
 
         // Create contact user and contact entry for conversation
         let contact_user = User::new("contact@example.com".to_string(), UserType::Contact);
-        test_db.db.create_user(&contact_user).await.expect("Failed to create contact user");
+        test_db
+            .db
+            .create_user(&contact_user)
+            .await
+            .expect("Failed to create contact user");
 
         // Create contact entry
         let contact_id = Uuid::new_v4().to_string();
-        sqlx::query(
-            "INSERT INTO contacts (id, user_id) VALUES (?, ?)"
-        )
-        .bind(&contact_id)
-        .bind(&contact_user.id)
-        .execute(test_db.db.pool())
-        .await
-        .expect("Failed to create contact");
+        sqlx::query("INSERT INTO contacts (id, user_id) VALUES (?, ?)")
+            .bind(&contact_id)
+            .bind(&contact_user.id)
+            .execute(test_db.db.pool())
+            .await
+            .expect("Failed to create contact");
 
         // Create inbox
         let inbox_id = Uuid::new_v4().to_string();
@@ -459,11 +468,15 @@ mod tests {
         assert_eq!(notification.user_id, user.id);
         assert_eq!(notification.conversation_id, Some(conv_id.clone()));
         assert_eq!(notification.actor_id, Some(actor.id));
-        assert_eq!(notification.notification_type, crate::models::NotificationType::Assignment);
+        assert_eq!(
+            notification.notification_type,
+            crate::models::NotificationType::Assignment
+        );
         assert!(!notification.is_read);
 
         // Verify it was actually saved to database
-        let saved = test_db.db
+        let saved = test_db
+            .db
             .get_notification_by_id(&notification.id)
             .await
             .expect("Failed to get notification")
@@ -528,11 +541,20 @@ mod tests {
 
     // Test helper to create test agents
     async fn create_test_agent(test_db: &TestDb, username: &str) -> crate::models::User {
-        use crate::models::{User, UserType, Agent};
+        use crate::models::{Agent, User, UserType};
         let user = User::new(format!("{}@test.com", username), UserType::Agent);
-        test_db.db.create_user(&user).await.expect("Failed to create user");
+        test_db
+            .db
+            .create_user(&user)
+            .await
+            .expect("Failed to create user");
 
-        let agent = Agent::new(user.id.clone(), username.to_string(), None, "hash".to_string());
+        let agent = Agent::new(
+            user.id.clone(),
+            username.to_string(),
+            None,
+            "hash".to_string(),
+        );
         sqlx::query(
             "INSERT INTO agents (id, user_id, first_name, last_name, password_hash, availability_status) VALUES (?, ?, ?, ?, ?, ?)"
         )
@@ -551,12 +573,16 @@ mod tests {
 
     // Test helper to create test conversation
     async fn create_test_conversation(test_db: &TestDb) -> String {
-        use uuid::Uuid;
         use crate::models::{User, UserType};
+        use uuid::Uuid;
 
         // Create contact user
         let contact_user = User::new("contact@example.com".to_string(), UserType::Contact);
-        test_db.db.create_user(&contact_user).await.expect("Failed to create contact user");
+        test_db
+            .db
+            .create_user(&contact_user)
+            .await
+            .expect("Failed to create contact user");
 
         // Create contact entry
         let contact_id = Uuid::new_v4().to_string();
@@ -603,7 +629,12 @@ mod tests {
     }
 
     // Test helper to create test message
-    async fn create_test_message(test_db: &TestDb, conversation_id: &str, author_id: &str, content: &str) -> String {
+    async fn create_test_message(
+        test_db: &TestDb,
+        conversation_id: &str,
+        author_id: &str,
+        content: &str,
+    ) -> String {
         use uuid::Uuid;
         let message_id = Uuid::new_v4().to_string();
         let now = time::OffsetDateTime::now_utc()
@@ -653,7 +684,10 @@ mod tests {
         assert_eq!(notifications[0].message_id, Some(message_id.to_string()));
         assert_eq!(notifications[0].conversation_id, Some(conv_id.clone()));
         assert_eq!(notifications[0].actor_id, Some(actor.id));
-        assert_eq!(notifications[0].notification_type, crate::models::NotificationType::Mention);
+        assert_eq!(
+            notifications[0].notification_type,
+            crate::models::NotificationType::Mention
+        );
     }
 
     #[tokio::test]
@@ -690,7 +724,10 @@ mod tests {
             assert_eq!(notification.message_id, Some(message_id.to_string()));
             assert_eq!(notification.conversation_id, Some(conv_id.clone()));
             assert_eq!(notification.actor_id, Some(actor.id.clone()));
-            assert_eq!(notification.notification_type, crate::models::NotificationType::Mention);
+            assert_eq!(
+                notification.notification_type,
+                crate::models::NotificationType::Mention
+            );
         }
     }
 
@@ -847,17 +884,14 @@ mod tests {
         assert!(!notification.is_read);
 
         // Mark as read
-        let result = NotificationService::mark_as_read(
-            &test_db.db,
-            &notification.id,
-            &user.id,
-        )
-        .await;
+        let result =
+            NotificationService::mark_as_read(&test_db.db, &notification.id, &user.id).await;
 
         assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
 
         // Verify it's now marked as read in database
-        let updated = test_db.db
+        let updated = test_db
+            .db
             .get_notification_by_id(&notification.id)
             .await
             .expect("Failed to get notification")
@@ -885,12 +919,8 @@ mod tests {
         .expect("Failed to create notification");
 
         // Try to mark as read with other_user's ID
-        let result = NotificationService::mark_as_read(
-            &test_db.db,
-            &notification.id,
-            &other_user.id,
-        )
-        .await;
+        let result =
+            NotificationService::mark_as_read(&test_db.db, &notification.id, &other_user.id).await;
 
         assert!(result.is_err());
         assert_eq!(
@@ -899,7 +929,8 @@ mod tests {
         );
 
         // Verify it's still unread in database
-        let unchanged = test_db.db
+        let unchanged = test_db
+            .db
             .get_notification_by_id(&notification.id)
             .await
             .expect("Failed to get notification")
@@ -926,27 +957,20 @@ mod tests {
         .expect("Failed to create notification");
 
         // Mark as read first time
-        let result1 = NotificationService::mark_as_read(
-            &test_db.db,
-            &notification.id,
-            &user.id,
-        )
-        .await;
+        let result1 =
+            NotificationService::mark_as_read(&test_db.db, &notification.id, &user.id).await;
 
         assert!(result1.is_ok(), "First mark_as_read failed: {:?}", result1);
 
         // Mark as read second time (idempotent)
-        let result2 = NotificationService::mark_as_read(
-            &test_db.db,
-            &notification.id,
-            &user.id,
-        )
-        .await;
+        let result2 =
+            NotificationService::mark_as_read(&test_db.db, &notification.id, &user.id).await;
 
         assert!(result2.is_ok(), "Second mark_as_read failed: {:?}", result2);
 
         // Verify it's still marked as read
-        let final_state = test_db.db
+        let final_state = test_db
+            .db
             .get_notification_by_id(&notification.id)
             .await
             .expect("Failed to get notification")
@@ -975,31 +999,33 @@ mod tests {
         .expect("Failed to create notification");
 
         // Step 2: Verify unread count = 1
-        let unread_count = test_db.db
+        let unread_count = test_db
+            .db
             .get_unread_count(&agent1.id)
             .await
             .expect("Failed to get unread count");
         assert_eq!(unread_count, 1, "Expected unread count to be 1");
 
         // Step 3: Call mark_as_read with correct user_id
-        NotificationService::mark_as_read(
-            &test_db.db,
-            &notification.id,
-            &agent1.id,
-        )
-        .await
-        .expect("Failed to mark notification as read");
+        NotificationService::mark_as_read(&test_db.db, &notification.id, &agent1.id)
+            .await
+            .expect("Failed to mark notification as read");
 
         // Step 4: Fetch notification and verify is_read = true
-        let updated_notification = test_db.db
+        let updated_notification = test_db
+            .db
             .get_notification_by_id(&notification.id)
             .await
             .expect("Failed to get notification")
             .expect("Notification not found");
-        assert!(updated_notification.is_read, "Expected notification to be marked as read");
+        assert!(
+            updated_notification.is_read,
+            "Expected notification to be marked as read"
+        );
 
         // Step 5: Verify unread count = 0
-        let unread_count_after = test_db.db
+        let unread_count_after = test_db
+            .db
             .get_unread_count(&agent1.id)
             .await
             .expect("Failed to get unread count after marking as read");
@@ -1044,47 +1070,38 @@ mod tests {
         .expect("Failed to create notification 3");
 
         // Step 2: Verify unread count = 3
-        let unread_count = test_db.db
+        let unread_count = test_db
+            .db
             .get_unread_count(&agent1.id)
             .await
             .expect("Failed to get unread count");
         assert_eq!(unread_count, 3, "Expected unread count to be 3");
 
         // Step 3: Mark 2 notifications as read
-        NotificationService::mark_as_read(
-            &test_db.db,
-            &notification1.id,
-            &agent1.id,
-        )
-        .await
-        .expect("Failed to mark notification 1 as read");
+        NotificationService::mark_as_read(&test_db.db, &notification1.id, &agent1.id)
+            .await
+            .expect("Failed to mark notification 1 as read");
 
-        NotificationService::mark_as_read(
-            &test_db.db,
-            &notification2.id,
-            &agent1.id,
-        )
-        .await
-        .expect("Failed to mark notification 2 as read");
+        NotificationService::mark_as_read(&test_db.db, &notification2.id, &agent1.id)
+            .await
+            .expect("Failed to mark notification 2 as read");
 
         // Step 4: Verify unread count = 1
-        let unread_count_after_2 = test_db.db
+        let unread_count_after_2 = test_db
+            .db
             .get_unread_count(&agent1.id)
             .await
             .expect("Failed to get unread count after marking 2 as read");
         assert_eq!(unread_count_after_2, 1, "Expected unread count to be 1");
 
         // Step 5: Mark remaining notification as read
-        NotificationService::mark_as_read(
-            &test_db.db,
-            &notification3.id,
-            &agent1.id,
-        )
-        .await
-        .expect("Failed to mark notification 3 as read");
+        NotificationService::mark_as_read(&test_db.db, &notification3.id, &agent1.id)
+            .await
+            .expect("Failed to mark notification 3 as read");
 
         // Step 6: Verify unread count = 0
-        let unread_count_final = test_db.db
+        let unread_count_final = test_db
+            .db
             .get_unread_count(&agent1.id)
             .await
             .expect("Failed to get unread count after marking all as read");
@@ -1127,25 +1144,24 @@ mod tests {
         .expect("Failed to create notification 3");
 
         // Verify unread count = 3
-        let unread_count_before = test_db.db
+        let unread_count_before = test_db
+            .db
             .get_unread_count(&user.id)
             .await
             .expect("Failed to get unread count");
         assert_eq!(unread_count_before, 3, "Expected 3 unread notifications");
 
         // Mark all as read
-        let count = NotificationService::mark_all_as_read(
-            &test_db.db,
-            &user.id,
-        )
-        .await
-        .expect("Failed to mark all as read");
+        let count = NotificationService::mark_all_as_read(&test_db.db, &user.id)
+            .await
+            .expect("Failed to mark all as read");
 
         // Verify count returned = 3
         assert_eq!(count, 3, "Expected mark_all_as_read to return 3");
 
         // Verify unread count = 0
-        let unread_count_after = test_db.db
+        let unread_count_after = test_db
+            .db
             .get_unread_count(&user.id)
             .await
             .expect("Failed to get unread count after marking all as read");
@@ -1158,18 +1174,19 @@ mod tests {
         let user = create_test_agent(&test_db, "user").await;
 
         // Mark all when no unread notifications exist
-        let count = NotificationService::mark_all_as_read(
-            &test_db.db,
-            &user.id,
-        )
-        .await
-        .expect("Failed to mark all as read");
+        let count = NotificationService::mark_all_as_read(&test_db.db, &user.id)
+            .await
+            .expect("Failed to mark all as read");
 
         // Verify count = 0
-        assert_eq!(count, 0, "Expected mark_all_as_read to return 0 when no unread notifications");
+        assert_eq!(
+            count, 0,
+            "Expected mark_all_as_read to return 0 when no unread notifications"
+        );
 
         // Verify unread count = 0
-        let unread_count = test_db.db
+        let unread_count = test_db
+            .db
             .get_unread_count(&user.id)
             .await
             .expect("Failed to get unread count");
@@ -1245,61 +1262,80 @@ mod tests {
         let notification5 = &mention_notifications2[0];
 
         // Step 2: Verify unread count = 5
-        let unread_count = test_db.db
+        let unread_count = test_db
+            .db
             .get_unread_count(&agent1.id)
             .await
             .expect("Failed to get unread count");
         assert_eq!(unread_count, 5, "Expected unread count to be 5");
 
         // Step 3: Call NotificationService::mark_all_as_read for "agent1"
-        let count = NotificationService::mark_all_as_read(
-            &test_db.db,
-            &agent1.id,
-        )
-        .await
-        .expect("Failed to mark all as read");
+        let count = NotificationService::mark_all_as_read(&test_db.db, &agent1.id)
+            .await
+            .expect("Failed to mark all as read");
 
         // Step 4: Verify the count returned = 5
         assert_eq!(count, 5, "Expected mark_all_as_read to return 5");
 
         // Step 5: Fetch all 5 notifications and verify all have is_read = true
-        let notif1_updated = test_db.db
+        let notif1_updated = test_db
+            .db
             .get_notification_by_id(&notification1.id)
             .await
             .expect("Failed to get notification 1")
             .expect("Notification 1 not found");
-        assert!(notif1_updated.is_read, "Expected notification 1 to be marked as read");
+        assert!(
+            notif1_updated.is_read,
+            "Expected notification 1 to be marked as read"
+        );
 
-        let notif2_updated = test_db.db
+        let notif2_updated = test_db
+            .db
             .get_notification_by_id(&notification2.id)
             .await
             .expect("Failed to get notification 2")
             .expect("Notification 2 not found");
-        assert!(notif2_updated.is_read, "Expected notification 2 to be marked as read");
+        assert!(
+            notif2_updated.is_read,
+            "Expected notification 2 to be marked as read"
+        );
 
-        let notif3_updated = test_db.db
+        let notif3_updated = test_db
+            .db
             .get_notification_by_id(&notification3.id)
             .await
             .expect("Failed to get notification 3")
             .expect("Notification 3 not found");
-        assert!(notif3_updated.is_read, "Expected notification 3 to be marked as read");
+        assert!(
+            notif3_updated.is_read,
+            "Expected notification 3 to be marked as read"
+        );
 
-        let notif4_updated = test_db.db
+        let notif4_updated = test_db
+            .db
             .get_notification_by_id(&notification4.id)
             .await
             .expect("Failed to get notification 4")
             .expect("Notification 4 not found");
-        assert!(notif4_updated.is_read, "Expected notification 4 to be marked as read");
+        assert!(
+            notif4_updated.is_read,
+            "Expected notification 4 to be marked as read"
+        );
 
-        let notif5_updated = test_db.db
+        let notif5_updated = test_db
+            .db
             .get_notification_by_id(&notification5.id)
             .await
             .expect("Failed to get notification 5")
             .expect("Notification 5 not found");
-        assert!(notif5_updated.is_read, "Expected notification 5 to be marked as read");
+        assert!(
+            notif5_updated.is_read,
+            "Expected notification 5 to be marked as read"
+        );
 
         // Step 6: Verify unread count = 0
-        let unread_count_after = test_db.db
+        let unread_count_after = test_db
+            .db
             .get_unread_count(&agent1.id)
             .await
             .expect("Failed to get unread count after marking all as read");
@@ -1308,9 +1344,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_cleanup_with_old_notifications() {
-        use uuid::Uuid;
-        use time::OffsetDateTime;
         use crate::models::NotificationType;
+        use time::OffsetDateTime;
+        use uuid::Uuid;
 
         let test_db = setup_test_db().await;
 
@@ -1337,13 +1373,15 @@ mod tests {
         };
 
         // Save the old notification
-        test_db.db
+        test_db
+            .db
             .create_notification(&old_notification)
             .await
             .expect("Failed to create old notification");
 
         // Verify notification exists
-        let notif = test_db.db
+        let notif = test_db
+            .db
             .get_notification_by_id(&old_notification.id)
             .await
             .expect("Failed to get notification")
@@ -1359,18 +1397,22 @@ mod tests {
         assert_eq!(deleted_count, 1, "Expected 1 notification to be deleted");
 
         // Verify notification is gone
-        let notif_after_cleanup = test_db.db
+        let notif_after_cleanup = test_db
+            .db
             .get_notification_by_id(&old_notification.id)
             .await
             .expect("Failed to get notification");
-        assert!(notif_after_cleanup.is_none(), "Expected notification to be deleted");
+        assert!(
+            notif_after_cleanup.is_none(),
+            "Expected notification to be deleted"
+        );
     }
 
     #[tokio::test]
     async fn test_cleanup_preserving_recent_notifications() {
-        use uuid::Uuid;
-        use time::OffsetDateTime;
         use crate::models::NotificationType;
+        use time::OffsetDateTime;
+        use uuid::Uuid;
 
         let test_db = setup_test_db().await;
 
@@ -1413,12 +1455,14 @@ mod tests {
         };
 
         // Save both notifications
-        test_db.db
+        test_db
+            .db
             .create_notification(&old_notification)
             .await
             .expect("Failed to create old notification");
 
-        test_db.db
+        test_db
+            .db
             .create_notification(&recent_notification)
             .await
             .expect("Failed to create recent notification");
@@ -1432,26 +1476,34 @@ mod tests {
         assert_eq!(deleted_count, 1, "Expected 1 notification to be deleted");
 
         // Verify old notification is gone
-        let old_notif_after = test_db.db
+        let old_notif_after = test_db
+            .db
             .get_notification_by_id(&old_notification.id)
             .await
             .expect("Failed to get old notification");
-        assert!(old_notif_after.is_none(), "Expected old notification to be deleted");
+        assert!(
+            old_notif_after.is_none(),
+            "Expected old notification to be deleted"
+        );
 
         // Verify recent notification still exists
-        let recent_notif_after = test_db.db
+        let recent_notif_after = test_db
+            .db
             .get_notification_by_id(&recent_notification.id)
             .await
             .expect("Failed to get recent notification")
             .expect("Recent notification not found");
-        assert_eq!(recent_notif_after.id, recent_notification.id, "Expected recent notification to be preserved");
+        assert_eq!(
+            recent_notif_after.id, recent_notification.id,
+            "Expected recent notification to be preserved"
+        );
     }
 
     #[tokio::test]
     async fn test_cleanup_with_no_old_notifications() {
-        use uuid::Uuid;
-        use time::OffsetDateTime;
         use crate::models::NotificationType;
+        use time::OffsetDateTime;
+        use uuid::Uuid;
 
         let test_db = setup_test_db().await;
 
@@ -1478,7 +1530,8 @@ mod tests {
         };
 
         // Save the recent notification
-        test_db.db
+        test_db
+            .db
             .create_notification(&recent_notification)
             .await
             .expect("Failed to create recent notification");
@@ -1492,19 +1545,23 @@ mod tests {
         assert_eq!(deleted_count, 0, "Expected 0 notifications to be deleted");
 
         // Verify recent notification still exists
-        let recent_notif_after = test_db.db
+        let recent_notif_after = test_db
+            .db
             .get_notification_by_id(&recent_notification.id)
             .await
             .expect("Failed to get recent notification")
             .expect("Recent notification not found");
-        assert_eq!(recent_notif_after.id, recent_notification.id, "Expected recent notification to be preserved");
+        assert_eq!(
+            recent_notif_after.id, recent_notification.id,
+            "Expected recent notification to be preserved"
+        );
     }
 
     #[tokio::test]
     async fn test_cleanup_integration_with_30day_cutoff() {
-        use uuid::Uuid;
-        use time::OffsetDateTime;
         use crate::models::NotificationType;
+        use time::OffsetDateTime;
+        use uuid::Uuid;
 
         let test_db = setup_test_db().await;
 
@@ -1516,11 +1573,11 @@ mod tests {
 
         // Create notifications at various ages
         let notifications = vec![
-            (35, "old1"), // >30 days - should be deleted
-            (40, "old2"), // >30 days - should be deleted
+            (35, "old1"),    // >30 days - should be deleted
+            (40, "old2"),    // >30 days - should be deleted
             (29, "recent1"), // <30 days - should be preserved
             (15, "recent2"), // <30 days - should be preserved
-            (5, "recent3"), // <30 days - should be preserved
+            (5, "recent3"),  // <30 days - should be preserved
         ];
 
         let mut created_notifications = Vec::new();
@@ -1540,7 +1597,8 @@ mod tests {
                 actor_id: Some(agent1.id.clone()),
             };
 
-            test_db.db
+            test_db
+                .db
                 .create_notification(&notification)
                 .await
                 .expect(&format!("Failed to create notification {}", label));
@@ -1550,7 +1608,8 @@ mod tests {
 
         // Verify all 5 notifications exist
         for (id, _, label) in &created_notifications {
-            let notif = test_db.db
+            let notif = test_db
+                .db
                 .get_notification_by_id(id)
                 .await
                 .expect(&format!("Failed to get notification {}", label))
@@ -1564,27 +1623,39 @@ mod tests {
             .expect("Cleanup failed");
 
         // Verify 2 old notifications were deleted
-        assert_eq!(deleted_count, 2, "Expected 2 old notifications to be deleted");
+        assert_eq!(
+            deleted_count, 2,
+            "Expected 2 old notifications to be deleted"
+        );
 
         // Verify old notifications (>30 days) are deleted
         for (id, days_ago, label) in &created_notifications {
             if *days_ago > 30 {
-                let notif_after = test_db.db
+                let notif_after = test_db
+                    .db
                     .get_notification_by_id(id)
                     .await
                     .expect(&format!("Failed to check notification {}", label));
-                assert!(notif_after.is_none(), "Expected old notification {} to be deleted", label);
+                assert!(
+                    notif_after.is_none(),
+                    "Expected old notification {} to be deleted",
+                    label
+                );
             }
         }
 
         // Verify recent notifications (<30 days) are preserved
         for (id, days_ago, label) in &created_notifications {
             if *days_ago <= 30 {
-                let notif_after = test_db.db
+                let notif_after = test_db
+                    .db
                     .get_notification_by_id(id)
                     .await
                     .expect(&format!("Failed to check notification {}", label))
-                    .expect(&format!("Expected recent notification {} to be preserved", label));
+                    .expect(&format!(
+                        "Expected recent notification {} to be preserved",
+                        label
+                    ));
                 assert_eq!(notif_after.id, *id);
             }
         }
@@ -1592,10 +1663,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_cleanup_performance() {
-        use uuid::Uuid;
-        use time::OffsetDateTime;
         use crate::models::NotificationType;
         use std::time::Instant;
+        use time::OffsetDateTime;
+        use uuid::Uuid;
 
         let test_db = setup_test_db().await;
 
@@ -1623,7 +1694,8 @@ mod tests {
                 actor_id: Some(agent1.id.clone()),
             };
 
-            test_db.db
+            test_db
+                .db
                 .create_notification(&notification)
                 .await
                 .expect(&format!("Failed to create notification {}", i));
@@ -1637,11 +1709,18 @@ mod tests {
         let duration = start.elapsed();
 
         // Verify all 100 were deleted
-        assert_eq!(deleted_count, 100, "Expected 100 notifications to be deleted");
+        assert_eq!(
+            deleted_count, 100,
+            "Expected 100 notifications to be deleted"
+        );
 
         // Verify cleanup completed quickly (should be much faster than 5 minutes)
         // For 100 notifications, expect <1 second
-        assert!(duration.as_secs() < 5, "Cleanup took too long: {:?}", duration);
+        assert!(
+            duration.as_secs() < 5,
+            "Cleanup took too long: {:?}",
+            duration
+        );
 
         tracing::info!("Cleanup of 100 notifications completed in {:?}", duration);
     }

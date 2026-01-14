@@ -3,8 +3,8 @@ mod helpers;
 use helpers::test_db::setup_test_db;
 use oxidesk::database::Database;
 use oxidesk::models::{
-    Message, MessageType, MessageStatus, IncomingMessageRequest, SendMessageRequest,
-    User, UserType, Conversation, ConversationStatus,
+    Conversation, ConversationStatus, IncomingMessageRequest, Message, MessageStatus, MessageType,
+    SendMessageRequest, User, UserType,
 };
 
 // Helper to create test user (agent or contact)
@@ -29,15 +29,13 @@ async fn create_test_user(db: &Database, email: &str, user_type: UserType) -> Us
     // If it's a contact, also create entry in contacts table
     if is_contact {
         let contact_id = uuid::Uuid::new_v4().to_string();
-        sqlx::query(
-            "INSERT INTO contacts (id, user_id, first_name) VALUES (?, ?, ?)",
-        )
-        .bind(&contact_id)
-        .bind(&user.id)
-        .bind("Test")
-        .execute(db.pool())
-        .await
-        .unwrap();
+        sqlx::query("INSERT INTO contacts (id, user_id, first_name) VALUES (?, ?, ?)")
+            .bind(&contact_id)
+            .bind(&user.id)
+            .bind("Test")
+            .execute(db.pool())
+            .await
+            .unwrap();
 
         // Return contact_id as the user id for FK references
         return User {
@@ -55,7 +53,9 @@ async fn create_test_user(db: &Database, email: &str, user_type: UserType) -> Us
 // Helper to create test inbox (workaround for missing inbox migration)
 async fn create_test_inbox(db: &Database, inbox_id: &str) {
     // Insert inbox (inboxes table should already exist from test_db setup)
-    let now = time::OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap();
+    let now = time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap();
     let result = sqlx::query(
         "INSERT INTO inboxes (id, name, channel_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
     )
@@ -74,11 +74,7 @@ async fn create_test_inbox(db: &Database, inbox_id: &str) {
 }
 
 // Helper to create test conversation
-async fn create_test_conversation(
-    db: &Database,
-    inbox_id: &str,
-    contact_id: &str,
-) -> Conversation {
+async fn create_test_conversation(db: &Database, inbox_id: &str, contact_id: &str) -> Conversation {
     let now = time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap();
@@ -131,7 +127,7 @@ async fn create_test_conversation(
         contact_id: contact_id.to_string(),
         subject: None,
         resolved_at: None,
-        closed_at: None,  // Feature 019
+        closed_at: None, // Feature 019
         snoozed_until: None,
         assigned_user_id: None,
         assigned_team_id: None,
@@ -199,13 +195,9 @@ async fn test_conversation_last_message_updated() {
     // Test that update_conversation_message_timestamps can be called
     // (This tests the database method exists and compiles correctly)
     // Full integration testing will be done in Phase 3 implementation
-    let result = db.update_conversation_message_timestamps(
-        conv_id,
-        msg_id,
-        &now,
-        None,
-    )
-    .await;
+    let result = db
+        .update_conversation_message_timestamps(conv_id, msg_id, &now, None)
+        .await;
 
     // We expect this to fail because the conversation doesn't exist,
     // but that's okay - we're just testing the API exists
@@ -314,7 +306,9 @@ async fn test_message_immutable_after_sent() {
 
     // Just verify the update_message_status method exists and compiles
     // (Without creating actual records due to FK constraints)
-    let result = db.update_message_status("test_id", MessageStatus::Sent, None).await;
+    let result = db
+        .update_message_status("test_id", MessageStatus::Sent, None)
+        .await;
     // Expected to fail since message doesn't exist, but that's okay
     assert!(result.is_ok() || result.is_err());
 }
@@ -395,10 +389,10 @@ async fn test_exponential_backoff() {
     use oxidesk::services::DeliveryService;
 
     // Test backoff calculation
-    assert_eq!(DeliveryService::calculate_retry_delay(0), 60);   // 60 * 2^0 = 60 seconds
-    assert_eq!(DeliveryService::calculate_retry_delay(1), 120);  // 60 * 2^1 = 120 seconds
-    assert_eq!(DeliveryService::calculate_retry_delay(2), 240);  // 60 * 2^2 = 240 seconds
-    assert_eq!(DeliveryService::calculate_retry_delay(3), 480);  // 60 * 2^3 = 480 seconds
+    assert_eq!(DeliveryService::calculate_retry_delay(0), 60); // 60 * 2^0 = 60 seconds
+    assert_eq!(DeliveryService::calculate_retry_delay(1), 120); // 60 * 2^1 = 120 seconds
+    assert_eq!(DeliveryService::calculate_retry_delay(2), 240); // 60 * 2^2 = 240 seconds
+    assert_eq!(DeliveryService::calculate_retry_delay(3), 480); // 60 * 2^3 = 480 seconds
 }
 
 // ============================================================================
@@ -408,7 +402,7 @@ async fn test_exponential_backoff() {
 // Test that MessageService with delivery actually queues messages
 #[tokio::test]
 async fn test_delivery_service_integration() {
-    use oxidesk::services::{MessageService, DeliveryService, MockDeliveryProvider};
+    use oxidesk::services::{DeliveryService, MessageService, MockDeliveryProvider};
     use std::sync::Arc;
 
     let test_db = setup_test_db().await;
@@ -488,7 +482,9 @@ async fn test_immutability_violation() {
 
     // Try to update status - database layer doesn't prevent this
     // but service layer should (tested in service layer tests)
-    let result = db.update_message_status(&message.id, MessageStatus::Pending, None).await;
+    let result = db
+        .update_message_status(&message.id, MessageStatus::Pending, None)
+        .await;
 
     // Database update succeeds, but service layer would prevent this
     assert!(result.is_ok());
@@ -561,7 +557,7 @@ async fn test_e2e_incoming_message_flow() {
 // T082: End-to-end outgoing message flow
 #[tokio::test]
 async fn test_e2e_outgoing_message_flow() {
-    use oxidesk::services::{MessageService, DeliveryService, MockDeliveryProvider};
+    use oxidesk::services::{DeliveryService, MessageService, MockDeliveryProvider};
     use std::sync::Arc;
 
     let test_db = setup_test_db().await;
@@ -630,9 +626,9 @@ async fn test_e2e_delivery_retry_flow() {
     assert_eq!(message.retry_count, 0);
 
     // Test exponential backoff calculation
-    assert_eq!(DeliveryService::calculate_retry_delay(0), 60);   // First retry: 60s
-    assert_eq!(DeliveryService::calculate_retry_delay(1), 120);  // Second retry: 120s
-    assert_eq!(DeliveryService::calculate_retry_delay(2), 240);  // Third retry: 240s
+    assert_eq!(DeliveryService::calculate_retry_delay(0), 60); // First retry: 60s
+    assert_eq!(DeliveryService::calculate_retry_delay(1), 120); // Second retry: 120s
+    assert_eq!(DeliveryService::calculate_retry_delay(2), 240); // Third retry: 240s
 
     // After 3 retries (retry_count reaches 3), message stays failed
     let max_retries = 3;

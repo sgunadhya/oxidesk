@@ -2,8 +2,14 @@ use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
     events::{EventBus, SystemEvent},
-    models::{AgentAvailability, AssignmentHistory, Conversation, ConversationStatus, Permission, UserNotification},
-    services::{connection_manager::ConnectionManager, notification_service::NotificationService, SlaService},
+    models::{
+        AgentAvailability, AssignmentHistory, Conversation, ConversationStatus, Permission,
+        UserNotification,
+    },
+    services::{
+        connection_manager::ConnectionManager, notification_service::NotificationService,
+        SlaService,
+    },
 };
 use std::sync::Arc;
 
@@ -158,9 +164,7 @@ impl AssignmentService {
             .db
             .get_agent_by_user_id(target_agent_id)
             .await?
-            .ok_or_else(|| {
-                ApiError::NotFound(format!("Agent {} not found", target_agent_id))
-            })?;
+            .ok_or_else(|| ApiError::NotFound(format!("Agent {} not found", target_agent_id)))?;
 
         // 4. Assign to database
         self.db
@@ -170,7 +174,11 @@ impl AssignmentService {
         // 5. Add target agent as participant (ignore if already exists)
         let _ = self
             .db
-            .add_conversation_participant(conversation_id, target_agent_id, Some(assigning_agent_id))
+            .add_conversation_participant(
+                conversation_id,
+                target_agent_id,
+                Some(assigning_agent_id),
+            )
             .await;
 
         // 6. Record in history
@@ -252,9 +260,11 @@ impl AssignmentService {
             })?;
 
         // 3. Verify team exists
-        let _team = self.db.get_team_by_id(team_id).await?.ok_or_else(|| {
-            ApiError::NotFound(format!("Team {} not found", team_id))
-        })?;
+        let _team = self
+            .db
+            .get_team_by_id(team_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Team {} not found", team_id)))?;
 
         // 4. Assign to database
         self.db
@@ -328,7 +338,10 @@ impl AssignmentService {
                 tracing::warn!("SLA service not initialized, skipping SLA application");
             }
         } else {
-            tracing::debug!("Team {} has no SLA policy, skipping SLA application", team_id);
+            tracing::debug!(
+                "Team {} has no SLA policy, skipping SLA application",
+                team_id
+            );
         }
 
         Ok(())
@@ -397,10 +410,7 @@ impl AssignmentService {
             .collect();
 
         // 2. Batch unassign
-        let count = self
-            .db
-            .unassign_agent_open_conversations(agent_id)
-            .await?;
+        let count = self.db.unassign_agent_open_conversations(agent_id).await?;
 
         // 3. Publish ConversationUnassigned event for each
         for conversation in &open_conversations {
@@ -449,7 +459,9 @@ impl AssignmentService {
         limit: i64,
         offset: i64,
     ) -> ApiResult<(Vec<Conversation>, i64)> {
-        self.db.get_user_assigned_conversations(user_id, limit, offset).await
+        self.db
+            .get_user_assigned_conversations(user_id, limit, offset)
+            .await
     }
 
     // Get team conversations
@@ -484,8 +496,13 @@ impl AssignmentService {
         conversation_id: &str,
     ) -> ApiResult<bool> {
         // Get conversation assignment
-        let conversation = self.db.get_conversation_by_id(conversation_id).await?
-            .ok_or_else(|| ApiError::NotFound(format!("Conversation {} not found", conversation_id)))?;
+        let conversation = self
+            .db
+            .get_conversation_by_id(conversation_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Conversation {} not found", conversation_id))
+            })?;
 
         // Check direct user assignment
         if let Some(assigned_user_id) = &conversation.assigned_user_id {

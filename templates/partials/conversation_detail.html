@@ -1,0 +1,68 @@
+<div id="message-view" class="flex-1 flex flex-col min-w-0 bg-white h-full relative">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+        <div>
+            <h2 class="text-xl font-bold text-gray-900 truncate" title="{{ conversation.subject }}">
+                {{ conversation.subject }}
+            </h2>
+            <p class="text-sm text-gray-500">
+                Contact: {{ conversation.contact_name }}
+            </p>
+        </div>
+        <div class="flex items-center space-x-4">
+            <!-- Status Badge -->
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                {% if conversation.status == " open" %} bg-green-100 text-green-800 {% else if
+                conversation.status=="resolved" %} bg-gray-100 text-gray-800 {% else if conversation.status=="snoozed"
+                %} bg-yellow-100 text-yellow-800 {% else %} bg-gray-100 text-gray-800 {% endif %}">
+                {{ conversation.status }}
+            </span>
+
+            <!-- Assignment Dropdown -->
+            <div class="relative">
+                <select hx-patch="/inbox/conversations/{{ conversation.id }}/assign" hx-trigger="change" hx-swap="none"
+                    name="agent_id"
+                    class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md h-9">
+                    <option value="">Unassigned</option>
+                    {% for agent in agents %}
+                    <option value="{{ agent.id }}" {% if let Some(assignee)=conversation.assigned_user_id %} {% if
+                        assignee.as_str()==agent.id %}selected{% endif %} {% endif %}>
+                        {{ agent.first_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Resolve/Reopen Button -->
+            {% if conversation.status != "resolved" && conversation.status != "closed" %}
+            <button hx-post="/inbox/conversations/{{ conversation.id }}/resolve" hx-target="#message-view"
+                class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                Resolve
+            </button>
+            {% else %}
+            <button hx-post="/inbox/conversations/{{ conversation.id }}/open" hx-target="#message-view"
+                class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Re-open
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Message Stream -->
+    <div id="message-list" class="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col">
+        {% for msg in messages %}
+        <div class="flex {% if msg.is_agent %}justify-end{% else %}justify-start{% endif %}">
+            <div
+                class="max-w-lg {% if msg.is_agent %}bg-indigo-600 text-white rounded-br-none{% else %}bg-gray-200 text-gray-900 rounded-bl-none{% endif %} rounded-lg px-4 py-2 shadow-sm">
+                <div class="text-xs {% if msg.is_agent %}text-indigo-200{% else %}text-gray-500{% endif %} mb-1">
+                    {{ msg.sender_name }} &bull; {{ msg.created_at }}
+                </div>
+                <p class="text-sm whitespace-pre-wrap">{{ msg.content }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Composer -->
+    {% include "partials/message_composer.html" %}
+</div>

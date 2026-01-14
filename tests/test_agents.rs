@@ -2,8 +2,8 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent, UserRole},
-    services::{validate_password_complexity, validate_and_normalize_email, hash_password},
+    models::{Agent, User, UserRole, UserType},
+    services::{hash_password, validate_and_normalize_email, validate_password_complexity},
 };
 
 #[tokio::test]
@@ -16,7 +16,12 @@ async fn test_agent_creation_success() {
     let admin_password_hash = hash_password("AdminPass123!").unwrap();
 
     let admin_user = User::new(admin_email.clone(), UserType::Agent);
-    let admin_agent = Agent::new(admin_user.id.clone(), "Admin".to_string(), None, admin_password_hash);
+    let admin_agent = Agent::new(
+        admin_user.id.clone(),
+        "Admin".to_string(),
+        None,
+        admin_password_hash,
+    );
 
     db.create_user(&admin_user).await.unwrap();
     db.create_agent(&admin_agent).await.unwrap();
@@ -31,7 +36,12 @@ async fn test_agent_creation_success() {
     let new_password_hash = hash_password("AgentPass123!").unwrap();
 
     let new_user = User::new(new_email.clone(), UserType::Agent);
-    let new_agent = Agent::new(new_user.id.clone(), "Test Agent".to_string(), None, new_password_hash);
+    let new_agent = Agent::new(
+        new_user.id.clone(),
+        "Test Agent".to_string(),
+        None,
+        new_password_hash,
+    );
 
     db.create_user(&new_user).await.unwrap();
     db.create_agent(&new_agent).await.unwrap();
@@ -42,7 +52,10 @@ async fn test_agent_creation_success() {
     db.assign_role_to_user(&new_user_role).await.unwrap();
 
     // Verify agent was created
-    let retrieved = db.get_user_by_email_and_type(&new_email, &UserType::Agent).await.unwrap();
+    let retrieved = db
+        .get_user_by_email_and_type(&new_email, &UserType::Agent)
+        .await
+        .unwrap();
     assert!(retrieved.is_some());
     assert_eq!(retrieved.unwrap().email, new_email);
 
@@ -63,7 +76,12 @@ async fn test_duplicate_agent_email_rejection() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user1 = User::new(email.clone(), UserType::Agent);
-    let agent1 = Agent::new(user1.id.clone(), "Agent 1".to_string(), None, password_hash.clone());
+    let agent1 = Agent::new(
+        user1.id.clone(),
+        "Agent 1".to_string(),
+        None,
+        password_hash.clone(),
+    );
 
     db.create_user(&user1).await.unwrap();
     db.create_agent(&agent1).await.unwrap();
@@ -93,7 +111,12 @@ async fn test_password_complexity_violations() {
 
     for (weak_pass, reason) in weak_passwords {
         let result = validate_password_complexity(weak_pass);
-        assert!(result.is_err(), "Password '{}' should be rejected: {}", weak_pass, reason);
+        assert!(
+            result.is_err(),
+            "Password '{}' should be rejected: {}",
+            weak_pass,
+            reason
+        );
     }
 }
 
@@ -107,7 +130,12 @@ async fn test_agent_creation_requires_at_least_one_role() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "No Role Agent".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "No Role Agent".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -138,16 +166,30 @@ async fn test_agent_email_can_duplicate_contact_email() {
     // Now create an agent with the same email (should succeed due to per-type uniqueness)
     let agent_user = User::new(email.clone(), UserType::Agent);
     let password_hash = hash_password("TestPass123!").unwrap();
-    let agent = Agent::new(agent_user.id.clone(), "Test Agent".to_string(), None, password_hash);
+    let agent = Agent::new(
+        agent_user.id.clone(),
+        "Test Agent".to_string(),
+        None,
+        password_hash,
+    );
 
     let result = db.create_user(&agent_user).await;
-    assert!(result.is_ok(), "Should allow same email for different user types");
+    assert!(
+        result.is_ok(),
+        "Should allow same email for different user types"
+    );
 
     db.create_agent(&agent).await.unwrap();
 
     // Verify both exist
-    let contact = db.get_user_by_email_and_type(&email, &UserType::Contact).await.unwrap();
-    let agent_retrieved = db.get_user_by_email_and_type(&email, &UserType::Agent).await.unwrap();
+    let contact = db
+        .get_user_by_email_and_type(&email, &UserType::Contact)
+        .await
+        .unwrap();
+    let agent_retrieved = db
+        .get_user_by_email_and_type(&email, &UserType::Agent)
+        .await
+        .unwrap();
 
     assert!(contact.is_some());
     assert!(agent_retrieved.is_some());
@@ -165,7 +207,12 @@ async fn test_get_agent_by_id() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Get Agent".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Get Agent".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();

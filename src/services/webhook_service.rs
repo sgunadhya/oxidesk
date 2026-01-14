@@ -2,8 +2,7 @@ use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
     models::{
-        CreateWebhookRequest, UpdateWebhookRequest, Webhook, WebhookListResponse,
-        WebhookResponse,
+        CreateWebhookRequest, UpdateWebhookRequest, Webhook, WebhookListResponse, WebhookResponse,
     },
 };
 use tracing::info;
@@ -40,9 +39,7 @@ impl WebhookService {
         }
 
         // Validate webhook
-        webhook
-            .validate()
-            .map_err(|e| ApiError::BadRequest(e))?;
+        webhook.validate().map_err(|e| ApiError::BadRequest(e))?;
 
         // Save to database
         self.db.create_webhook(&webhook).await?;
@@ -86,9 +83,7 @@ impl WebhookService {
         webhook.touch();
 
         // Validate updated webhook
-        webhook
-            .validate()
-            .map_err(|e| ApiError::BadRequest(e))?;
+        webhook.validate().map_err(|e| ApiError::BadRequest(e))?;
 
         // Save to database
         self.db.update_webhook(&webhook).await?;
@@ -133,7 +128,11 @@ impl WebhookService {
         info!(
             "Toggled webhook {} status to {}",
             webhook.id,
-            if webhook.is_active { "active" } else { "inactive" }
+            if webhook.is_active {
+                "active"
+            } else {
+                "inactive"
+            }
         );
 
         Ok(WebhookResponse::from(webhook))
@@ -171,10 +170,8 @@ impl WebhookService {
         let total = self.db.count_webhooks().await?;
 
         // Convert to response models (without secrets)
-        let webhook_responses: Vec<WebhookResponse> = webhooks
-            .into_iter()
-            .map(WebhookResponse::from)
-            .collect();
+        let webhook_responses: Vec<WebhookResponse> =
+            webhooks.into_iter().map(WebhookResponse::from).collect();
 
         Ok(WebhookListResponse {
             webhooks: webhook_responses,

@@ -1,14 +1,12 @@
-use axum::{
-    extract::{Path, Query, State},
-
-    Json,
-};
-use serde::Deserialize;
 use crate::{
     api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
     models::*,
-
 };
+use axum::{
+    extract::{Path, Query, State},
+    Json,
+};
+use serde::Deserialize;
 
 /// POST /api/agents/:id/availability - Set agent availability
 pub async fn set_availability(
@@ -33,7 +31,10 @@ pub async fn set_availability(
         .await?;
 
     // Return updated availability
-    let response = state.availability_service.get_availability(&agent_id).await?;
+    let response = state
+        .availability_service
+        .get_availability(&agent_id)
+        .await?;
 
     Ok(Json(response))
 }
@@ -53,7 +54,10 @@ pub async fn get_availability(
         ));
     }
 
-    let response = state.availability_service.get_availability(&agent_id).await?;
+    let response = state
+        .availability_service
+        .get_availability(&agent_id)
+        .await?;
 
     Ok(Json(response))
 }

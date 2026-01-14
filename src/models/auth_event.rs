@@ -11,7 +11,7 @@ pub enum AuthEventType {
     Logout,
     SessionExpired,
     RateLimitExceeded,
-    AuthorizationDenied,  // RBAC System: Permission check failures
+    AuthorizationDenied, // RBAC System: Permission check failures
 }
 
 impl std::fmt::Display for AuthEventType {

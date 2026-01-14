@@ -2,7 +2,6 @@
 ///
 /// Provides AES-256-GCM encryption for sensitive fields like IMAP/SMTP passwords.
 /// Uses a master encryption key from environment variable.
-
 use aes_gcm::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     Aes256Gcm, Nonce,
@@ -152,7 +151,10 @@ mod tests {
     use super::*;
 
     fn setup_test_key() {
-        std::env::set_var("ENCRYPTION_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        std::env::set_var(
+            "ENCRYPTION_KEY",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        );
     }
 
     #[test]
@@ -203,13 +205,19 @@ mod tests {
 
     #[test]
     fn test_wrong_key_fails_decryption() {
-        std::env::set_var("ENCRYPTION_KEY", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        std::env::set_var(
+            "ENCRYPTION_KEY",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        );
 
         let password = "secret";
         let encrypted = encrypt_password(password).unwrap();
 
         // Change the key
-        std::env::set_var("ENCRYPTION_KEY", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        std::env::set_var(
+            "ENCRYPTION_KEY",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        );
 
         let result = decrypt_password(&encrypted);
         assert!(result.is_err());

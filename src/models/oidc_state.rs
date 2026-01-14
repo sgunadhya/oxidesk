@@ -16,12 +16,7 @@ pub struct OidcState {
 
 impl OidcState {
     /// Create a new OIDC state with 10-minute expiration
-    pub fn new(
-        state: String,
-        provider_name: String,
-        nonce: String,
-        pkce_verifier: String,
-    ) -> Self {
+    pub fn new(state: String, provider_name: String, nonce: String, pkce_verifier: String) -> Self {
         let now = time::OffsetDateTime::now_utc();
         let expires_at = now + time::Duration::minutes(10);
 

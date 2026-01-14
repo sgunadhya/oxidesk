@@ -66,8 +66,6 @@ impl<'r> sqlx::Decode<'r, sqlx::Any> for ConversationStatus {
     }
 }
 
-
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum Priority {
@@ -123,8 +121,6 @@ impl sqlx::Type<sqlx::Any> for Priority {
     fn type_info() -> sqlx::any::AnyTypeInfo {
         <String as sqlx::Type<sqlx::Any>>::type_info()
     }
-
-
 }
 
 impl<'r> sqlx::Decode<'r, sqlx::Any> for Priority {
@@ -134,8 +130,6 @@ impl<'r> sqlx::Decode<'r, sqlx::Any> for Priority {
     }
 }
 
-
-
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Conversation {
     pub id: String,
@@ -144,8 +138,8 @@ pub struct Conversation {
     pub inbox_id: String,
     pub contact_id: String,
     pub subject: Option<String>,
-    pub resolved_at: Option<String>, // ISO8601 string from DB
-    pub closed_at: Option<String>, // ISO8601 string from DB (Feature 019)
+    pub resolved_at: Option<String>,   // ISO8601 string from DB
+    pub closed_at: Option<String>,     // ISO8601 string from DB (Feature 019)
     pub snoozed_until: Option<String>, // ISO8601 string from DB
     pub assigned_user_id: Option<String>,
     pub assigned_team_id: Option<String>,
@@ -197,7 +191,7 @@ impl From<Conversation> for ConversationResponse {
             contact_id: conv.contact_id,
             subject: conv.subject,
             resolved_at: conv.resolved_at,
-            closed_at: conv.closed_at,  // Feature 019
+            closed_at: conv.closed_at, // Feature 019
             snoozed_until: conv.snoozed_until,
             assigned_user_id: conv.assigned_user_id,
             assigned_team_id: conv.assigned_team_id,

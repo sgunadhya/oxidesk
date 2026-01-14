@@ -3,8 +3,8 @@ use uuid::Uuid;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent, Session},
-    services::{hash_password, validate_and_normalize_email, password_reset_service},
+    models::{Agent, Session, User, UserType},
+    services::{hash_password, password_reset_service, validate_and_normalize_email},
 };
 
 #[tokio::test]
@@ -18,7 +18,12 @@ async fn test_invalid_token_does_not_change_password() {
     let original_hash = hash_password(original_password).unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Rollback Test 1".to_string(), None, original_hash.clone());
+    let agent = Agent::new(
+        user.id.clone(),
+        "Rollback Test 1".to_string(),
+        None,
+        original_hash.clone(),
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -50,14 +55,24 @@ async fn test_weak_password_does_not_mark_token_as_used() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Rollback Test 2".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Rollback Test 2".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = &tokens[0].token;
 
     // Try to reset with weak password
@@ -68,11 +83,17 @@ async fn test_weak_password_does_not_mark_token_as_used() {
 
     // Token should still be unused
     let token_after = db.get_password_reset_token(token).await.unwrap().unwrap();
-    assert!(!token_after.used, "Token should not be marked as used on password validation failure");
+    assert!(
+        !token_after.used,
+        "Token should not be marked as used on password validation failure"
+    );
 
     // Token should still be usable
     let result2 = password_reset_service::reset_password(db, token, "StrongPass123!").await;
-    assert!(result2.is_ok(), "Token should still be usable after failed attempt");
+    assert!(
+        result2.is_ok(),
+        "Token should still be usable after failed attempt"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -87,7 +108,12 @@ async fn test_failed_reset_does_not_destroy_sessions() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Rollback Test 3".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Rollback Test 3".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -99,8 +125,13 @@ async fn test_failed_reset_does_not_destroy_sessions() {
     db.create_session(&session2).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = &tokens[0].token;
 
     // Try to reset with weak password (should fail)
@@ -110,7 +141,8 @@ async fn test_failed_reset_does_not_destroy_sessions() {
     // Sessions should remain intact
     let sessions_after = db.get_user_sessions(&user.id).await.unwrap();
     assert_eq!(
-        sessions_after.len(), 2,
+        sessions_after.len(),
+        2,
         "Sessions should not be destroyed on failed reset"
     );
 
@@ -127,7 +159,12 @@ async fn test_nonexistent_token_does_not_affect_database() {
     let original_hash = hash_password("OriginalPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Rollback Test 4".to_string(), None, original_hash.clone());
+    let agent = Agent::new(
+        user.id.clone(),
+        "Rollback Test 4".to_string(),
+        None,
+        original_hash.clone(),
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -165,18 +202,32 @@ async fn test_expired_token_does_not_change_password() {
     let original_hash = hash_password(original_password).unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Expired Test".to_string(), None, original_hash.clone());
+    let agent = Agent::new(
+        user.id.clone(),
+        "Expired Test".to_string(),
+        None,
+        original_hash.clone(),
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token_value = tokens[0].token.clone();
 
     // Manually update token to be expired (set expires_at to past)
-    let expired_token = db.get_password_reset_token(&token_value).await.unwrap().unwrap();
+    let expired_token = db
+        .get_password_reset_token(&token_value)
+        .await
+        .unwrap()
+        .unwrap();
     let past_time = chrono::Utc::now() - chrono::Duration::hours(2);
     sqlx::query("UPDATE password_reset_tokens SET expires_at = ? WHERE id = ?")
         .bind(past_time.to_rfc3339())
@@ -211,18 +262,30 @@ async fn test_used_token_does_not_change_password_again() {
     let original_hash = hash_password("OriginalPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Reuse Test".to_string(), None, original_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Reuse Test".to_string(),
+        None,
+        original_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = &tokens[0].token;
 
     // Use token once
-    password_reset_service::reset_password(db, token, "FirstNewPass123!").await.unwrap();
+    password_reset_service::reset_password(db, token, "FirstNewPass123!")
+        .await
+        .unwrap();
 
     // Get the new password hash
     let agent_after_first = db.get_agent_by_user_id(&user.id).await.unwrap().unwrap();

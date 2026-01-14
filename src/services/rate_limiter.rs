@@ -4,8 +4,8 @@ use governor::{
     state::InMemoryState,
     Quota, RateLimiter as GovernorRateLimiter,
 };
-use std::{num::NonZeroU32, sync::Arc, time::Duration};
 use std::collections::HashMap;
+use std::{num::NonZeroU32, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 
 /// Rate limiter for authentication attempts
@@ -15,7 +15,9 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct AuthRateLimiter {
     /// Map of email -> rate limiter instance
-    limiters: Arc<RwLock<HashMap<String, Arc<GovernorRateLimiter<NotKeyed, InMemoryState, DefaultClock>>>>>,
+    limiters: Arc<
+        RwLock<HashMap<String, Arc<GovernorRateLimiter<NotKeyed, InMemoryState, DefaultClock>>>>,
+    >,
     /// Maximum attempts allowed
     max_attempts: u32,
     /// Time window in minutes
@@ -51,11 +53,9 @@ impl AuthRateLimiter {
             limiters
                 .entry(email.clone())
                 .or_insert_with(|| {
-                    let quota = Quota::with_period(
-                        Duration::from_secs(self.window_minutes * 60)
-                    )
-                    .unwrap()
-                    .allow_burst(NonZeroU32::new(self.max_attempts).unwrap());
+                    let quota = Quota::with_period(Duration::from_secs(self.window_minutes * 60))
+                        .unwrap()
+                        .allow_burst(NonZeroU32::new(self.max_attempts).unwrap());
 
                     Arc::new(GovernorRateLimiter::direct(quota))
                 })
@@ -147,7 +147,6 @@ impl RateLimitError {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[tokio::test]
     async fn test_rate_limiter_allows_within_limit() {

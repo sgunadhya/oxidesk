@@ -19,15 +19,9 @@ impl TeamService {
     }
 
     pub async fn get_team(&self, team_id: &str) -> ApiResult<Team> {
-        self.db
-            .get_team_by_id(team_id)
-            .await?
-            .ok_or_else(|| {
-                crate::api::middleware::error::ApiError::NotFound(format!(
-                    "Team {} not found",
-                    team_id
-                ))
-            })
+        self.db.get_team_by_id(team_id).await?.ok_or_else(|| {
+            crate::api::middleware::error::ApiError::NotFound(format!("Team {} not found", team_id))
+        })
     }
 
     pub async fn list_teams(&self) -> ApiResult<Vec<Team>> {

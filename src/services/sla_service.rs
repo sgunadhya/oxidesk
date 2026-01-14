@@ -35,9 +35,8 @@ impl SlaService {
         next_response_time: String,
     ) -> ApiResult<SlaPolicy> {
         // Validate duration formats
-        parse_duration(&first_response_time).map_err(|e| {
-            ApiError::BadRequest(format!("Invalid first_response_time: {}", e))
-        })?;
+        parse_duration(&first_response_time)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid first_response_time: {}", e)))?;
         parse_duration(&resolution_time)
             .map_err(|e| ApiError::BadRequest(format!("Invalid resolution_time: {}", e)))?;
         parse_duration(&next_response_time)
@@ -68,11 +67,7 @@ impl SlaService {
     }
 
     /// List all SLA policies
-    pub async fn list_policies(
-        &self,
-        limit: i64,
-        offset: i64,
-    ) -> ApiResult<(Vec<SlaPolicy>, i64)> {
+    pub async fn list_policies(&self, limit: i64, offset: i64) -> ApiResult<(Vec<SlaPolicy>, i64)> {
         self.db.list_sla_policies(limit, offset).await
     }
 
@@ -88,9 +83,8 @@ impl SlaService {
     ) -> ApiResult<()> {
         // Validate duration formats if provided
         if let Some(ref time) = first_response_time {
-            parse_duration(time).map_err(|e| {
-                ApiError::BadRequest(format!("Invalid first_response_time: {}", e))
-            })?;
+            parse_duration(time)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid first_response_time: {}", e)))?;
         }
         if let Some(ref time) = resolution_time {
             parse_duration(time)
@@ -195,10 +189,13 @@ impl SlaService {
         base_timestamp: &str,
     ) -> ApiResult<AppliedSla> {
         // Validate conversation exists and get it
-        let conversation = self.db
+        let conversation = self
+            .db
             .get_conversation_by_id(conversation_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Conversation not found: {}", conversation_id)))?;
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Conversation not found: {}", conversation_id))
+            })?;
 
         // Get the policy
         let policy = self
@@ -207,9 +204,13 @@ impl SlaService {
             .ok_or_else(|| ApiError::NotFound(format!("SLA policy not found: {}", policy_id)))?;
 
         // Check for duplicate: conversation must not already have an applied SLA
-        if let Some(_existing) = self.db.get_applied_sla_by_conversation(conversation_id).await? {
+        if let Some(_existing) = self
+            .db
+            .get_applied_sla_by_conversation(conversation_id)
+            .await?
+        {
             return Err(ApiError::BadRequest(
-                "Conversation already has an applied SLA".to_string()
+                "Conversation already has an applied SLA".to_string(),
             ));
         }
 
@@ -220,7 +221,10 @@ impl SlaService {
                     // Parse business hours JSON
                     match crate::models::team::BusinessHours::parse(bh_json) {
                         Ok(bh) => {
-                            info!("Using business hours for team {} (timezone: {})", team_id, bh.timezone);
+                            info!(
+                                "Using business hours for team {} (timezone: {})",
+                                team_id, bh.timezone
+                            );
                             Some(bh)
                         }
                         Err(e) => {
@@ -461,18 +465,28 @@ impl SlaService {
             return Ok(());
         }
 
-        info!("Found {} breached SLA events to process", breached_events.len());
+        info!(
+            "Found {} breached SLA events to process",
+            breached_events.len()
+        );
 
         for event in breached_events {
             // Get the applied SLA to get conversation_id
-            let applied_sla = self.db.get_applied_sla_by_id(&event.applied_sla_id).await?
-                .ok_or_else(|| ApiError::NotFound(format!("Applied SLA not found: {}", event.applied_sla_id)))?;
+            let applied_sla = self
+                .db
+                .get_applied_sla_by_id(&event.applied_sla_id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!("Applied SLA not found: {}", event.applied_sla_id))
+                })?;
 
             // Mark the event as breached (using deadline as breached_at)
-            self.mark_event_breached(&event.id, &event.deadline_at).await?;
+            self.mark_event_breached(&event.id, &event.deadline_at)
+                .await?;
 
             // Update the applied SLA status if needed
-            self.update_applied_sla_status(&event.applied_sla_id).await?;
+            self.update_applied_sla_status(&event.applied_sla_id)
+                .await?;
 
             // Emit SLA breached event
             let now = chrono::Utc::now().to_rfc3339();
@@ -484,7 +498,8 @@ impl SlaService {
                 deadline_at: event.deadline_at.clone(),
                 breached_at: event.deadline_at.clone(), // Use deadline as breached time
                 timestamp: now,
-            }).await;
+            })
+            .await;
 
             info!(
                 "SLA event {} breached for conversation {} (type: {:?}, deadline: {})",
@@ -497,7 +512,9 @@ impl SlaService {
 
     /// Mark an SLA event as breached
     async fn mark_event_breached(&self, event_id: &str, deadline_at: &str) -> ApiResult<()> {
-        self.db.mark_sla_event_breached(event_id, deadline_at).await?;
+        self.db
+            .mark_sla_event_breached(event_id, deadline_at)
+            .await?;
         Ok(())
     }
 
@@ -505,7 +522,10 @@ impl SlaService {
     /// Uses "worst outcome" logic: breached > pending > met
     async fn update_applied_sla_status(&self, applied_sla_id: &str) -> ApiResult<()> {
         // Get all events for this applied SLA
-        let events = self.db.get_sla_events_by_applied_sla(applied_sla_id).await?;
+        let events = self
+            .db
+            .get_sla_events_by_applied_sla(applied_sla_id)
+            .await?;
 
         // Determine the worst status
         let has_breached = events.iter().any(|e| e.status == SlaEventStatus::Breached);
@@ -520,7 +540,9 @@ impl SlaService {
         };
 
         // Update the applied SLA status
-        self.db.update_applied_sla_status(applied_sla_id, new_status).await?;
+        self.db
+            .update_applied_sla_status(applied_sla_id, new_status)
+            .await?;
 
         Ok(())
     }
@@ -556,8 +578,9 @@ impl SlaService {
             .with_timezone(&chrono::Utc);
 
         // Parse timezone
-        let tz: Tz = business_hours.timezone.parse()
-            .map_err(|_| ApiError::BadRequest(format!("Invalid timezone: {}", business_hours.timezone)))?;
+        let tz: Tz = business_hours.timezone.parse().map_err(|_| {
+            ApiError::BadRequest(format!("Invalid timezone: {}", business_hours.timezone))
+        })?;
 
         // Convert to team timezone
         current = current.with_timezone(&tz).with_timezone(&chrono::Utc);
@@ -575,7 +598,8 @@ impl SlaService {
                 remaining_seconds -= 60;
             } else {
                 // We're outside working hours, jump to next working hour
-                current = self.next_working_hour(&current_in_tz, business_hours, &tz)?
+                current = self
+                    .next_working_hour(&current_in_tz, business_hours, &tz)?
                     .with_timezone(&chrono::Utc);
             }
         }
@@ -603,8 +627,7 @@ impl SlaService {
         };
 
         // Find schedule for this day
-        let day_schedule = business_hours.schedule.iter()
-            .find(|s| s.day == day_name);
+        let day_schedule = business_hours.schedule.iter().find(|s| s.day == day_name);
 
         if let Some(schedule) = day_schedule {
             // Parse start and end times (format: "HH:MM")
@@ -636,7 +659,9 @@ impl SlaService {
             }
         }
 
-        Err(ApiError::Internal("Could not find next working hour within 14 days".to_string()))
+        Err(ApiError::Internal(
+            "Could not find next working hour within 14 days".to_string(),
+        ))
     }
 
     /// Publish event to the event bus

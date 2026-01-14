@@ -1,6 +1,6 @@
-use crate::models::{RuleAction, ActionType, ConversationStatus};
-use crate::database::Database;
 use crate::api::middleware::ApiError;
+use crate::database::Database;
+use crate::models::{ActionType, ConversationStatus, RuleAction};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -62,9 +62,12 @@ impl ActionExecutor {
         executed_by: &str,
     ) -> Result<(), ActionError> {
         // Wrap execution with timeout
-        tokio::time::timeout(self.timeout, self.execute_internal(action, conversation_id, executed_by))
-            .await
-            .map_err(|_| ActionError::Timeout)?
+        tokio::time::timeout(
+            self.timeout,
+            self.execute_internal(action, conversation_id, executed_by),
+        )
+        .await
+        .map_err(|_| ActionError::Timeout)?
     }
 
     async fn execute_internal(
@@ -74,7 +77,8 @@ impl ActionExecutor {
         executed_by: &str,
     ) -> Result<(), ActionError> {
         // Verify conversation exists
-        let _conversation = self.db
+        let _conversation = self
+            .db
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or(ActionError::ConversationNotFound)?;
@@ -88,22 +92,28 @@ impl ActionExecutor {
 
         match action.action_type {
             ActionType::SetPriority => {
-                self.execute_set_priority(conversation_id, &action.parameters).await
+                self.execute_set_priority(conversation_id, &action.parameters)
+                    .await
             }
             ActionType::AssignToUser => {
-                self.execute_assign_to_user(conversation_id, executed_by, &action.parameters).await
+                self.execute_assign_to_user(conversation_id, executed_by, &action.parameters)
+                    .await
             }
             ActionType::AssignToTeam => {
-                self.execute_assign_to_team(conversation_id, executed_by, &action.parameters).await
+                self.execute_assign_to_team(conversation_id, executed_by, &action.parameters)
+                    .await
             }
             ActionType::AddTag => {
-                self.execute_add_tag(conversation_id, executed_by, &action.parameters).await
+                self.execute_add_tag(conversation_id, executed_by, &action.parameters)
+                    .await
             }
             ActionType::RemoveTag => {
-                self.execute_remove_tag(conversation_id, &action.parameters).await
+                self.execute_remove_tag(conversation_id, &action.parameters)
+                    .await
             }
             ActionType::ChangeStatus => {
-                self.execute_change_status(conversation_id, &action.parameters).await
+                self.execute_change_status(conversation_id, &action.parameters)
+                    .await
             }
         }
     }
@@ -116,7 +126,9 @@ impl ActionExecutor {
         let priority = parameters
             .get("priority")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ActionError::InvalidParameters("Missing 'priority' parameter".to_string()))?;
+            .ok_or_else(|| {
+                ActionError::InvalidParameters("Missing 'priority' parameter".to_string())
+            })?;
 
         // Validate priority value (Feature 020: Only Low, Medium, High)
         if !["Low", "Medium", "High"].contains(&priority) {
@@ -127,7 +139,9 @@ impl ActionExecutor {
         }
 
         let priority_enum = crate::models::Priority::from(priority.to_string());
-        self.db.set_conversation_priority(conversation_id, &priority_enum).await?;
+        self.db
+            .set_conversation_priority(conversation_id, &priority_enum)
+            .await?;
 
         tracing::info!(
             "Set priority to '{}' for conversation {}",
@@ -147,10 +161,13 @@ impl ActionExecutor {
         let user_id = parameters
             .get("user_id")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ActionError::InvalidParameters("Missing 'user_id' parameter".to_string()))?;
+            .ok_or_else(|| {
+                ActionError::InvalidParameters("Missing 'user_id' parameter".to_string())
+            })?;
 
         // Verify user exists and is an agent
-        let user = self.db
+        let user = self
+            .db
             .get_user_by_id(user_id)
             .await?
             .ok_or(ActionError::UserNotFound)?;
@@ -185,7 +202,9 @@ impl ActionExecutor {
         let team_id = parameters
             .get("team_id")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ActionError::InvalidParameters("Missing 'team_id' parameter".to_string()))?;
+            .ok_or_else(|| {
+                ActionError::InvalidParameters("Missing 'team_id' parameter".to_string())
+            })?;
 
         // Verify team exists
         self.db
@@ -290,7 +309,9 @@ impl ActionExecutor {
         let status_str = parameters
             .get("status")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ActionError::InvalidParameters("Missing 'status' parameter".to_string()))?;
+            .ok_or_else(|| {
+                ActionError::InvalidParameters("Missing 'status' parameter".to_string())
+            })?;
 
         // Parse status
         let status = match status_str {
@@ -307,7 +328,9 @@ impl ActionExecutor {
         };
 
         // Update conversation status
-        self.db.update_conversation_status(conversation_id, status).await?;
+        self.db
+            .update_conversation_status(conversation_id, status)
+            .await?;
 
         tracing::info!(
             "Changed status to '{}' for conversation {}",
@@ -321,6 +344,8 @@ impl ActionExecutor {
 
 impl Default for ActionExecutor {
     fn default() -> Self {
-        panic!("ActionExecutor cannot be created with default(). Use new() with a Database instance.");
+        panic!(
+            "ActionExecutor cannot be created with default(). Use new() with a Database instance."
+        );
     }
 }

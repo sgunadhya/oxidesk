@@ -48,7 +48,7 @@ pub fn validate_transition(
         (Open, Resolved) => Ok(()),
         (Snoozed, Open) => Ok(()),
         (Resolved, Open) => Ok(()),
-        (Resolved, Closed) => Ok(()),  // Feature 019: Allow closing resolved conversations
+        (Resolved, Closed) => Ok(()), // Feature 019: Allow closing resolved conversations
 
         // All other transitions are invalid
         _ => Err(TransitionError::InvalidTransition { from, to }),
@@ -116,7 +116,9 @@ mod tests {
 
     #[test]
     fn test_open_to_resolved_valid() {
-        assert!(validate_transition(ConversationStatus::Open, ConversationStatus::Resolved).is_ok());
+        assert!(
+            validate_transition(ConversationStatus::Open, ConversationStatus::Resolved).is_ok()
+        );
     }
 
     #[test]
@@ -126,7 +128,9 @@ mod tests {
 
     #[test]
     fn test_resolved_to_open_valid() {
-        assert!(validate_transition(ConversationStatus::Resolved, ConversationStatus::Open).is_ok());
+        assert!(
+            validate_transition(ConversationStatus::Resolved, ConversationStatus::Open).is_ok()
+        );
     }
 
     #[test]

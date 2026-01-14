@@ -2,9 +2,9 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    services::agent_service::{create_agent},
-    services::{verify_password},
-    models::{UserType, CreateAgentRequest},
+    models::{CreateAgentRequest, UserType},
+    services::agent_service::create_agent,
+    services::verify_password,
 };
 
 #[tokio::test]
@@ -24,7 +24,9 @@ async fn test_create_agent_service_flow() {
     };
 
     // 3. Call create_agent
-    let response = create_agent(db, &admin_user, request.clone()).await.expect("Failed to create agent");
+    let response = create_agent(db, &admin_user, request.clone())
+        .await
+        .expect("Failed to create agent");
 
     // 4. Verify Response
     assert_eq!(response.email, request.email);
@@ -34,13 +36,23 @@ async fn test_create_agent_service_flow() {
     println!("Generated Password: {}", response.password);
 
     // 5. Verify Database
-    let created_user = db.get_user_by_email_and_type(&request.email, &UserType::Agent)
-        .await.expect("DB error").expect("User not found");
-    
+    let created_user = db
+        .get_user_by_email_and_type(&request.email, &UserType::Agent)
+        .await
+        .expect("DB error")
+        .expect("User not found");
+
     // Verify password hash
-    let agent_details = db.get_agent_by_user_id(&created_user.id).await.expect("DB error").expect("Agent details not found");
-    
-    assert!(verify_password(&response.password, &agent_details.password_hash).expect("Verification error"));
+    let agent_details = db
+        .get_agent_by_user_id(&created_user.id)
+        .await
+        .expect("DB error")
+        .expect("Agent details not found");
+
+    assert!(
+        verify_password(&response.password, &agent_details.password_hash)
+            .expect("Verification error")
+    );
 
     // Verify Role
     let roles = db.get_user_roles(&created_user.id).await.expect("DB error");

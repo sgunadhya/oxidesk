@@ -1,12 +1,11 @@
+use rand::distributions::Alphanumeric;
+use rand::seq::SliceRandom;
 /// Password Generation Service
 /// Feature: User Creation (016)
 ///
 /// Provides secure random password generation for newly created agent accounts.
 /// Passwords are 16+ characters with mixed complexity for high security.
-
 use rand::{thread_rng, Rng};
-use rand::distributions::Alphanumeric;
-use rand::seq::SliceRandom;
 
 /// Special characters used in password generation
 const SPECIAL_CHARS: &[u8] = b"!@#$%^&*()_+-=[]{}|;:,.<>?";
@@ -40,9 +39,7 @@ pub fn generate_random_password() -> String {
     let mut rng = thread_rng();
 
     // Generate 8 random alphanumeric characters
-    let mut password: Vec<u8> = (0..8)
-        .map(|_| rng.sample(Alphanumeric))
-        .collect();
+    let mut password: Vec<u8> = (0..8).map(|_| rng.sample(Alphanumeric)).collect();
 
     // Add 1 guaranteed uppercase letter (A-Z)
     password.push(rng.gen_range(b'A'..=b'Z'));
@@ -109,7 +106,11 @@ mod tests {
     #[test]
     fn test_generate_password_length() {
         let password = generate_random_password();
-        assert_eq!(password.len(), 16, "Password should be exactly 16 characters");
+        assert_eq!(
+            password.len(),
+            16,
+            "Password should be exactly 16 characters"
+        );
     }
 
     #[test]
@@ -124,9 +125,7 @@ mod tests {
     #[test]
     fn test_generate_password_has_special_chars() {
         let password = generate_random_password();
-        let has_special = password.chars().any(|c| {
-            SPECIAL_CHARS.contains(&(c as u8))
-        });
+        let has_special = password.chars().any(|c| SPECIAL_CHARS.contains(&(c as u8)));
         assert!(has_special, "Password should contain special characters");
     }
 
@@ -135,7 +134,10 @@ mod tests {
         let password = generate_random_password();
         let has_uppercase = password.chars().any(|c| c.is_uppercase());
         let has_lowercase = password.chars().any(|c| c.is_lowercase());
-        assert!(has_uppercase || has_lowercase, "Password should have mixed case");
+        assert!(
+            has_uppercase || has_lowercase,
+            "Password should have mixed case"
+        );
     }
 
     #[test]
@@ -146,7 +148,11 @@ mod tests {
             let password = generate_random_password();
             passwords.insert(password);
         }
-        assert_eq!(passwords.len(), 100, "All generated passwords should be unique");
+        assert_eq!(
+            passwords.len(),
+            100,
+            "All generated passwords should be unique"
+        );
     }
 
     #[test]

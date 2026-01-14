@@ -2,7 +2,7 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{RuleAction, ActionType, ConversationStatus, Priority},
+    models::{ActionType, ConversationStatus, Priority, RuleAction},
     services::action_executor::ActionExecutor,
 };
 use serde_json::json;
@@ -31,12 +31,18 @@ async fn test_execute_set_priority_action() {
 
     // Execute action
     let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
-    let result = executor.execute(&action, &conversation.id, "automation-system").await;
+    let result = executor
+        .execute(&action, &conversation.id, "automation-system")
+        .await;
 
     assert!(result.is_ok(), "Set priority action should succeed");
 
     // Verify priority was set
-    let updated_conv = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated_conv = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated_conv.priority, Some(Priority::High));
 
     teardown_test_db(test_db).await;
@@ -66,14 +72,23 @@ async fn test_execute_assign_to_user_action() {
 
     // Execute action
     let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
-    let result = executor.execute(&action, &conversation.id, "automation-system").await;
+    let result = executor
+        .execute(&action, &conversation.id, "automation-system")
+        .await;
 
     assert!(result.is_ok(), "Assign to user action should succeed");
 
     // Verify assignment
-    let updated_conv = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated_conv = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated_conv.assigned_user_id, Some(agent.user_id.clone()));
-    assert_eq!(updated_conv.assigned_by, Some("automation-system".to_string()));
+    assert_eq!(
+        updated_conv.assigned_by,
+        Some("automation-system".to_string())
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -112,14 +127,23 @@ async fn test_execute_assign_to_team_action() {
 
     // Execute action
     let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
-    let result = executor.execute(&action, &conversation.id, "automation-system").await;
+    let result = executor
+        .execute(&action, &conversation.id, "automation-system")
+        .await;
 
     assert!(result.is_ok(), "Assign to team action should succeed");
 
     // Verify assignment
-    let updated_conv = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated_conv = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated_conv.assigned_team_id, Some(team_id));
-    assert_eq!(updated_conv.assigned_by, Some("automation-system".to_string()));
+    assert_eq!(
+        updated_conv.assigned_by,
+        Some("automation-system".to_string())
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -159,7 +183,9 @@ async fn test_execute_add_tag_action() {
 
     // Execute action
     let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
-    let result = executor.execute(&action, &conversation.id, agent.user_id.as_str()).await;
+    let result = executor
+        .execute(&action, &conversation.id, agent.user_id.as_str())
+        .await;
 
     assert!(result.is_ok(), "Add tag action should succeed");
 
@@ -220,7 +246,9 @@ async fn test_execute_remove_tag_action() {
 
     // Execute action
     let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
-    let result = executor.execute(&action, &conversation.id, agent.user_id.as_str()).await;
+    let result = executor
+        .execute(&action, &conversation.id, agent.user_id.as_str())
+        .await;
 
     assert!(result.is_ok(), "Remove tag action should succeed");
 
@@ -254,12 +282,18 @@ async fn test_execute_change_status_action() {
 
     // Execute action
     let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
-    let result = executor.execute(&action, &conversation.id, "automation-system").await;
+    let result = executor
+        .execute(&action, &conversation.id, "automation-system")
+        .await;
 
     assert!(result.is_ok(), "Change status action should succeed");
 
     // Verify status was changed
-    let updated_conv = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated_conv = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated_conv.status, ConversationStatus::Resolved);
     assert!(updated_conv.resolved_at.is_some());
 
@@ -289,9 +323,14 @@ async fn test_execute_action_with_invalid_parameters() {
 
     // Execute action
     let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
-    let result = executor.execute(&action, &conversation.id, "automation-system").await;
+    let result = executor
+        .execute(&action, &conversation.id, "automation-system")
+        .await;
 
-    assert!(result.is_err(), "Action with invalid parameters should fail");
+    assert!(
+        result.is_err(),
+        "Action with invalid parameters should fail"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -319,7 +358,9 @@ async fn test_execute_action_user_not_found() {
 
     // Execute action
     let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
-    let result = executor.execute(&action, &conversation.id, "automation-system").await;
+    let result = executor
+        .execute(&action, &conversation.id, "automation-system")
+        .await;
 
     assert!(result.is_err(), "Action with non-existent user should fail");
 
@@ -339,9 +380,14 @@ async fn test_execute_action_conversation_not_found() {
 
     // Execute action on non-existent conversation
     let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
-    let result = executor.execute(&action, "non-existent-conversation", "automation-system").await;
+    let result = executor
+        .execute(&action, "non-existent-conversation", "automation-system")
+        .await;
 
-    assert!(result.is_err(), "Action on non-existent conversation should fail");
+    assert!(
+        result.is_err(),
+        "Action on non-existent conversation should fail"
+    );
 
     teardown_test_db(test_db).await;
 }

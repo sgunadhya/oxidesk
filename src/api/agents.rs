@@ -1,21 +1,21 @@
+use crate::{
+    api::middleware::{ApiResult, AppState, AuthenticatedUser},
+    models::*,
+};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
 use serde::Deserialize;
-use crate::{
-    api::middleware::{ApiResult, AppState, AuthenticatedUser},
-    models::*,
-
-};
 
 pub async fn create_agent(
     State(state): State<AppState>,
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
     Json(request): Json<CreateAgentRequest>,
 ) -> ApiResult<(StatusCode, Json<CreateAgentResponse>)> {
-    let response = crate::services::agent_service::create_agent(&state.db, &auth_user, request).await?;
+    let response =
+        crate::services::agent_service::create_agent(&state.db, &auth_user, request).await?;
     Ok((StatusCode::CREATED, Json(response)))
 }
 
@@ -58,7 +58,9 @@ pub async fn list_agents(
     axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
     Query(params): Query<PaginationParams>,
 ) -> ApiResult<Json<AgentListResponse>> {
-    let response = crate::services::agent_service::list_agents(&state.db, params.page, params.per_page).await?;
+    let response =
+        crate::services::agent_service::list_agents(&state.db, params.page, params.per_page)
+            .await?;
     Ok(Json(response))
 }
 
@@ -68,7 +70,8 @@ pub async fn update_agent(
     Path(id): Path<String>,
     Json(request): Json<UpdateAgentRequest>,
 ) -> ApiResult<Json<AgentResponse>> {
-    let response = crate::services::agent_service::update_agent(&state.db, &auth_user, &id, request).await?;
+    let response =
+        crate::services::agent_service::update_agent(&state.db, &auth_user, &id, request).await?;
     Ok(Json(response))
 }
 
@@ -78,6 +81,7 @@ pub async fn change_agent_password(
     Path(id): Path<String>,
     Json(request): Json<ChangePasswordRequest>,
 ) -> ApiResult<StatusCode> {
-    crate::services::agent_service::change_agent_password(&state.db, &auth_user, &id, request).await?;
+    crate::services::agent_service::change_agent_password(&state.db, &auth_user, &id, request)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }

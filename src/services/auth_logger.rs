@@ -281,10 +281,7 @@ mod tests {
     #[test]
     fn test_extract_ip_from_forwarded_for() {
         let mut headers = axum::http::HeaderMap::new();
-        headers.insert(
-            "x-forwarded-for",
-            "192.168.1.1, 10.0.0.1".parse().unwrap(),
-        );
+        headers.insert("x-forwarded-for", "192.168.1.1, 10.0.0.1".parse().unwrap());
 
         let ip = extract_ip_address(&headers);
         assert_eq!(ip, "192.168.1.1");
@@ -309,10 +306,7 @@ mod tests {
     #[test]
     fn test_extract_user_agent() {
         let mut headers = axum::http::HeaderMap::new();
-        headers.insert(
-            "user-agent",
-            "Mozilla/5.0 (Test)".parse().unwrap(),
-        );
+        headers.insert("user-agent", "Mozilla/5.0 (Test)".parse().unwrap());
 
         let ua = extract_user_agent(&headers);
         assert_eq!(ua, Some("Mozilla/5.0 (Test)".to_string()));

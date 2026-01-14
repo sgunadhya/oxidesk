@@ -1,13 +1,13 @@
 use axum::{
     extract::{Request, State},
-    http::header::{AUTHORIZATION, HeaderMap},
+    http::header::{HeaderMap, AUTHORIZATION},
     middleware::Next,
     response::Response,
 };
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 
-use crate::api::middleware::error::ApiError;
 use crate::api::middleware::auth::AppState;
+use crate::api::middleware::error::ApiError;
 use crate::database::Database;
 use crate::models::Agent;
 use crate::services::api_key_service::verify_api_secret;
@@ -18,10 +18,9 @@ use crate::services::api_key_service::verify_api_secret;
 /// 2. HTTP Basic Auth: Authorization: Basic <base64(key:secret)>
 fn extract_credentials(headers: &HeaderMap) -> Option<(String, String)> {
     // Method 1: Check for custom headers (priority)
-    if let (Some(api_key), Some(api_secret)) = (
-        headers.get("X-API-Key"),
-        headers.get("X-API-Secret"),
-    ) {
+    if let (Some(api_key), Some(api_secret)) =
+        (headers.get("X-API-Key"), headers.get("X-API-Secret"))
+    {
         if let (Ok(key), Ok(secret)) = (api_key.to_str(), api_secret.to_str()) {
             return Some((key.to_string(), secret.to_string()));
         }
@@ -103,7 +102,10 @@ pub async fn authenticate_with_api_key(
             Ok(Some(agent))
         }
         Ok(false) => {
-            tracing::warn!("API key secret verification failed for: {}", &api_key[..10.min(api_key.len())]);
+            tracing::warn!(
+                "API key secret verification failed for: {}",
+                &api_key[..10.min(api_key.len())]
+            );
             Ok(None)
         }
         Err(e) => {
@@ -179,14 +181,25 @@ mod tests {
     #[test]
     fn test_extract_credentials_custom_headers() {
         let mut headers = HeaderMap::new();
-        headers.insert("X-API-Key", "test_key_32_characters_long12".parse().unwrap());
-        headers.insert("X-API-Secret", "test_secret_64_characters_long_0123456789_ABCDEFGHIJKLMNOPQRST".parse().unwrap());
+        headers.insert(
+            "X-API-Key",
+            "test_key_32_characters_long12".parse().unwrap(),
+        );
+        headers.insert(
+            "X-API-Secret",
+            "test_secret_64_characters_long_0123456789_ABCDEFGHIJKLMNOPQRST"
+                .parse()
+                .unwrap(),
+        );
 
         let result = extract_credentials(&headers);
         assert!(result.is_some());
         let (key, secret) = result.unwrap();
         assert_eq!(key, "test_key_32_characters_long12");
-        assert_eq!(secret, "test_secret_64_characters_long_0123456789_ABCDEFGHIJKLMNOPQRST");
+        assert_eq!(
+            secret,
+            "test_secret_64_characters_long_0123456789_ABCDEFGHIJKLMNOPQRST"
+        );
     }
 
     #[test]
@@ -194,7 +207,10 @@ mod tests {
         let mut headers = HeaderMap::new();
         // Base64 encode "mykey:mysecret"
         let credentials = general_purpose::STANDARD.encode("mykey:mysecret");
-        headers.insert(AUTHORIZATION, format!("Basic {}", credentials).parse().unwrap());
+        headers.insert(
+            AUTHORIZATION,
+            format!("Basic {}", credentials).parse().unwrap(),
+        );
 
         let result = extract_credentials(&headers);
         assert!(result.is_some());
@@ -217,7 +233,10 @@ mod tests {
         headers.insert("X-API-Key", "custom_key".parse().unwrap());
         headers.insert("X-API-Secret", "custom_secret".parse().unwrap());
         let credentials = general_purpose::STANDARD.encode("basic_key:basic_secret");
-        headers.insert(AUTHORIZATION, format!("Basic {}", credentials).parse().unwrap());
+        headers.insert(
+            AUTHORIZATION,
+            format!("Basic {}", credentials).parse().unwrap(),
+        );
 
         let result = extract_credentials(&headers);
         assert!(result.is_some());

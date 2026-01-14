@@ -47,7 +47,9 @@ impl ConversationTagService {
 
         // 3. Validate request
         if request.tag_ids.is_empty() {
-            return Err(ApiError::BadRequest("Tag IDs list cannot be empty".to_string()));
+            return Err(ApiError::BadRequest(
+                "Tag IDs list cannot be empty".to_string(),
+            ));
         }
 
         // 4. Get previous tags for event
@@ -74,13 +76,14 @@ impl ConversationTagService {
         let new_tag_ids: Vec<String> = new_tags.iter().map(|t| t.id.clone()).collect();
 
         // 7. Emit ConversationTagsChanged event
-        self.event_bus.publish(SystemEvent::ConversationTagsChanged {
-            conversation_id: conversation_id.to_string(),
-            previous_tags: previous_tag_ids,
-            new_tags: new_tag_ids,
-            changed_by: user_id.to_string(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-        });
+        self.event_bus
+            .publish(SystemEvent::ConversationTagsChanged {
+                conversation_id: conversation_id.to_string(),
+                previous_tags: previous_tag_ids,
+                new_tags: new_tag_ids,
+                changed_by: user_id.to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            });
 
         // 8. Return updated tag list
         Ok(new_tags)
@@ -124,13 +127,14 @@ impl ConversationTagService {
         let new_tag_ids: Vec<String> = new_tags.iter().map(|t| t.id.clone()).collect();
 
         // 6. Emit ConversationTagsChanged event
-        self.event_bus.publish(SystemEvent::ConversationTagsChanged {
-            conversation_id: conversation_id.to_string(),
-            previous_tags: previous_tag_ids,
-            new_tags: new_tag_ids,
-            changed_by: user_id.to_string(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-        });
+        self.event_bus
+            .publish(SystemEvent::ConversationTagsChanged {
+                conversation_id: conversation_id.to_string(),
+                previous_tags: previous_tag_ids,
+                new_tags: new_tag_ids,
+                changed_by: user_id.to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            });
 
         // 7. Return updated tag list
         Ok(new_tags)
@@ -183,13 +187,14 @@ impl ConversationTagService {
         let new_tag_ids: Vec<String> = new_tags.iter().map(|t| t.id.clone()).collect();
 
         // 7. Emit ConversationTagsChanged event
-        self.event_bus.publish(SystemEvent::ConversationTagsChanged {
-            conversation_id: conversation_id.to_string(),
-            previous_tags: previous_tag_ids,
-            new_tags: new_tag_ids,
-            changed_by: user_id.to_string(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-        });
+        self.event_bus
+            .publish(SystemEvent::ConversationTagsChanged {
+                conversation_id: conversation_id.to_string(),
+                previous_tags: previous_tag_ids,
+                new_tags: new_tag_ids,
+                changed_by: user_id.to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            });
 
         // 8. Return updated tag list
         Ok(new_tags)
@@ -225,7 +230,9 @@ impl ConversationTagService {
             .ok_or_else(|| ApiError::NotFound(format!("Tag {} not found", tag_id)))?;
 
         // 2. Get conversations
-        self.db.get_conversations_by_tag(tag_id, limit, offset).await
+        self.db
+            .get_conversations_by_tag(tag_id, limit, offset)
+            .await
     }
 
     /// Get user permissions (helper for service layer)

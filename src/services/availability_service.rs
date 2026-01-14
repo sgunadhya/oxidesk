@@ -2,7 +2,7 @@ use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
     events::{EventBus, SystemEvent},
-    models::{AgentActivityLog, ActivityEventType, AgentAvailability},
+    models::{ActivityEventType, AgentActivityLog, AgentAvailability},
 };
 
 #[derive(Clone)]
@@ -49,18 +49,25 @@ impl AvailabilityService {
         }
 
         // Log activity
-        self.log_activity(&agent.id, ActivityEventType::AvailabilityChanged, Some(old_status), Some(status))
-            .await?;
+        self.log_activity(
+            &agent.id,
+            ActivityEventType::AvailabilityChanged,
+            Some(old_status),
+            Some(status),
+        )
+        .await?;
 
         // Emit event
         let now = chrono::Utc::now().to_rfc3339();
-        let _ = self.event_bus.publish(SystemEvent::AgentAvailabilityChanged {
-            agent_id: agent.id.clone(),
-            old_status: old_status.to_string(),
-            new_status: status.to_string(),
-            timestamp: now,
-            reason: "manual".to_string(),
-        });
+        let _ = self
+            .event_bus
+            .publish(SystemEvent::AgentAvailabilityChanged {
+                agent_id: agent.id.clone(),
+                old_status: old_status.to_string(),
+                new_status: status.to_string(),
+                timestamp: now,
+                reason: "manual".to_string(),
+            });
 
         tracing::info!(
             "Agent {} availability changed from {} to {} (manual)",
@@ -110,13 +117,15 @@ impl AvailabilityService {
 
         // Also emit availability changed if status changed
         if old_status != AgentAvailability::Online {
-            let _ = self.event_bus.publish(SystemEvent::AgentAvailabilityChanged {
-                agent_id: agent.id.clone(),
-                old_status: old_status.to_string(),
-                new_status: "online".to_string(),
-                timestamp: now,
-                reason: "login".to_string(),
-            });
+            let _ = self
+                .event_bus
+                .publish(SystemEvent::AgentAvailabilityChanged {
+                    agent_id: agent.id.clone(),
+                    old_status: old_status.to_string(),
+                    new_status: "online".to_string(),
+                    timestamp: now,
+                    reason: "login".to_string(),
+                });
         }
 
         tracing::info!("Agent {} logged in and went online", agent.id);
@@ -152,13 +161,15 @@ impl AvailabilityService {
         });
 
         // Also emit availability changed
-        let _ = self.event_bus.publish(SystemEvent::AgentAvailabilityChanged {
-            agent_id: agent.id.clone(),
-            old_status: old_status.to_string(),
-            new_status: "offline".to_string(),
-            timestamp: now,
-            reason: "logout".to_string(),
-        });
+        let _ = self
+            .event_bus
+            .publish(SystemEvent::AgentAvailabilityChanged {
+                agent_id: agent.id.clone(),
+                old_status: old_status.to_string(),
+                new_status: "offline".to_string(),
+                timestamp: now,
+                reason: "logout".to_string(),
+            });
 
         tracing::info!("Agent {} logged out and went offline", agent.id);
 
@@ -189,13 +200,15 @@ impl AvailabilityService {
 
             // Emit event
             let now = chrono::Utc::now().to_rfc3339();
-            let _ = self.event_bus.publish(SystemEvent::AgentAvailabilityChanged {
-                agent_id: agent.id.clone(),
-                old_status: "online".to_string(),
-                new_status: "away".to_string(),
-                timestamp: now,
-                reason: "inactivity_timeout".to_string(),
-            });
+            let _ = self
+                .event_bus
+                .publish(SystemEvent::AgentAvailabilityChanged {
+                    agent_id: agent.id.clone(),
+                    old_status: "online".to_string(),
+                    new_status: "away".to_string(),
+                    timestamp: now,
+                    reason: "inactivity_timeout".to_string(),
+                });
 
             tracing::info!("Agent {} transitioned to away due to inactivity", agent.id);
             affected.push(agent.id);
@@ -214,11 +227,17 @@ impl AvailabilityService {
         for agent in agents {
             // Transition to away_and_reassigning
             self.db
-                .update_agent_availability_with_timestamp(&agent.id, AgentAvailability::AwayAndReassigning)
+                .update_agent_availability_with_timestamp(
+                    &agent.id,
+                    AgentAvailability::AwayAndReassigning,
+                )
                 .await?;
 
             // Unassign all open conversations (this method already handles open/snoozed filtering)
-            let unassigned_count = self.db.unassign_agent_open_conversations(&agent.user_id).await?;
+            let unassigned_count = self
+                .db
+                .unassign_agent_open_conversations(&agent.user_id)
+                .await?;
 
             tracing::info!(
                 "Unassigned {} open conversations from agent {}",
@@ -245,13 +264,15 @@ impl AvailabilityService {
 
             // Emit event
             let now = chrono::Utc::now().to_rfc3339();
-            let _ = self.event_bus.publish(SystemEvent::AgentAvailabilityChanged {
-                agent_id: agent.id.clone(),
-                old_status: agent.availability_status.to_string(),
-                new_status: "offline".to_string(),
-                timestamp: now,
-                reason: "max_idle_threshold".to_string(),
-            });
+            let _ = self
+                .event_bus
+                .publish(SystemEvent::AgentAvailabilityChanged {
+                    agent_id: agent.id.clone(),
+                    old_status: agent.availability_status.to_string(),
+                    new_status: "offline".to_string(),
+                    timestamp: now,
+                    reason: "max_idle_threshold".to_string(),
+                });
 
             tracing::info!(
                 "Agent {} reached max idle threshold, conversations unassigned, went offline",
@@ -264,7 +285,10 @@ impl AvailabilityService {
     }
 
     /// Get agent availability info
-    pub async fn get_availability(&self, agent_id: &str) -> ApiResult<crate::models::AvailabilityResponse> {
+    pub async fn get_availability(
+        &self,
+        agent_id: &str,
+    ) -> ApiResult<crate::models::AvailabilityResponse> {
         let agent = self
             .db
             .get_agent_by_user_id(agent_id)
@@ -286,7 +310,10 @@ impl AvailabilityService {
         limit: i64,
         offset: i64,
     ) -> ApiResult<crate::models::ActivityLogResponse> {
-        let (logs, total) = self.db.get_agent_activity_logs(agent_id, limit, offset).await?;
+        let (logs, total) = self
+            .db
+            .get_agent_activity_logs(agent_id, limit, offset)
+            .await?;
 
         let page = (offset / limit) + 1;
         let total_pages = (total as f64 / limit as f64).ceil() as i64;
@@ -334,10 +361,14 @@ impl AvailabilityService {
         }
 
         // Try database config
-        if let Some(value) = self.db.get_config_value("availability.inactivity_timeout_seconds").await? {
-            return value
-                .parse()
-                .map_err(|_| ApiError::Internal("Invalid inactivity timeout in config".to_string()));
+        if let Some(value) = self
+            .db
+            .get_config_value("availability.inactivity_timeout_seconds")
+            .await?
+        {
+            return value.parse().map_err(|_| {
+                ApiError::Internal("Invalid inactivity timeout in config".to_string())
+            });
         }
 
         // Default: 5 minutes
@@ -354,10 +385,14 @@ impl AvailabilityService {
         }
 
         // Try database config
-        if let Some(value) = self.db.get_config_value("availability.max_idle_threshold_seconds").await? {
-            return value
-                .parse()
-                .map_err(|_| ApiError::Internal("Invalid max idle threshold in config".to_string()));
+        if let Some(value) = self
+            .db
+            .get_config_value("availability.max_idle_threshold_seconds")
+            .await?
+        {
+            return value.parse().map_err(|_| {
+                ApiError::Internal("Invalid max idle threshold in config".to_string())
+            });
         }
 
         // Default: 30 minutes

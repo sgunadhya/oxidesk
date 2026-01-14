@@ -16,18 +16,11 @@ pub fn generate_csrf_token() -> String {
 ///
 /// Compares the token from the request header with the token from the session.
 /// Both must be present and match exactly.
-pub fn validate_csrf_token(
-    header_token: Option<&str>,
-    session_token: &str,
-) -> Result<(), String> {
+pub fn validate_csrf_token(header_token: Option<&str>, session_token: &str) -> Result<(), String> {
     match header_token {
         None => Err("Missing CSRF token in request header".to_string()),
-        Some(token) if token.is_empty() => {
-            Err("Empty CSRF token in request header".to_string())
-        }
-        Some(token) if token != session_token => {
-            Err("CSRF token mismatch".to_string())
-        }
+        Some(token) if token.is_empty() => Err("Empty CSRF token in request header".to_string()),
+        Some(token) if token != session_token => Err("CSRF token mismatch".to_string()),
         Some(_) => Ok(()),
     }
 }
@@ -87,10 +80,7 @@ pub async fn csrf_middleware(
     }
 
     // Extract authenticated user from extensions (set by auth middleware)
-    let auth_user = request
-        .extensions()
-        .get::<AuthenticatedUser>()
-        .cloned();
+    let auth_user = request.extensions().get::<AuthenticatedUser>().cloned();
 
     match auth_user {
         Some(user) => {
@@ -98,13 +88,12 @@ pub async fn csrf_middleware(
             let header_token = extract_csrf_from_headers(&headers, &config.header_name);
 
             // Validate against session's CSRF token
-            validate_csrf_token(
-                header_token.as_deref(),
-                &user.session.csrf_token,
-            ).map_err(|err| {
-                tracing::warn!("CSRF validation failed: {}", err);
-                StatusCode::FORBIDDEN
-            })?;
+            validate_csrf_token(header_token.as_deref(), &user.session.csrf_token).map_err(
+                |err| {
+                    tracing::warn!("CSRF validation failed: {}", err);
+                    StatusCode::FORBIDDEN
+                },
+            )?;
 
             Ok(next.run(request).await)
         }
@@ -146,20 +135,14 @@ mod tests {
     fn test_validate_csrf_token_missing() {
         let result = validate_csrf_token(None, "abc123");
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err(),
-            "Missing CSRF token in request header"
-        );
+        assert_eq!(result.unwrap_err(), "Missing CSRF token in request header");
     }
 
     #[test]
     fn test_validate_csrf_token_empty() {
         let result = validate_csrf_token(Some(""), "abc123");
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err(),
-            "Empty CSRF token in request header"
-        );
+        assert_eq!(result.unwrap_err(), "Empty CSRF token in request header");
     }
 
     #[test]

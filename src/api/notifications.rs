@@ -100,7 +100,9 @@ pub async fn list_notifications(
     }
 
     if query.offset < 0 {
-        return Err(ApiError::BadRequest("Offset must be non-negative".to_string()));
+        return Err(ApiError::BadRequest(
+            "Offset must be non-negative".to_string(),
+        ));
     }
 
     // Fetch notifications from database
@@ -199,7 +201,10 @@ pub async fn mark_all_notifications_as_read(
     Extension(user): Extension<AuthenticatedUser>,
 ) -> ApiResult<impl IntoResponse> {
     // Call database method to mark all notifications as read
-    let count = state.db.mark_all_notifications_as_read(&user.user.id).await?;
+    let count = state
+        .db
+        .mark_all_notifications_as_read(&user.user.id)
+        .await?;
 
     Ok(Json(MarkAllReadResponse {
         message: "All notifications marked as read".to_string(),

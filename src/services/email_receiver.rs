@@ -2,7 +2,6 @@
 ///
 /// Handles receiving and processing incoming emails via IMAP.
 /// Creates conversations, messages, contacts, and attachments from emails.
-
 use crate::database::Database;
 use crate::error::{ApiError, ApiResult};
 use crate::models::{
@@ -52,7 +51,9 @@ impl EmailReceiverService {
             connector
                 .connect(&config.imap_host, tcp_stream_compat)
                 .await
-                .map_err(|e| ApiError::Internal(format!("Failed to establish TLS connection: {}", e)))?
+                .map_err(|e| {
+                    ApiError::Internal(format!("Failed to establish TLS connection: {}", e))
+                })?
         } else {
             return Err(ApiError::Internal(
                 "Non-TLS IMAP connections are not supported".to_string(),
@@ -86,10 +87,9 @@ impl EmailReceiverService {
             .map_err(|e| ApiError::Internal(format!("Failed to select mailbox: {:?}", e)))?;
 
         // Search for UNSEEN messages
-        let unseen_uids = session
-            .uid_search("UNSEEN")
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to search for unseen messages: {:?}", e)))?;
+        let unseen_uids = session.uid_search("UNSEEN").await.map_err(|e| {
+            ApiError::Internal(format!("Failed to search for unseen messages: {:?}", e))
+        })?;
 
         if unseen_uids.is_empty() {
             return Ok(Vec::new());
@@ -131,7 +131,11 @@ impl EmailReceiverService {
     ) -> ApiResult<(String, String)> {
         // Get or create contact from email sender
         let contact_id = self
-            .get_or_create_contact(inbox_id, &parsed_email.from_address, parsed_email.from_name.as_deref())
+            .get_or_create_contact(
+                inbox_id,
+                &parsed_email.from_address,
+                parsed_email.from_name.as_deref(),
+            )
             .await?;
 
         // Create conversation
@@ -227,7 +231,10 @@ impl EmailReceiverService {
                 .check_email_processed(inbox_id, &parsed_email.message_id)
                 .await?
             {
-                tracing::info!("Email {} already processed, skipping", parsed_email.message_id);
+                tracing::info!(
+                    "Email {} already processed, skipping",
+                    parsed_email.message_id
+                );
                 continue;
             }
 
@@ -251,7 +258,11 @@ impl EmailReceiverService {
                     log.mark_success(conversation_id, message_id)
                 }
                 Err(e) => {
-                    tracing::error!("Failed to process email {}: {:?}", parsed_email.message_id, e);
+                    tracing::error!(
+                        "Failed to process email {}: {:?}",
+                        parsed_email.message_id,
+                        e
+                    );
                     log.mark_failed(e.to_string())
                 }
             };
@@ -309,7 +320,8 @@ impl EmailReceiverService {
                     .clone()
                     .or_else(|| parsed_email.html_body.clone())
                     .unwrap_or_default();
-                let message = Message::new_incoming(conversation.id.clone(), content, contact_id.clone());
+                let message =
+                    Message::new_incoming(conversation.id.clone(), content, contact_id.clone());
                 let message_id = message.id.clone();
                 self.db.create_message(&message).await?;
 
@@ -342,13 +354,17 @@ impl EmailReceiverService {
         }
 
         // Fallback: create new conversation
-        self.process_new_email(inbox_id, email_uid, parsed_email).await
+        self.process_new_email(inbox_id, email_uid, parsed_email)
+            .await
     }
 }
 
 /// Spawn background email polling worker
 /// Polls all enabled email inboxes every 60 seconds
-pub fn spawn_email_polling_worker(db: Database, attachment_storage_path: String) -> tokio::task::JoinHandle<()> {
+pub fn spawn_email_polling_worker(
+    db: Database,
+    attachment_storage_path: String,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         tracing::info!("Email polling worker started");
 
@@ -358,7 +374,10 @@ pub fn spawn_email_polling_worker(db: Database, attachment_storage_path: String)
             // Get all enabled email configurations
             match db.get_enabled_email_configs().await {
                 Ok(configs) => {
-                    tracing::info!("Found {} enabled email configurations to process", configs.len());
+                    tracing::info!(
+                        "Found {} enabled email configurations to process",
+                        configs.len()
+                    );
 
                     // Process each inbox concurrently
                     let mut handles = Vec::new();
@@ -373,11 +392,19 @@ pub fn spawn_email_polling_worker(db: Database, attachment_storage_path: String)
                             match receiver.process_inbox(&inbox_id).await {
                                 Ok(count) => {
                                     if count > 0 {
-                                        tracing::info!("Processed {} emails for inbox {}", count, inbox_id);
+                                        tracing::info!(
+                                            "Processed {} emails for inbox {}",
+                                            count,
+                                            inbox_id
+                                        );
                                     }
                                 }
                                 Err(e) => {
-                                    tracing::error!("Failed to process inbox {}: {:?}", inbox_id, e);
+                                    tracing::error!(
+                                        "Failed to process inbox {}: {:?}",
+                                        inbox_id,
+                                        e
+                                    );
                                 }
                             }
                         });

@@ -1,12 +1,12 @@
-use axum::{
-    extract::{Path, State},
-    http::{HeaderMap, StatusCode},
-    Json,
-};
 use crate::{
     api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
     models::*,
     services::*,
+};
+use axum::{
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode},
+    Json,
 };
 
 pub async fn login(
@@ -90,7 +90,8 @@ pub async fn login(
     };
 
     // Build response from AuthResult
-    let role_responses: Vec<RoleResponse> = auth_result.roles
+    let role_responses: Vec<RoleResponse> = auth_result
+        .roles
         .iter()
         .map(|r| RoleResponse {
             id: r.id.clone(),
@@ -186,10 +187,8 @@ pub async fn get_my_auth_events(
     // Default pagination: 50 events
     let events = AuthLogger::get_user_events(&state.db, &auth_user.user.id, 50, 0).await?;
 
-    let event_responses: Vec<AuthEventResponse> = events
-        .into_iter()
-        .map(AuthEventResponse::from)
-        .collect();
+    let event_responses: Vec<AuthEventResponse> =
+        events.into_iter().map(AuthEventResponse::from).collect();
 
     let total = event_responses.len() as i64;
 
@@ -206,18 +205,14 @@ pub async fn get_recent_auth_events(
 ) -> ApiResult<Json<AuthEventListResponse>> {
     // Check if user is admin
     if !auth_user.is_admin() {
-        return Err(ApiError::Forbidden(
-            "Admin permission required".to_string(),
-        ));
+        return Err(ApiError::Forbidden("Admin permission required".to_string()));
     }
 
     // Default pagination: 100 recent events
     let events = AuthLogger::get_recent_events(&state.db, 100, 0).await?;
 
-    let event_responses: Vec<AuthEventResponse> = events
-        .into_iter()
-        .map(AuthEventResponse::from)
-        .collect();
+    let event_responses: Vec<AuthEventResponse> =
+        events.into_iter().map(AuthEventResponse::from).collect();
 
     let total = event_responses.len() as i64;
 
@@ -244,7 +239,9 @@ pub async fn oidc_login(
 
     // Check if provider is enabled
     if !provider.enabled {
-        return Err(ApiError::BadRequest("OIDC provider is disabled".to_string()));
+        return Err(ApiError::BadRequest(
+            "OIDC provider is disabled".to_string(),
+        ));
     }
 
     // Initiate OIDC flow
@@ -262,7 +259,9 @@ pub async fn oidc_login(
     state.db.create_oidc_state(&oidc_state).await?;
 
     // Redirect to provider's authorization URL
-    Ok(axum::response::Redirect::temporary(&auth_request.authorize_url))
+    Ok(axum::response::Redirect::temporary(
+        &auth_request.authorize_url,
+    ))
 }
 
 /// Handle OIDC callback
@@ -304,9 +303,7 @@ pub async fn oidc_callback(
         .db
         .consume_oidc_state(&state_param)
         .await?
-        .ok_or_else(|| {
-            ApiError::BadRequest("Invalid or expired state parameter".to_string())
-        })?;
+        .ok_or_else(|| ApiError::BadRequest("Invalid or expired state parameter".to_string()))?;
 
     // Verify state hasn't expired
     if stored_state.is_expired() {
@@ -315,7 +312,9 @@ pub async fn oidc_callback(
 
     // Verify state matches (CSRF protection)
     if stored_state.state != state_param {
-        return Err(ApiError::BadRequest("State mismatch - possible CSRF attack".to_string()));
+        return Err(ApiError::BadRequest(
+            "State mismatch - possible CSRF attack".to_string(),
+        ));
     }
 
     // Extract validated values

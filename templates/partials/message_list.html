@@ -1,0 +1,15 @@
+<div id="message-list" class="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col">
+    {% for msg in messages %}
+    <div class="flex {% if msg.is_agent %}justify-end{% else %}justify-start{% endif %}">
+        <div
+            class="max-w-lg {% if msg.is_agent %}bg-indigo-600 text-white rounded-br-none{% else %}bg-gray-200 text-gray-900 rounded-bl-none{% endif %} rounded-lg px-4 py-2 shadow-sm">
+            <div class="text-xs {% if msg.is_agent %}text-indigo-200{% else %}text-gray-500{% endif %} mb-1">
+                {{ msg.sender_name }} &bull; {{ msg.created_at }}
+            </div>
+            <p class="text-sm whitespace-pre-wrap">{{ msg.content }}</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% include "partials/message_composer.html" %}

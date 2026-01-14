@@ -2,9 +2,9 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent},
-    services::{hash_password, validate_and_normalize_email, password_reset_service},
     api::middleware::error::ApiError,
+    models::{Agent, User, UserType},
+    services::{hash_password, password_reset_service, validate_and_normalize_email},
 };
 
 // Consolidate all rate limit tests into a single sequential test
@@ -21,7 +21,12 @@ async fn test_rate_limiting_scenarios() {
         let password_hash = hash_password("TestPass123!").unwrap();
 
         let user = User::new(email.clone(), UserType::Agent);
-        let agent = Agent::new(user.id.clone(), "Rate Limit Test".to_string(), None, password_hash);
+        let agent = Agent::new(
+            user.id.clone(),
+            "Rate Limit Test".to_string(),
+            None,
+            password_hash,
+        );
 
         db.create_user(&user).await.unwrap();
         db.create_agent(&agent).await.unwrap();
@@ -39,7 +44,7 @@ async fn test_rate_limiting_scenarios() {
         match result.unwrap_err() {
             ApiError::TooManyRequests(msg) => {
                 assert!(msg.contains("Too many password reset requests"));
-            },
+            }
             other => panic!("Expected TooManyRequests error, got: {:?}", other),
         }
 
@@ -56,10 +61,20 @@ async fn test_rate_limiting_scenarios() {
         let password_hash = hash_password("TestPass123!").unwrap();
 
         let user1 = User::new(email1.clone(), UserType::Agent);
-        let agent1 = Agent::new(user1.id.clone(), "User 1".to_string(), None, password_hash.clone());
+        let agent1 = Agent::new(
+            user1.id.clone(),
+            "User 1".to_string(),
+            None,
+            password_hash.clone(),
+        );
 
         let user2 = User::new(email2.clone(), UserType::Agent);
-        let agent2 = Agent::new(user2.id.clone(), "User 2".to_string(), None, password_hash.clone());
+        let agent2 = Agent::new(
+            user2.id.clone(),
+            "User 2".to_string(),
+            None,
+            password_hash.clone(),
+        );
 
         db.create_user(&user1).await.unwrap();
         db.create_agent(&agent1).await.unwrap();
@@ -68,7 +83,9 @@ async fn test_rate_limiting_scenarios() {
 
         // Make 5 requests for user1
         for _ in 0..5 {
-            password_reset_service::request_password_reset(db, &email1).await.unwrap();
+            password_reset_service::request_password_reset(db, &email1)
+                .await
+                .unwrap();
         }
 
         // 6th request for user1 should fail
@@ -91,14 +108,21 @@ async fn test_rate_limiting_scenarios() {
         let password_hash = hash_password("TestPass123!").unwrap();
 
         let user = User::new(email.clone(), UserType::Agent);
-        let agent = Agent::new(user.id.clone(), "Window Test".to_string(), None, password_hash);
+        let agent = Agent::new(
+            user.id.clone(),
+            "Window Test".to_string(),
+            None,
+            password_hash,
+        );
 
         db.create_user(&user).await.unwrap();
         db.create_agent(&agent).await.unwrap();
 
         // Make 5 requests
         for _ in 0..5 {
-            password_reset_service::request_password_reset(db, &email).await.unwrap();
+            password_reset_service::request_password_reset(db, &email)
+                .await
+                .unwrap();
         }
 
         // 6th request should fail
@@ -106,7 +130,10 @@ async fn test_rate_limiting_scenarios() {
         assert!(result.is_err());
 
         // Check that we're counting requests in a 3600 second (1 hour) window
-        let count = db.count_recent_reset_requests(&user.id, 3600).await.unwrap();
+        let count = db
+            .count_recent_reset_requests(&user.id, 3600)
+            .await
+            .unwrap();
         assert_eq!(count, 5, "Should count 5 requests in the 1-hour window");
 
         teardown_test_db(test_db).await;
@@ -125,7 +152,12 @@ async fn test_rate_limiting_scenarios() {
         let password_hash = hash_password("TestPass123!").unwrap();
 
         let user = User::new(email.clone(), UserType::Agent);
-        let agent = Agent::new(user.id.clone(), "Custom Limit".to_string(), None, password_hash);
+        let agent = Agent::new(
+            user.id.clone(),
+            "Custom Limit".to_string(),
+            None,
+            password_hash,
+        );
 
         db.create_user(&user).await.unwrap();
         db.create_agent(&agent).await.unwrap();
@@ -133,12 +165,19 @@ async fn test_rate_limiting_scenarios() {
         // Make 3 requests (should all succeed)
         for i in 1..=3 {
             let result = password_reset_service::request_password_reset(db, &email).await;
-            assert!(result.is_ok(), "Request {} should succeed with custom limit of 3", i);
+            assert!(
+                result.is_ok(),
+                "Request {} should succeed with custom limit of 3",
+                i
+            );
         }
 
         // 4th request should fail
         let result = password_reset_service::request_password_reset(db, &email).await;
-        assert!(result.is_err(), "4th request should fail with custom limit of 3");
+        assert!(
+            result.is_err(),
+            "4th request should fail with custom limit of 3"
+        );
 
         // Clean up env var
         std::env::set_var("PASSWORD_RESET_RATE_LIMIT", "5");
@@ -154,7 +193,8 @@ async fn test_rate_limiting_scenarios() {
         // Request password reset for non-existent email multiple times
         // Should always succeed with generic message (no rate limiting for non-existent users)
         for i in 1..=10 {
-            let result = password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
+            let result =
+                password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
             assert!(
                 result.is_ok(),
                 "Request {} should succeed for non-existent email (no rate limiting)",

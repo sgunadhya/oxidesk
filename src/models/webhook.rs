@@ -70,12 +70,12 @@ pub struct Webhook {
     pub name: String,
     pub url: String,
     #[sqlx(skip)]
-    pub subscribed_events: Vec<String>,  // Stored as JSON in DB
-    #[serde(skip_serializing)]  // Don't expose secret in API responses
+    pub subscribed_events: Vec<String>, // Stored as JSON in DB
+    #[serde(skip_serializing)] // Don't expose secret in API responses
     pub secret: String,
     pub is_active: bool,
-    pub created_at: String,  // ISO 8601
-    pub updated_at: String,  // ISO 8601
+    pub created_at: String, // ISO 8601
+    pub updated_at: String, // ISO 8601
     pub created_by: String,
 }
 
@@ -95,7 +95,7 @@ impl Webhook {
             url,
             subscribed_events,
             secret,
-            is_active: true,  // Default active
+            is_active: true, // Default active
             created_at: now.clone(),
             updated_at: now,
             created_by,
@@ -158,12 +158,12 @@ pub struct WebhookDelivery {
     pub id: String,
     pub webhook_id: String,
     pub event_type: String,
-    pub payload: String,  // JSON string
-    pub signature: String,  // Format: "sha256=..."
+    pub payload: String,   // JSON string
+    pub signature: String, // Format: "sha256=..."
     pub status: DeliveryStatus,
     pub http_status_code: Option<i32>,
     pub retry_count: i32,
-    pub next_retry_at: Option<String>,  // ISO 8601
+    pub next_retry_at: Option<String>, // ISO 8601
     pub attempted_at: Option<String>,  // ISO 8601
     pub completed_at: Option<String>,  // ISO 8601
     pub error_message: Option<String>,
@@ -171,12 +171,7 @@ pub struct WebhookDelivery {
 
 impl WebhookDelivery {
     /// Create a new delivery record in queued status
-    pub fn new(
-        webhook_id: String,
-        event_type: String,
-        payload: String,
-        signature: String,
-    ) -> Self {
+    pub fn new(webhook_id: String, event_type: String, payload: String, signature: String) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             webhook_id,
@@ -227,9 +222,9 @@ impl WebhookDelivery {
     /// Calculate next retry time using exponential backoff
     /// Delay: 1min, 2min, 4min, 8min, 16min (capped at 16 minutes)
     fn calculate_next_retry(&self) -> String {
-        const INITIAL_DELAY_SECS: i64 = 60;  // 1 minute
+        const INITIAL_DELAY_SECS: i64 = 60; // 1 minute
         let delay_secs = INITIAL_DELAY_SECS * 2i64.pow((self.retry_count - 1) as u32);
-        let delay_secs = delay_secs.min(960);  // Cap at 16 minutes
+        let delay_secs = delay_secs.min(960); // Cap at 16 minutes
 
         let next_retry = chrono::Utc::now() + chrono::Duration::seconds(delay_secs);
         next_retry.to_rfc3339()
@@ -242,7 +237,7 @@ impl WebhookDelivery {
         }
 
         match &self.next_retry_at {
-            None => self.retry_count == 0,  // Initial attempt
+            None => self.retry_count == 0, // Initial attempt
             Some(retry_at) => {
                 // Parse retry_at and check if it's in the past
                 if let Ok(retry_time) = chrono::DateTime::parse_from_rfc3339(retry_at) {

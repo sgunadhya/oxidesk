@@ -1,8 +1,8 @@
 mod helpers;
 
 use helpers::*;
-use oxidesk::{
-    models::{AutomationRule, RuleType, RuleCondition, RuleAction, ActionType, ComparisonOperator},
+use oxidesk::models::{
+    ActionType, AutomationRule, ComparisonOperator, RuleAction, RuleCondition, RuleType,
 };
 use serde_json::json;
 use std::collections::HashMap;
@@ -103,7 +103,10 @@ async fn test_get_automation_rule_by_name() {
     db.create_automation_rule(&rule).await.unwrap();
 
     // Retrieve the rule by name
-    let retrieved = db.get_automation_rule_by_name("Test Rule With Unique Name").await.unwrap();
+    let retrieved = db
+        .get_automation_rule_by_name("Test Rule With Unique Name")
+        .await
+        .unwrap();
     assert!(retrieved.is_some());
 
     let retrieved_rule = retrieved.unwrap();
@@ -231,12 +234,18 @@ async fn test_get_enabled_rules_for_event() {
     db.create_automation_rule(&rule2).await.unwrap();
 
     // Get rules for tags_changed event
-    let rules = db.get_enabled_rules_for_event("conversation.tags_changed").await.unwrap();
+    let rules = db
+        .get_enabled_rules_for_event("conversation.tags_changed")
+        .await
+        .unwrap();
     assert_eq!(rules.len(), 1);
     assert_eq!(rules[0].name, "Tags Rule");
 
     // Get rules for status_change event
-    let rules = db.get_enabled_rules_for_event("conversation.status.change").await.unwrap();
+    let rules = db
+        .get_enabled_rules_for_event("conversation.status.change")
+        .await
+        .unwrap();
     assert_eq!(rules.len(), 1);
     assert_eq!(rules[0].name, "Status Rule");
 
@@ -272,7 +281,11 @@ async fn test_update_automation_rule() {
     db.update_automation_rule(&rule).await.unwrap();
 
     // Verify update
-    let updated = db.get_automation_rule_by_id(&rule.id).await.unwrap().unwrap();
+    let updated = db
+        .get_automation_rule_by_id(&rule.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.name, "Updated Name");
     assert_eq!(updated.priority, 50);
 
@@ -334,17 +347,29 @@ async fn test_enable_disable_automation_rule() {
     db.create_automation_rule(&rule).await.unwrap();
 
     // Initially enabled
-    let retrieved = db.get_automation_rule_by_id(&rule.id).await.unwrap().unwrap();
+    let retrieved = db
+        .get_automation_rule_by_id(&rule.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(retrieved.enabled);
 
     // Disable
     db.disable_automation_rule(&rule.id).await.unwrap();
-    let retrieved = db.get_automation_rule_by_id(&rule.id).await.unwrap().unwrap();
+    let retrieved = db
+        .get_automation_rule_by_id(&rule.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(!retrieved.enabled);
 
     // Enable
     db.enable_automation_rule(&rule.id).await.unwrap();
-    let retrieved = db.get_automation_rule_by_id(&rule.id).await.unwrap().unwrap();
+    let retrieved = db
+        .get_automation_rule_by_id(&rule.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(retrieved.enabled);
 
     teardown_test_db(test_db).await;
@@ -432,7 +457,11 @@ async fn test_complex_condition_serialization() {
     db.create_automation_rule(&rule).await.unwrap();
 
     // Retrieve and verify
-    let retrieved = db.get_automation_rule_by_id(&rule.id).await.unwrap().unwrap();
+    let retrieved = db
+        .get_automation_rule_by_id(&rule.id)
+        .await
+        .unwrap()
+        .unwrap();
     match retrieved.condition {
         RuleCondition::And { conditions } => {
             assert_eq!(conditions.len(), 2);

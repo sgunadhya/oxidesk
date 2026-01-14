@@ -7,7 +7,7 @@ pub struct OidcProvider {
     pub name: String,
     pub issuer_url: String,
     pub client_id: String,
-    #[serde(skip_serializing)]  // Never send client_secret to clients
+    #[serde(skip_serializing)] // Never send client_secret to clients
     pub client_secret: String,
     pub redirect_uri: String,
     pub scopes: Vec<String>,
@@ -33,47 +33,71 @@ impl CreateOidcProviderRequest {
         use crate::api::middleware::ApiError;
 
         if self.name.trim().is_empty() {
-            return Err(ApiError::BadRequest("Provider name cannot be empty".to_string()));
+            return Err(ApiError::BadRequest(
+                "Provider name cannot be empty".to_string(),
+            ));
         }
 
         if self.name.len() > 100 {
-            return Err(ApiError::BadRequest("Provider name cannot exceed 100 characters".to_string()));
+            return Err(ApiError::BadRequest(
+                "Provider name cannot exceed 100 characters".to_string(),
+            ));
         }
 
         if self.issuer_url.trim().is_empty() {
-            return Err(ApiError::BadRequest("Issuer URL cannot be empty".to_string()));
+            return Err(ApiError::BadRequest(
+                "Issuer URL cannot be empty".to_string(),
+            ));
         }
 
         if !self.issuer_url.starts_with("https://") {
-            return Err(ApiError::BadRequest("Issuer URL must use HTTPS".to_string()));
+            return Err(ApiError::BadRequest(
+                "Issuer URL must use HTTPS".to_string(),
+            ));
         }
 
         if self.client_id.trim().is_empty() {
-            return Err(ApiError::BadRequest("Client ID cannot be empty".to_string()));
+            return Err(ApiError::BadRequest(
+                "Client ID cannot be empty".to_string(),
+            ));
         }
 
         if self.client_secret.trim().is_empty() {
-            return Err(ApiError::BadRequest("Client secret cannot be empty".to_string()));
+            return Err(ApiError::BadRequest(
+                "Client secret cannot be empty".to_string(),
+            ));
         }
 
         if self.redirect_uri.trim().is_empty() {
-            return Err(ApiError::BadRequest("Redirect URI cannot be empty".to_string()));
+            return Err(ApiError::BadRequest(
+                "Redirect URI cannot be empty".to_string(),
+            ));
         }
 
-        if !self.redirect_uri.starts_with("https://") && !self.redirect_uri.starts_with("http://localhost") {
-            return Err(ApiError::BadRequest("Redirect URI must use HTTPS (or http://localhost for development)".to_string()));
+        if !self.redirect_uri.starts_with("https://")
+            && !self.redirect_uri.starts_with("http://localhost")
+        {
+            return Err(ApiError::BadRequest(
+                "Redirect URI must use HTTPS (or http://localhost for development)".to_string(),
+            ));
         }
 
         if self.scopes.is_empty() {
-            return Err(ApiError::BadRequest("At least one scope must be specified".to_string()));
+            return Err(ApiError::BadRequest(
+                "At least one scope must be specified".to_string(),
+            ));
         }
 
         if !self.scopes.contains(&"openid".to_string()) {
-            return Err(ApiError::BadRequest("Scopes must include 'openid' for OIDC".to_string()));
+            return Err(ApiError::BadRequest(
+                "Scopes must include 'openid' for OIDC".to_string(),
+            ));
         }
 
         if !self.scopes.contains(&"email".to_string()) {
-            return Err(ApiError::BadRequest("Scopes must include 'email' to identify users".to_string()));
+            return Err(ApiError::BadRequest(
+                "Scopes must include 'email' to identify users".to_string(),
+            ));
         }
 
         Ok(())
@@ -165,8 +189,12 @@ impl OidcProvider {
             return Err("Redirect URI cannot be empty".to_string());
         }
 
-        if !self.redirect_uri.starts_with("https://") && !self.redirect_uri.starts_with("http://localhost") {
-            return Err("Redirect URI must use HTTPS (or http://localhost for development)".to_string());
+        if !self.redirect_uri.starts_with("https://")
+            && !self.redirect_uri.starts_with("http://localhost")
+        {
+            return Err(
+                "Redirect URI must use HTTPS (or http://localhost for development)".to_string(),
+            );
         }
 
         if self.scopes.is_empty() {
@@ -201,7 +229,10 @@ impl OidcProvider {
         )
     }
 
-    pub fn update_from_request(&mut self, request: UpdateOidcProviderRequest) -> Result<(), String> {
+    pub fn update_from_request(
+        &mut self,
+        request: UpdateOidcProviderRequest,
+    ) -> Result<(), String> {
         if let Some(name) = request.name {
             self.name = name;
         }

@@ -2,8 +2,8 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent},
-    services::{hash_password, validate_and_normalize_email, password_reset_service},
+    models::{Agent, User, UserType},
+    services::{hash_password, password_reset_service, validate_and_normalize_email},
 };
 
 #[tokio::test]
@@ -36,7 +36,10 @@ async fn test_request_password_reset_registered_email_success() {
     );
 
     // Verify token was created in database
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     assert_eq!(tokens.len(), 1);
     assert_eq!(tokens[0].token.len(), 32);
     assert!(!tokens[0].used);
@@ -50,7 +53,8 @@ async fn test_request_password_reset_nonexistent_email_same_response() {
     let db = test_db.db();
 
     // Request password reset for email that doesn't exist
-    let result = password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
+    let result =
+        password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
 
     // Should succeed with same generic message (email enumeration prevention)
     assert!(result.is_ok());
@@ -79,15 +83,23 @@ async fn test_request_password_reset_token_format() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
 
     // Verify token format
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     assert_eq!(tokens.len(), 1);
 
     let token = &tokens[0].token;
     assert_eq!(token.len(), 32, "Token should be 32 characters");
-    assert!(token.chars().all(|c| c.is_alphanumeric()), "Token should be alphanumeric only");
+    assert!(
+        token.chars().all(|c| c.is_alphanumeric()),
+        "Token should be alphanumeric only"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -108,14 +120,22 @@ async fn test_request_password_reset_token_expiry() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
 
     // Verify token has expiry timestamp (1 hour from now)
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     assert_eq!(tokens.len(), 1);
 
     let token = &tokens[0];
-    assert!(!token.is_expired(), "Token should not be expired immediately after creation");
+    assert!(
+        !token.is_expired(),
+        "Token should not be expired immediately after creation"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -136,11 +156,18 @@ async fn test_request_password_reset_invalidates_previous_tokens() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset twice
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens_after_first = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens_after_first = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let first_token = tokens_after_first[0].token.clone();
 
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
 
     // First token should be marked as used (invalidated)
     let first_token_record = db.get_password_reset_token(&first_token).await.unwrap();
@@ -149,7 +176,10 @@ async fn test_request_password_reset_invalidates_previous_tokens() {
     }
 
     // Should have exactly 1 active token (the new one)
-    let all_tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    let all_tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let active_tokens: Vec<_> = all_tokens.iter().filter(|t| !t.used).collect();
     assert_eq!(active_tokens.len(), 1, "Should have exactly 1 active token");
 
@@ -178,7 +208,10 @@ async fn test_request_password_reset_email_normalization() {
     assert!(result.is_ok());
 
     // Verify token was created
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     assert_eq!(tokens.len(), 1);
 
     teardown_test_db(test_db).await;

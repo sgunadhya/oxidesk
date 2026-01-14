@@ -7,10 +7,10 @@ pub struct Macro {
     pub name: String,
     pub message_content: String,
     pub created_by: String,
-    pub created_at: String,  // ISO 8601
-    pub updated_at: String,  // ISO 8601
+    pub created_at: String, // ISO 8601
+    pub updated_at: String, // ISO 8601
     pub usage_count: i32,
-    pub access_control: String,  // "all" or "restricted"
+    pub access_control: String, // "all" or "restricted"
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub actions: Option<Vec<MacroAction>>,
@@ -48,7 +48,7 @@ impl Macro {
 pub struct MacroAction {
     pub id: String,
     pub macro_id: String,
-    pub action_type: String,  // set_status, assign_to_user, assign_to_team, add_tag, set_priority
+    pub action_type: String, // set_status, assign_to_user, assign_to_team, add_tag, set_priority
     pub action_value: String,
     pub action_order: i32,
 }
@@ -92,9 +92,9 @@ impl MacroAction {
 pub struct MacroAccess {
     pub id: String,
     pub macro_id: String,
-    pub entity_type: String,  // "user" or "team"
+    pub entity_type: String, // "user" or "team"
     pub entity_id: String,
-    pub granted_at: String,  // ISO 8601
+    pub granted_at: String, // ISO 8601
     pub granted_by: String,
 }
 
@@ -122,8 +122,8 @@ pub struct MacroApplicationLog {
     pub macro_id: String,
     pub agent_id: String,
     pub conversation_id: String,
-    pub applied_at: String,  // ISO 8601
-    pub actions_queued: String,  // JSON array
+    pub applied_at: String,     // ISO 8601
+    pub actions_queued: String, // JSON array
     pub variables_replaced: i32,
 }
 

@@ -2,9 +2,9 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Agent},
-    services::{hash_password, validate_and_normalize_email, password_reset_service},
     api::middleware::error::ApiError,
+    models::{Agent, User, UserType},
+    services::{hash_password, password_reset_service, validate_and_normalize_email},
 };
 
 #[tokio::test]
@@ -17,14 +17,24 @@ async fn test_expired_token_rejected() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Expired Test 1".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Expired Test 1".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token_value = tokens[0].token.clone();
     let token_id = tokens[0].id.clone();
 
@@ -46,7 +56,7 @@ async fn test_expired_token_rejected() {
     match result.unwrap_err() {
         ApiError::BadRequest(msg) => {
             assert_eq!(msg, "Invalid or expired reset token");
-        },
+        }
         other => panic!("Expected BadRequest for expired token, got: {:?}", other),
     }
 
@@ -64,14 +74,24 @@ async fn test_password_unchanged_after_expired_token_rejection() {
     let original_hash = hash_password(original_password).unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Expired Test 2".to_string(), None, original_hash.clone());
+    let agent = Agent::new(
+        user.id.clone(),
+        "Expired Test 2".to_string(),
+        None,
+        original_hash.clone(),
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token_value = tokens[0].token.clone();
     let token_id = tokens[0].id.clone();
 
@@ -108,14 +128,24 @@ async fn test_token_at_exact_expiry_boundary() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Boundary Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Boundary Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token_value = tokens[0].token.clone();
     let token_id = tokens[0].id.clone();
 
@@ -132,7 +162,10 @@ async fn test_token_at_exact_expiry_boundary() {
     let result = password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
 
     // Should be rejected (expired tokens are rejected if expires_at <= now)
-    assert!(result.is_err(), "Token at exact expiry boundary should be rejected");
+    assert!(
+        result.is_err(),
+        "Token at exact expiry boundary should be rejected"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -147,14 +180,24 @@ async fn test_token_just_before_expiry_works() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Just Before Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Just Before Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token_value = tokens[0].token.clone();
     let token_id = tokens[0].id.clone();
 
@@ -184,18 +227,28 @@ async fn test_default_expiry_is_1_hour() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "One Hour Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "One Hour Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
     let before_request = chrono::Utc::now();
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
     let after_request = chrono::Utc::now();
 
     // Get token and check expiry time
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token = &tokens[0];
 
     // Parse the expires_at string to DateTime for comparison
@@ -225,7 +278,12 @@ async fn test_multiple_expired_tokens_all_rejected() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Multiple Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Multiple Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
@@ -233,8 +291,13 @@ async fn test_multiple_expired_tokens_all_rejected() {
     // Create multiple tokens and expire them all
     let mut expired_tokens = Vec::new();
     for _ in 0..3 {
-        password_reset_service::request_password_reset(db, &email).await.unwrap();
-        let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+        password_reset_service::request_password_reset(db, &email)
+            .await
+            .unwrap();
+        let tokens = db
+            .get_all_password_reset_tokens_for_user(&user.id)
+            .await
+            .unwrap();
         let latest_token = tokens.iter().find(|t| !t.used).unwrap();
 
         // Expire this token
@@ -272,14 +335,24 @@ async fn test_expired_token_error_message_same_as_invalid() {
     let password_hash = hash_password("TestPass123!").unwrap();
 
     let user = User::new(email.clone(), UserType::Agent);
-    let agent = Agent::new(user.id.clone(), "Same Message Test".to_string(), None, password_hash);
+    let agent = Agent::new(
+        user.id.clone(),
+        "Same Message Test".to_string(),
+        None,
+        password_hash,
+    );
 
     db.create_user(&user).await.unwrap();
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and expire token
-    password_reset_service::request_password_reset(db, &email).await.unwrap();
-    let tokens = db.get_all_password_reset_tokens_for_user(&user.id).await.unwrap();
+    password_reset_service::request_password_reset(db, &email)
+        .await
+        .unwrap();
+    let tokens = db
+        .get_all_password_reset_tokens_for_user(&user.id)
+        .await
+        .unwrap();
     let token_value = tokens[0].token.clone();
     let token_id = tokens[0].id.clone();
 
@@ -292,10 +365,16 @@ async fn test_expired_token_error_message_same_as_invalid() {
         .unwrap();
 
     // Try to use expired token
-    let expired_result = password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
+    let expired_result =
+        password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
 
     // Try to use non-existent token
-    let invalid_result = password_reset_service::reset_password(db, "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6", "NewPass123!").await;
+    let invalid_result = password_reset_service::reset_password(
+        db,
+        "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+        "NewPass123!",
+    )
+    .await;
 
     // Both should return the same generic error message
     assert!(expired_result.is_err());

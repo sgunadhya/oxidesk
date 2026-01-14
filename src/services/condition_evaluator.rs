@@ -1,4 +1,4 @@
-use crate::models::{Conversation, ConversationStatus, RuleCondition, ComparisonOperator};
+use crate::models::{ComparisonOperator, Conversation, ConversationStatus, RuleCondition};
 use serde_json::Value;
 use std::time::Duration;
 
@@ -45,27 +45,37 @@ impl ConditionEvaluator {
         conversation: &Conversation,
     ) -> Result<bool, ConditionError> {
         // Wrap evaluation with timeout
-        tokio::time::timeout(self.timeout, self.evaluate_internal(condition, conversation))
-            .await
-            .map_err(|_| ConditionError::Timeout)?
+        tokio::time::timeout(
+            self.timeout,
+            self.evaluate_internal(condition, conversation),
+        )
+        .await
+        .map_err(|_| ConditionError::Timeout)?
     }
 
     fn evaluate_internal<'a>(
         &'a self,
         condition: &'a RuleCondition,
         conversation: &'a Conversation,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool, ConditionError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<bool, ConditionError>> + Send + 'a>,
+    > {
         Box::pin(async move {
             match condition {
                 RuleCondition::Simple {
                     attribute,
                     comparison,
                     value,
-                } => self.evaluate_simple(attribute, comparison, value, conversation).await,
+                } => {
+                    self.evaluate_simple(attribute, comparison, value, conversation)
+                        .await
+                }
                 RuleCondition::And { conditions } => {
                     self.evaluate_and(conditions, conversation).await
                 }
-                RuleCondition::Or { conditions } => self.evaluate_or(conditions, conversation).await,
+                RuleCondition::Or { conditions } => {
+                    self.evaluate_or(conditions, conversation).await
+                }
                 RuleCondition::Not { condition } => {
                     let result = self.evaluate_internal(condition, conversation).await?;
                     Ok(!result)
@@ -130,7 +140,11 @@ impl ConditionEvaluator {
         }
     }
 
-    fn evaluate_contains(&self, attr_value: &Value, expected: &Value) -> Result<bool, ConditionError> {
+    fn evaluate_contains(
+        &self,
+        attr_value: &Value,
+        expected: &Value,
+    ) -> Result<bool, ConditionError> {
         match attr_value {
             Value::Array(arr) => {
                 // Check if array contains the expected value
@@ -152,11 +166,19 @@ impl ConditionEvaluator {
         }
     }
 
-    fn evaluate_equals(&self, attr_value: &Value, expected: &Value) -> Result<bool, ConditionError> {
+    fn evaluate_equals(
+        &self,
+        attr_value: &Value,
+        expected: &Value,
+    ) -> Result<bool, ConditionError> {
         Ok(attr_value == expected)
     }
 
-    fn evaluate_greater_than(&self, attr_value: &Value, expected: &Value) -> Result<bool, ConditionError> {
+    fn evaluate_greater_than(
+        &self,
+        attr_value: &Value,
+        expected: &Value,
+    ) -> Result<bool, ConditionError> {
         match (attr_value, expected) {
             (Value::Number(a), Value::Number(b)) => {
                 if let (Some(a_f), Some(b_f)) = (a.as_f64(), b.as_f64()) {
@@ -173,7 +195,11 @@ impl ConditionEvaluator {
         }
     }
 
-    fn evaluate_less_than(&self, attr_value: &Value, expected: &Value) -> Result<bool, ConditionError> {
+    fn evaluate_less_than(
+        &self,
+        attr_value: &Value,
+        expected: &Value,
+    ) -> Result<bool, ConditionError> {
         match (attr_value, expected) {
             (Value::Number(a), Value::Number(b)) => {
                 if let (Some(a_f), Some(b_f)) = (a.as_f64(), b.as_f64()) {
@@ -249,7 +275,7 @@ mod tests {
             contact_id: "contact-001".to_string(),
             subject: Some("Test".to_string()),
             resolved_at: None,
-            closed_at: None,  // Feature 019
+            closed_at: None, // Feature 019
             snoozed_until: None,
             assigned_user_id: None,
             assigned_team_id: None,
@@ -308,6 +334,9 @@ mod tests {
 
         let result = evaluator.evaluate(&condition, &conversation).await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ConditionError::InvalidAttribute(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConditionError::InvalidAttribute(_)
+        ));
     }
 }

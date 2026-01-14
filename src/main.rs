@@ -1,22 +1,27 @@
 // Modules are imported from the library crate
 
-
 use oxidesk::{
-    api::{self, middleware::{AppState, ApiError}}, // Explicitly fixing imports mapping
+    api::{
+        self,
+        middleware::{ApiError, AppState},
+    }, // Explicitly fixing imports mapping
     config::Config,
     database::Database,
     models::*,
-    services::{*, connection_manager::{ConnectionManager, InMemoryConnectionManager}},
+    services::{
+        connection_manager::{ConnectionManager, InMemoryConnectionManager},
+        *,
+    },
     web,
 };
-// Re-import initialize_admin for main.rs usage if it was public in lib? 
+// Re-import initialize_admin for main.rs usage if it was public in lib?
 // initialize_admin was defined in main.rs (line 305). Wait.
 // If initialize_admin function is at the bottom of main.rs, it uses `Database`.
 // `Database` is now `oxidesk::database::Database`.
 
 use axum::{
     extract::State,
-    routing::{get, post, delete, patch, put},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use std::sync::Arc;
@@ -47,12 +52,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Database URL: {}", config.database_url);
 
     // Connect to database
-    let db = Database::connect(&config.database_url)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to connect to database: {}", e);
-            e
-        })?;
+    let db = Database::connect(&config.database_url).await.map_err(|e| {
+        tracing::error!("Failed to connect to database: {}", e);
+        e
+    })?;
 
     tracing::info!("Connected to database successfully");
 
@@ -76,10 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize delivery service with mock provider
     let delivery_provider = std::sync::Arc::new(oxidesk::services::MockDeliveryProvider::new());
-    let delivery_service = oxidesk::services::DeliveryService::new(
-        db.clone(),
-        delivery_provider,
-    );
+    let delivery_service = oxidesk::services::DeliveryService::new(db.clone(), delivery_provider);
     tracing::info!("Delivery service initialized with mock provider");
 
     // Initialize notification service
@@ -87,18 +87,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Notification service initialized (stub)");
 
     // Initialize availability service
-    let availability_service = oxidesk::AvailabilityService::new(
-        db.clone(),
-        event_bus.clone(),
-    );
+    let availability_service = oxidesk::AvailabilityService::new(db.clone(), event_bus.clone());
     tracing::info!("Availability service initialized");
 
     // Initialize SLA service
     let event_bus_arc = std::sync::Arc::new(tokio::sync::RwLock::new(event_bus.clone()));
-    let sla_service = oxidesk::SlaService::new(
-        db.clone(),
-        event_bus_arc,
-    );
+    let sla_service = oxidesk::SlaService::new(db.clone(), event_bus_arc);
     tracing::info!("SLA service initialized");
 
     // Initialize connection manager
@@ -212,9 +206,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
 
                             // Trigger automation rules for conversation creation
-                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                            if let Ok(Some(conversation)) =
+                                automation_db.get_conversation_by_id(&conversation_id).await
+                            {
                                 if let Err(e) = automation_rule_service
-                                    .handle_conversation_event("conversation.created", &conversation, "system")
+                                    .handle_conversation_event(
+                                        "conversation.created",
+                                        &conversation,
+                                        "system",
+                                    )
                                     .await
                                 {
                                     tracing::error!("Failed to execute automation rules for conversation creation: {}", e);
@@ -248,13 +248,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
 
                             // Trigger automation rules for status change
-                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                            if let Ok(Some(conversation)) =
+                                automation_db.get_conversation_by_id(&conversation_id).await
+                            {
                                 let executed_by = agent_id.as_deref().unwrap_or("system");
                                 if let Err(e) = automation_rule_service
-                                    .handle_conversation_event("conversation.status_changed", &conversation, executed_by)
+                                    .handle_conversation_event(
+                                        "conversation.status_changed",
+                                        &conversation,
+                                        executed_by,
+                                    )
                                     .await
                                 {
-                                    tracing::error!("Failed to execute automation rules for status change: {}", e);
+                                    tracing::error!(
+                                        "Failed to execute automation rules for status change: {}",
+                                        e
+                                    );
                                 }
                             }
                         }
@@ -281,9 +290,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
 
                             // Trigger automation rules for incoming messages
-                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                            if let Ok(Some(conversation)) =
+                                automation_db.get_conversation_by_id(&conversation_id).await
+                            {
                                 if let Err(e) = automation_rule_service
-                                    .handle_conversation_event("conversation.message_received", &conversation, "system")
+                                    .handle_conversation_event(
+                                        "conversation.message_received",
+                                        &conversation,
+                                        "system",
+                                    )
                                     .await
                                 {
                                     tracing::error!("Failed to execute automation rules for message received: {}", e);
@@ -313,12 +328,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
 
                             // Trigger automation rules for sent messages
-                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                            if let Ok(Some(conversation)) =
+                                automation_db.get_conversation_by_id(&conversation_id).await
+                            {
                                 if let Err(e) = automation_rule_service
-                                    .handle_conversation_event("conversation.message_sent", &conversation, &agent_id)
+                                    .handle_conversation_event(
+                                        "conversation.message_sent",
+                                        &conversation,
+                                        &agent_id,
+                                    )
                                     .await
                                 {
-                                    tracing::error!("Failed to execute automation rules for message sent: {}", e);
+                                    tracing::error!(
+                                        "Failed to execute automation rules for message sent: {}",
+                                        e
+                                    );
                                 }
                             }
                         }
@@ -337,12 +361,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
 
                             // Trigger automation rules for failed messages
-                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                            if let Ok(Some(conversation)) =
+                                automation_db.get_conversation_by_id(&conversation_id).await
+                            {
                                 if let Err(e) = automation_rule_service
-                                    .handle_conversation_event("conversation.message_failed", &conversation, "system")
+                                    .handle_conversation_event(
+                                        "conversation.message_failed",
+                                        &conversation,
+                                        "system",
+                                    )
                                     .await
                                 {
-                                    tracing::error!("Failed to execute automation rules for message failed: {}", e);
+                                    tracing::error!(
+                                        "Failed to execute automation rules for message failed: {}",
+                                        e
+                                    );
                                 }
                             }
                         }
@@ -365,10 +398,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // Auto-apply SLA if assigned to a team with a default SLA policy
                             if let Some(team_id) = &assigned_team_id {
                                 // Check if conversation already has an applied SLA
-                                match automation_sla_service.get_applied_sla_by_conversation(&conversation_id).await {
+                                match automation_sla_service
+                                    .get_applied_sla_by_conversation(&conversation_id)
+                                    .await
+                                {
                                     Ok(None) => {
                                         // No existing SLA, check if team has a default policy
-                                        if let Ok(Some(team)) = automation_db.get_team_by_id(team_id).await {
+                                        if let Ok(Some(team)) =
+                                            automation_db.get_team_by_id(team_id).await
+                                        {
                                             if let Some(policy_id) = team.sla_policy_id {
                                                 tracing::info!(
                                                     "Auto-applying SLA policy {} to conversation {} (assigned to team {})",
@@ -377,7 +415,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                     team_id
                                                 );
 
-                                                match automation_sla_service.apply_sla(&conversation_id, &policy_id, &timestamp).await {
+                                                match automation_sla_service
+                                                    .apply_sla(
+                                                        &conversation_id,
+                                                        &policy_id,
+                                                        &timestamp,
+                                                    )
+                                                    .await
+                                                {
                                                     Ok(_) => {
                                                         tracing::info!(
                                                             "Successfully auto-applied SLA policy {} to conversation {}",
@@ -414,9 +459,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
 
                             // Trigger automation rules for assignment change
-                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                            if let Ok(Some(conversation)) =
+                                automation_db.get_conversation_by_id(&conversation_id).await
+                            {
                                 if let Err(e) = automation_rule_service
-                                    .handle_conversation_event("conversation.assignment_changed", &conversation, &assigned_by)
+                                    .handle_conversation_event(
+                                        "conversation.assignment_changed",
+                                        &conversation,
+                                        &assigned_by,
+                                    )
                                     .await
                                 {
                                     tracing::error!("Failed to execute automation rules for assignment change: {}", e);
@@ -441,12 +492,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
 
                             // Trigger automation rules for unassignment
-                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                            if let Ok(Some(conversation)) =
+                                automation_db.get_conversation_by_id(&conversation_id).await
+                            {
                                 if let Err(e) = automation_rule_service
-                                    .handle_conversation_event("conversation.unassigned", &conversation, &unassigned_by)
+                                    .handle_conversation_event(
+                                        "conversation.unassigned",
+                                        &conversation,
+                                        &unassigned_by,
+                                    )
                                     .await
                                 {
-                                    tracing::error!("Failed to execute automation rules for unassignment: {}", e);
+                                    tracing::error!(
+                                        "Failed to execute automation rules for unassignment: {}",
+                                        e
+                                    );
                                 }
                             }
                             // TODO: Feature 012 will add webhook triggering
@@ -468,12 +528,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
 
                             // Trigger automation rules for tags change
-                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                            if let Ok(Some(conversation)) =
+                                automation_db.get_conversation_by_id(&conversation_id).await
+                            {
                                 if let Err(e) = automation_rule_service
-                                    .handle_conversation_event("conversation.tags_changed", &conversation, &changed_by)
+                                    .handle_conversation_event(
+                                        "conversation.tags_changed",
+                                        &conversation,
+                                        &changed_by,
+                                    )
                                     .await
                                 {
-                                    tracing::error!("Failed to execute automation rules for tags change: {}", e);
+                                    tracing::error!(
+                                        "Failed to execute automation rules for tags change: {}",
+                                        e
+                                    );
                                 }
                             }
                             // TODO: Feature 012 will add webhook triggering
@@ -541,12 +610,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
 
                             // Trigger automation rules for SLA breach
-                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                            if let Ok(Some(conversation)) =
+                                automation_db.get_conversation_by_id(&conversation_id).await
+                            {
                                 if let Err(e) = automation_rule_service
-                                    .handle_conversation_event("conversation.sla_breached", &conversation, "system")
+                                    .handle_conversation_event(
+                                        "conversation.sla_breached",
+                                        &conversation,
+                                        "system",
+                                    )
                                     .await
                                 {
-                                    tracing::error!("Failed to execute automation rules for SLA breach: {}", e);
+                                    tracing::error!(
+                                        "Failed to execute automation rules for SLA breach: {}",
+                                        e
+                                    );
                                 }
                             }
                             // TODO: Feature 010 will add notification sending
@@ -569,9 +647,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
 
                             // Trigger automation rules for priority change
-                            if let Ok(Some(conversation)) = automation_db.get_conversation_by_id(&conversation_id).await {
+                            if let Ok(Some(conversation)) =
+                                automation_db.get_conversation_by_id(&conversation_id).await
+                            {
                                 if let Err(e) = automation_rule_service
-                                    .handle_conversation_event("conversation.priority_changed", &conversation, &updated_by)
+                                    .handle_conversation_event(
+                                        "conversation.priority_changed",
+                                        &conversation,
+                                        &updated_by,
+                                    )
                                     .await
                                 {
                                     tracing::error!("Failed to execute automation rules for priority change: {}", e);
@@ -611,7 +695,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         loop {
             interval.tick().await;
 
-            match availability_service_inactivity.check_inactivity_timeouts().await {
+            match availability_service_inactivity
+                .check_inactivity_timeouts()
+                .await
+            {
                 Ok(affected) => {
                     if !affected.is_empty() {
                         tracing::info!(
@@ -672,34 +759,77 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/auth/logout", post(api::auth::logout))
         .route("/api/auth/session", get(api::auth::get_session))
         .route("/api/auth/events", get(api::auth::get_my_auth_events))
-        .route("/api/auth/events/recent", get(api::auth::get_recent_auth_events))
-        .route("/api/oidc-providers", get(api::oidc_providers::list_oidc_providers))
-        .route("/api/oidc-providers", post(api::oidc_providers::create_oidc_provider))
-        .route("/api/oidc-providers/:id", get(api::oidc_providers::get_oidc_provider))
-        .route("/api/oidc-providers/:id", patch(api::oidc_providers::update_oidc_provider))
-        .route("/api/oidc-providers/:id", delete(api::oidc_providers::delete_oidc_provider))
-        .route("/api/oidc-providers/:id/toggle", post(api::oidc_providers::toggle_oidc_provider))
-        .route("/api/agents", get(api::agents::list_agents))
-        .route("/api/agents", post(api::agents::create_agent))
+        .route(
+            "/api/auth/events/recent",
+            get(api::auth::get_recent_auth_events),
+        )
+        .route(
+            "/api/oidc-providers",
+            get(api::oidc_providers::list_oidc_providers),
+        )
+        .route(
+            "/api/oidc-providers",
+            post(api::oidc_providers::create_oidc_provider),
+        )
+        .route(
+            "/api/oidc-providers/:id",
+            get(api::oidc_providers::get_oidc_provider),
+        )
+        .route(
+            "/api/oidc-providers/:id",
+            patch(api::oidc_providers::update_oidc_provider),
+        )
+        .route(
+            "/api/oidc-providers/:id",
+            delete(api::oidc_providers::delete_oidc_provider),
+        )
+        // API Routes
         .route("/api/agents/:id", get(api::agents::get_agent))
         .route("/api/agents/:id", patch(api::agents::update_agent))
         .route("/api/agents/:id", delete(api::agents::delete_agent))
-        .route("/api/agents/:id/password", post(api::agents::change_agent_password))
+        .route(
+            "/api/agents/:id/password",
+            post(api::agents::change_agent_password),
+        )
         // API Key routes (Feature 015)
-        .route("/api/agents/:id/api-key", post(api::api_keys::generate_api_key_handler))
-        .route("/api/agents/:id/api-key", delete(api::api_keys::revoke_api_key_handler))
+        .route(
+            "/api/agents/:id/api-key",
+            post(api::api_keys::generate_api_key_handler),
+        )
+        .route(
+            "/api/agents/:id/api-key",
+            delete(api::api_keys::revoke_api_key_handler),
+        )
         .route("/api/api-keys", get(api::api_keys::list_api_keys_handler))
         .route("/api/contacts", get(api::contacts::list_contacts))
         .route("/api/contacts", post(api::contacts::create_contact))
         .route("/api/contacts/:id", get(api::contacts::get_contact))
         .route("/api/contacts/:id", patch(api::contacts::update_contact))
         .route("/api/contacts/:id", delete(api::contacts::delete_contact))
-        .route("/api/conversations", get(api::conversations::list_conversations))
-        .route("/api/conversations", post(api::conversations::create_conversation))
-        .route("/api/conversations/:id", get(api::conversations::get_conversation))
-        .route("/api/conversations/:id/status", patch(api::conversations::update_conversation_status))
-        .route("/api/conversations/:id/priority", patch(api::conversations::update_conversation_priority))
-        .route("/api/conversations/ref/:reference_number", get(api::conversations::get_conversation_by_reference))
+        .route(
+            "/api/conversations",
+            get(api::conversations::list_conversations),
+        )
+        .route(
+            "/api/conversations",
+            post(api::conversations::create_conversation),
+        )
+        .route(
+            "/api/conversations/:id",
+            get(api::conversations::get_conversation),
+        )
+        .route(
+            "/api/conversations/:id/status",
+            patch(api::conversations::update_conversation_status),
+        )
+        .route(
+            "/api/conversations/:id/priority",
+            patch(api::conversations::update_conversation_priority),
+        )
+        .route(
+            "/api/conversations/ref/:reference_number",
+            get(api::conversations::get_conversation_by_reference),
+        )
         .route("/api/roles", get(api::roles::list_roles))
         .route("/api/roles", post(api::roles::create_role))
         .route("/api/roles/:id", get(api::roles::get_role))
@@ -715,14 +845,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/teams/:id", get(api::teams::get_team))
         .route("/api/teams/:id/members", post(api::teams::add_team_member))
         .route("/api/teams/:id/members", get(api::teams::get_team_members))
-        .route("/api/teams/:id/members/:user_id", delete(api::teams::remove_team_member))
+        .route(
+            "/api/teams/:id/members/:user_id",
+            delete(api::teams::remove_team_member),
+        )
         // Assignment routes
-        .route("/api/conversations/:id/assign", post(api::assignments::assign_conversation))
-        .route("/api/conversations/:id/unassign", post(api::assignments::unassign_conversation))
-        .route("/api/conversations/unassigned", get(api::assignments::get_unassigned_conversations))
-        .route("/api/conversations/assigned", get(api::assignments::get_assigned_conversations))
-        .route("/api/teams/:id/conversations", get(api::assignments::get_team_conversations))
-        .route("/api/agents/:id/availability", put(api::assignments::update_agent_availability))
+        .route(
+            "/api/conversations/:id/assign",
+            post(api::assignments::assign_conversation),
+        )
+        .route(
+            "/api/conversations/:id/unassign",
+            post(api::assignments::unassign_conversation),
+        )
+        .route(
+            "/api/conversations/unassigned",
+            get(api::assignments::get_unassigned_conversations),
+        )
+        .route(
+            "/api/conversations/assigned",
+            get(api::assignments::get_assigned_conversations),
+        )
+        .route(
+            "/api/teams/:id/conversations",
+            get(api::assignments::get_team_conversations),
+        )
+        .route(
+            "/api/agents/:id/availability",
+            put(api::assignments::update_agent_availability),
+        )
         // Tag management routes
         .route("/api/tags", post(api::tags::create_tag))
         .route("/api/tags", get(api::tags::list_tags))
@@ -730,34 +881,88 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/tags/:id", patch(api::tags::update_tag))
         .route("/api/tags/:id", delete(api::tags::delete_tag))
         // Conversation tagging routes
-        .route("/api/conversations/:id/tags", get(api::conversation_tags::get_conversation_tags))
-        .route("/api/conversations/:id/tags", post(api::conversation_tags::add_tags_to_conversation))
-        .route("/api/conversations/:id/tags/:tag_id", delete(api::conversation_tags::remove_tag_from_conversation))
-        .route("/api/conversations/:id/tags", put(api::conversation_tags::replace_conversation_tags))
+        .route(
+            "/api/conversations/:id/tags",
+            get(api::conversation_tags::get_conversation_tags),
+        )
+        .route(
+            "/api/conversations/:id/tags",
+            post(api::conversation_tags::add_tags_to_conversation),
+        )
+        .route(
+            "/api/conversations/:id/tags/:tag_id",
+            delete(api::conversation_tags::remove_tag_from_conversation),
+        )
+        .route(
+            "/api/conversations/:id/tags",
+            put(api::conversation_tags::replace_conversation_tags),
+        )
         // Agent availability routes
-        .route("/api/agents/:id/availability", post(api::availability::set_availability))
-        .route("/api/agents/:id/availability", get(api::availability::get_availability))
-        .route("/api/agents/:id/activity", get(api::availability::get_activity_log))
+        .route(
+            "/api/agents/:id/availability",
+            post(api::availability::set_availability),
+        )
+        .route(
+            "/api/agents/:id/availability",
+            get(api::availability::get_availability),
+        )
+        .route(
+            "/api/agents/:id/activity",
+            get(api::availability::get_activity_log),
+        )
         // SLA routes
         .route("/api/sla/policies", post(api::sla::create_sla_policy))
         .route("/api/sla/policies", get(api::sla::list_sla_policies))
         .route("/api/sla/policies/:id", get(api::sla::get_sla_policy))
         .route("/api/sla/policies/:id", put(api::sla::update_sla_policy))
         .route("/api/sla/policies/:id", delete(api::sla::delete_sla_policy))
-        .route("/api/sla/conversations/:conversation_id", get(api::sla::get_applied_sla_by_conversation))
+        .route(
+            "/api/sla/conversations/:conversation_id",
+            get(api::sla::get_applied_sla_by_conversation),
+        )
         .route("/api/sla/applied", get(api::sla::list_applied_slas))
         .route("/api/sla/apply", post(api::sla::apply_sla))
-        .route("/api/sla/applied/:applied_sla_id/events", get(api::sla::get_sla_events))
-        .route("/api/teams/:id/sla-policy", put(api::sla::assign_sla_policy_to_team))
+        .route(
+            "/api/sla/applied/:applied_sla_id/events",
+            get(api::sla::get_sla_events),
+        )
+        .route(
+            "/api/teams/:id/sla-policy",
+            put(api::sla::assign_sla_policy_to_team),
+        )
         // Automation rules endpoints
-        .route("/api/automation/rules", post(api::automation::create_automation_rule))
-        .route("/api/automation/rules", get(api::automation::list_automation_rules))
-        .route("/api/automation/rules/:id", get(api::automation::get_automation_rule))
-        .route("/api/automation/rules/:id", put(api::automation::update_automation_rule))
-        .route("/api/automation/rules/:id", delete(api::automation::delete_automation_rule))
-        .route("/api/automation/rules/:id/enable", patch(api::automation::enable_automation_rule))
-        .route("/api/automation/rules/:id/disable", patch(api::automation::disable_automation_rule))
-        .route("/api/automation/evaluation-logs", get(api::automation::list_evaluation_logs))
+        .route(
+            "/api/automation/rules",
+            post(api::automation::create_automation_rule),
+        )
+        .route(
+            "/api/automation/rules",
+            get(api::automation::list_automation_rules),
+        )
+        .route(
+            "/api/automation/rules/:id",
+            get(api::automation::get_automation_rule),
+        )
+        .route(
+            "/api/automation/rules/:id",
+            put(api::automation::update_automation_rule),
+        )
+        .route(
+            "/api/automation/rules/:id",
+            delete(api::automation::delete_automation_rule),
+        )
+        .route(
+            "/api/automation/rules/:id/enable",
+            patch(api::automation::enable_automation_rule),
+        )
+        .route(
+            "/api/automation/rules/:id/disable",
+            patch(api::automation::disable_automation_rule),
+        )
+        .route(
+            "/api/automation/evaluation-logs",
+            get(api::automation::list_evaluation_logs),
+        )
         // Macro endpoints
         .route("/api/macros", post(api::macros::create_macro))
         .route("/api/macros", get(api::macros::list_macros))
@@ -765,31 +970,76 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/macros/:id", put(api::macros::update_macro))
         .route("/api/macros/:id", delete(api::macros::delete_macro))
         .route("/api/macros/:id/apply", post(api::macros::apply_macro))
-        .route("/api/macros/:id/access", post(api::macros::grant_macro_access))
-        .route("/api/macros/:id/access", get(api::macros::list_macro_access))
-        .route("/api/macros/:id/access/:entity_type/:entity_id", delete(api::macros::revoke_macro_access))
+        .route(
+            "/api/macros/:id/access",
+            post(api::macros::grant_macro_access),
+        )
+        .route(
+            "/api/macros/:id/access",
+            get(api::macros::list_macro_access),
+        )
+        .route(
+            "/api/macros/:id/access/:entity_type/:entity_id",
+            delete(api::macros::revoke_macro_access),
+        )
         .route("/api/macros/:id/logs", get(api::macros::get_macro_logs))
         // Notification routes
-        .route("/api/notifications", get(api::notifications::list_notifications))
-        .route("/api/notifications/unread-count", get(api::notifications::get_unread_count))
-        .route("/api/notifications/stream", get(api::notifications::notification_stream))
-        .route("/api/notifications/:id/read", put(api::notifications::mark_notification_as_read))
-        .route("/api/notifications/read-all", put(api::notifications::mark_all_notifications_as_read))
+        .route(
+            "/api/notifications",
+            get(api::notifications::list_notifications),
+        )
+        .route(
+            "/api/notifications/unread-count",
+            get(api::notifications::get_unread_count),
+        )
+        .route(
+            "/api/notifications/stream",
+            get(api::notifications::notification_stream),
+        )
+        .route(
+            "/api/notifications/:id/read",
+            put(api::notifications::mark_notification_as_read),
+        )
+        .route(
+            "/api/notifications/read-all",
+            put(api::notifications::mark_all_notifications_as_read),
+        )
         // Inbox email configuration routes (Feature 021)
-        .route("/api/inboxes/:inbox_id/email-config", post(api::inbox_email_configs::create_inbox_email_config))
-        .route("/api/inboxes/:inbox_id/email-config", get(api::inbox_email_configs::get_inbox_email_config))
-        .route("/api/inboxes/:inbox_id/email-config", put(api::inbox_email_configs::update_inbox_email_config))
-        .route("/api/inboxes/:inbox_id/email-config", delete(api::inbox_email_configs::delete_inbox_email_config))
-        .route("/api/inboxes/email-config/test", post(api::inbox_email_configs::test_inbox_email_config))
+        .route(
+            "/api/inboxes/:inbox_id/email-config",
+            post(api::inbox_email_configs::create_inbox_email_config),
+        )
+        .route(
+            "/api/inboxes/:inbox_id/email-config",
+            get(api::inbox_email_configs::get_inbox_email_config),
+        )
+        .route(
+            "/api/inboxes/:inbox_id/email-config",
+            put(api::inbox_email_configs::update_inbox_email_config),
+        )
+        .route(
+            "/api/inboxes/:inbox_id/email-config",
+            delete(api::inbox_email_configs::delete_inbox_email_config),
+        )
+        .route(
+            "/api/inboxes/email-config/test",
+            post(api::inbox_email_configs::test_inbox_email_config),
+        )
         // Webhook routes (admin only)
         .route("/api/webhooks", post(api::webhooks::create_webhook))
         .route("/api/webhooks", get(api::webhooks::list_webhooks))
         .route("/api/webhooks/:id", get(api::webhooks::get_webhook))
         .route("/api/webhooks/:id", put(api::webhooks::update_webhook))
         .route("/api/webhooks/:id", delete(api::webhooks::delete_webhook))
-        .route("/api/webhooks/:id/toggle", put(api::webhooks::toggle_webhook_status))
+        .route(
+            "/api/webhooks/:id/toggle",
+            put(api::webhooks::toggle_webhook_status),
+        )
         .route("/api/webhooks/:id/test", post(api::webhooks::test_webhook))
-        .route("/api/webhooks/:id/deliveries", get(api::webhooks::list_webhook_deliveries))
+        .route(
+            "/api/webhooks/:id/deliveries",
+            get(api::webhooks::list_webhook_deliveries),
+        )
         // Add activity tracking middleware (before auth middleware)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -808,12 +1058,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let web_protected = Router::new()
         .route("/dashboard", get(web::show_dashboard))
         .route("/logout", post(web::handle_logout))
-        .route("/agents", get(web::show_agents))
+        .route("/agents", get(web::show_agents).post(web::create_agent))
+        .route("/agents/new", get(web::show_create_agent_page))
         .route("/agents/:id", delete(web::delete_agent))
-        .route("/contacts", get(web::show_contacts))
-        .route("/contacts/:id", delete(web::delete_contact))
+        .route(
+            "/contacts",
+            get(web::show_contacts).post(web::create_contact),
+        )
+        .route("/contacts/new", get(web::show_create_contact_page))
+        .route(
+            "/contacts/:id",
+            delete(web::delete_contact)
+                .get(web::show_contact_profile)
+                .post(web::update_contact),
+        )
+        .route("/contacts/:id/edit", get(web::show_contact_edit))
         .route("/roles", get(web::show_roles))
         .route("/roles/:id", delete(web::delete_role))
+        // Inbox
+        .route("/inbox", get(web::show_inbox))
+        .route("/inbox/c/:id", get(web::show_conversation))
+        .route("/inbox/c/:id/messages", post(web::send_message))
+        // Standardized routes (aliased for compatibility/template usage)
+        .route("/inbox/conversations/:id", get(web::show_conversation))
+        .route("/inbox/conversations/:id/assign", patch(web::assign_ticket))
+        .route(
+            "/inbox/conversations/:id/resolve",
+            post(web::resolve_ticket),
+        )
+        .route("/inbox/conversations/:id/open", post(web::reopen_ticket))
+        // Manual Ticket Creation
+        .route("/conversations/new", get(web::show_create_ticket_page))
+        .route("/conversations", post(web::create_ticket))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             web_auth_middleware,
@@ -826,12 +1102,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/login", get(web::show_login_page))
         .route("/login", post(web::handle_login))
         .route("/api/auth/login", post(api::auth::login))
-        .route("/api/auth/oidc/providers", get(api::oidc_providers::list_enabled_oidc_providers))
-        .route("/api/auth/oidc/:provider_name/login", get(api::auth::oidc_login))
+        .route(
+            "/api/auth/oidc/providers",
+            get(api::oidc_providers::list_enabled_oidc_providers),
+        )
+        .route(
+            "/api/auth/oidc/:provider_name/login",
+            get(api::auth::oidc_login),
+        )
         .route("/api/auth/oidc/callback", get(api::auth::oidc_callback))
         // Password Reset routes (Feature 017) - Public endpoints
-        .route("/api/password-reset/request", post(api::password_reset::request_password_reset))
-        .route("/api/password-reset/reset", post(api::password_reset::reset_password))
+        .route(
+            "/api/password-reset/request",
+            post(api::password_reset::request_password_reset),
+        )
+        .route(
+            "/api/password-reset/reset",
+            post(api::password_reset::reset_password),
+        )
         .merge(protected)
         .merge(web_protected)
         .merge(api::messages::routes())
@@ -844,14 +1132,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             use tokio::time::{interval, Duration};
             let mut cleanup_interval = interval(Duration::from_secs(24 * 60 * 60)); // 24 hours
 
-            tracing::info!("Notification cleanup task started (24-hour interval, 30-day retention)");
+            tracing::info!(
+                "Notification cleanup task started (24-hour interval, 30-day retention)"
+            );
 
             loop {
                 cleanup_interval.tick().await;
 
-                match oxidesk::NotificationService::cleanup_old_notifications(&cleanup_db, Some(30)).await {
+                match oxidesk::NotificationService::cleanup_old_notifications(&cleanup_db, Some(30))
+                    .await
+                {
                     Ok(count) => {
-                        tracing::info!("Notification cleanup completed: {} old notifications deleted", count);
+                        tracing::info!(
+                            "Notification cleanup completed: {} old notifications deleted",
+                            count
+                        );
                     }
                     Err(e) => {
                         tracing::error!("Notification cleanup failed: {}", e);
@@ -862,13 +1157,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Spawn email polling worker (Feature 021)
-    let attachment_storage_path = std::env::var("ATTACHMENT_STORAGE_PATH")
-        .unwrap_or_else(|_| "./attachments".to_string());
+    let attachment_storage_path =
+        std::env::var("ATTACHMENT_STORAGE_PATH").unwrap_or_else(|_| "./attachments".to_string());
     std::fs::create_dir_all(&attachment_storage_path)?;
-    let _email_polling_handle = oxidesk::spawn_email_polling_worker(
-        db.clone(),
-        attachment_storage_path,
-    );
+    let _email_polling_handle =
+        oxidesk::spawn_email_polling_worker(db.clone(), attachment_storage_path);
     tracing::info!("Email polling worker started");
 
     // Start server
@@ -889,11 +1182,7 @@ async fn health_handler() -> &'static str {
     "OK"
 }
 
-use axum::{
-    extract::Request,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, middleware::Next, response::Response};
 
 /// Web authentication middleware that checks session cookie
 async fn web_auth_middleware(
@@ -908,19 +1197,17 @@ async fn web_auth_middleware(
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
 
-    let token = cookies
-        .split(';')
-        .find_map(|cookie| {
-            let cookie = cookie.trim();
-            if cookie.starts_with("session_token=") {
-                Some(cookie.trim_start_matches("session_token="))
-            } else {
-                None
-            }
-        });
+    let token = cookies.split(';').find_map(|cookie| {
+        let cookie = cookie.trim();
+        if cookie.starts_with("session_token=") {
+            Some(cookie.trim_start_matches("session_token="))
+        } else {
+            None
+        }
+    });
 
     let token = match token {
-        Some(t) => t.to_string(),  // Clone to owned string
+        Some(t) => t.to_string(), // Clone to owned string
         None => return Err(axum::response::Redirect::to("/login")),
     };
 
@@ -968,14 +1255,16 @@ async fn web_auth_middleware(
     let permissions: Vec<String> = permissions.into_iter().collect();
 
     // Store authenticated user in request extensions
-    request.extensions_mut().insert(api::middleware::AuthenticatedUser {
-        user,
-        agent,
-        roles,
-        permissions,
-        session,
-        token,
-    });
+    request
+        .extensions_mut()
+        .insert(api::middleware::AuthenticatedUser {
+            user,
+            agent,
+            roles,
+            permissions,
+            session,
+            token,
+        });
 
     Ok(next.run(request).await)
 }

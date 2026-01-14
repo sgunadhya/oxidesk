@@ -3,10 +3,10 @@ mod helpers;
 use helpers::*;
 use oxidesk::{
     models::{
-        AutomationRule, RuleType, RuleCondition, RuleAction, ActionType, ComparisonOperator,
-        ConversationStatus, Priority,
+        ActionType, AutomationRule, ComparisonOperator, ConversationStatus, Priority, RuleAction,
+        RuleCondition, RuleType,
     },
-    services::automation_service::{AutomationService, AutomationConfig},
+    services::automation_service::{AutomationConfig, AutomationService},
 };
 use serde_json::json;
 use std::collections::HashMap;
@@ -46,10 +46,8 @@ async fn test_rule_matching_by_event_type() {
     conversation.tags = Some(vec!["Bug".to_string()]);
 
     // Create automation service
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -59,7 +57,11 @@ async fn test_rule_matching_by_event_type() {
     assert!(result.is_ok(), "Event handling should succeed");
 
     // Verify action was executed
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.priority, Some(Priority::High));
 
     teardown_test_db(test_db).await;
@@ -127,10 +129,8 @@ async fn test_priority_based_rule_ordering() {
     .await;
 
     // Create automation service
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Handle event - high priority rule should execute last and win
     let result = service
@@ -140,7 +140,11 @@ async fn test_priority_based_rule_ordering() {
     assert!(result.is_ok(), "Event handling should succeed");
 
     // Verify high priority rule's action was applied (executed last)
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.priority, Some(Priority::High));
 
     teardown_test_db(test_db).await;
@@ -181,10 +185,8 @@ async fn test_disabled_rules_are_skipped() {
     .await;
 
     // Create automation service
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -194,7 +196,11 @@ async fn test_disabled_rules_are_skipped() {
     assert!(result.is_ok(), "Event handling should succeed");
 
     // Verify action was NOT executed (rule disabled)
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.priority, None);
 
     teardown_test_db(test_db).await;
@@ -234,10 +240,8 @@ async fn test_condition_true_executes_action() {
     .await;
 
     // Create automation service
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -247,7 +251,11 @@ async fn test_condition_true_executes_action() {
     assert!(result.is_ok(), "Event handling should succeed");
 
     // Verify action was executed
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.priority, Some(Priority::Medium));
 
     teardown_test_db(test_db).await;
@@ -287,10 +295,8 @@ async fn test_condition_false_skips_action() {
     .await;
 
     // Create automation service
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -300,7 +306,11 @@ async fn test_condition_false_skips_action() {
     assert!(result.is_ok(), "Event handling should succeed");
 
     // Verify action was NOT executed (condition false)
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.priority, None);
 
     teardown_test_db(test_db).await;
@@ -351,10 +361,17 @@ async fn test_cascade_depth_limiting() {
         .handle_conversation_event_with_depth("conversation.created", &conversation, "test-user", 1)
         .await;
 
-    assert!(result.is_ok(), "Event handling should succeed but skip rules");
+    assert!(
+        result.is_ok(),
+        "Event handling should succeed but skip rules"
+    );
 
     // Verify action was NOT executed (depth limit exceeded)
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.priority, None);
 
     teardown_test_db(test_db).await;
@@ -394,10 +411,8 @@ async fn test_evaluation_logging() {
     .await;
 
     // Create automation service
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -472,10 +487,8 @@ async fn test_multiple_rules_matching_same_event() {
     .await;
 
     // Create automation service
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -485,7 +498,11 @@ async fn test_multiple_rules_matching_same_event() {
     assert!(result.is_ok(), "Event handling should succeed");
 
     // Verify both actions were executed
-    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.priority, Some(Priority::Medium));
     assert_eq!(updated.status, ConversationStatus::Resolved);
 
@@ -539,17 +556,18 @@ async fn test_rule_evaluation_error_does_not_crash() {
     .await;
 
     // Create automation service
-    let service = AutomationService::new(
-        std::sync::Arc::new(db.clone()),
-        AutomationConfig::default(),
-    );
+    let service =
+        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
     // Handle event - should not crash despite error
     let result = service
         .handle_conversation_event("conversation.created", &conversation, "test-user")
         .await;
 
-    assert!(result.is_ok(), "Event handling should succeed even with action error");
+    assert!(
+        result.is_ok(),
+        "Event handling should succeed even with action error"
+    );
 
     // Verify evaluation log shows error
     let logs = db

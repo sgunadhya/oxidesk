@@ -2,8 +2,8 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{User, UserType, Contact, ContactChannel},
-    services::{validate_and_normalize_email},
+    models::{Contact, ContactChannel, User, UserType},
+    services::validate_and_normalize_email,
 };
 
 #[tokio::test]
@@ -20,7 +20,10 @@ async fn test_contact_creation_success() {
     db.create_contact(&contact).await.unwrap();
 
     // Verify contact was created
-    let retrieved = db.get_user_by_email_and_type(&email, &UserType::Contact).await.unwrap();
+    let retrieved = db
+        .get_user_by_email_and_type(&email, &UserType::Contact)
+        .await
+        .unwrap();
     assert!(retrieved.is_some());
     assert_eq!(retrieved.unwrap().email, email);
 
@@ -71,13 +74,22 @@ async fn test_contact_email_can_duplicate_agent_email() {
     let contact = Contact::new(contact_user.id.clone(), Some("Shared Email".to_string()));
 
     let result = db.create_user(&contact_user).await;
-    assert!(result.is_ok(), "Should allow same email for different user types");
+    assert!(
+        result.is_ok(),
+        "Should allow same email for different user types"
+    );
 
     db.create_contact(&contact).await.unwrap();
 
     // Verify both exist
-    let agent = db.get_user_by_email_and_type(&email, &UserType::Agent).await.unwrap();
-    let contact_retrieved = db.get_user_by_email_and_type(&email, &UserType::Contact).await.unwrap();
+    let agent = db
+        .get_user_by_email_and_type(&email, &UserType::Agent)
+        .await
+        .unwrap();
+    let contact_retrieved = db
+        .get_user_by_email_and_type(&email, &UserType::Contact)
+        .await
+        .unwrap();
 
     assert!(agent.is_some());
     assert!(contact_retrieved.is_some());
@@ -141,7 +153,10 @@ async fn test_get_contact_by_id() {
     assert!(retrieved_contact.is_some());
 
     let retrieved_contact = retrieved_contact.unwrap();
-    assert_eq!(retrieved_contact.first_name, Some("Get Contact".to_string()));
+    assert_eq!(
+        retrieved_contact.first_name,
+        Some("Get Contact".to_string())
+    );
 
     teardown_test_db(test_db).await;
 }

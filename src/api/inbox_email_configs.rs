@@ -1,3 +1,8 @@
+use crate::{
+    api::middleware::{ApiResult, AppState, AuthenticatedUser},
+    error::ApiError,
+    models::{CreateInboxEmailConfigRequest, InboxEmailConfig, UpdateInboxEmailConfigRequest},
+};
 /// API handlers for inbox email configurations (Feature 021)
 use axum::{
     extract::{Path, State},
@@ -5,11 +10,6 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use crate::{
-    api::middleware::{ApiResult, AppState, AuthenticatedUser},
-    error::ApiError,
-    models::{CreateInboxEmailConfigRequest, InboxEmailConfig, UpdateInboxEmailConfigRequest},
-};
 
 /// Response DTO with masked passwords
 #[derive(Debug, Clone, Serialize)]
@@ -95,7 +95,10 @@ pub async fn create_inbox_email_config(
 
     let created = state.db.create_inbox_email_config(&config).await?;
 
-    Ok((StatusCode::CREATED, Json(InboxEmailConfigResponse::from(created))))
+    Ok((
+        StatusCode::CREATED,
+        Json(InboxEmailConfigResponse::from(created)),
+    ))
 }
 
 /// Get inbox email configuration

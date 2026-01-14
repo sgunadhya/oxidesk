@@ -27,7 +27,9 @@ pub async fn assign_conversation(
     assignment_service.set_sla_service(state.sla_service.clone());
 
     // Get user's permissions via service
-    let permissions = assignment_service.get_user_permissions(&user.user.id).await?;
+    let permissions = assignment_service
+        .get_user_permissions(&user.user.id)
+        .await?;
 
     let conversation = if let Some(user_id) = req.assigned_user_id {
         // Check if self-assignment or agent-to-agent
@@ -39,7 +41,12 @@ pub async fn assign_conversation(
         } else {
             // Agent-to-agent assignment
             assignment_service
-                .assign_conversation_to_agent(&conversation_id, &user_id, &user.user.id, &permissions)
+                .assign_conversation_to_agent(
+                    &conversation_id,
+                    &user_id,
+                    &user.user.id,
+                    &permissions,
+                )
                 .await?
         }
     } else if let Some(team_id) = req.assigned_team_id {
@@ -104,9 +111,7 @@ pub async fn update_agent_availability(
 
     // If setting to away_and_reassigning, auto-unassign conversations
     if req.availability_status == AgentAvailability::AwayAndReassigning {
-        let unassigned_conversations = assignment_service
-            .auto_unassign_on_away(&agent_id)
-            .await?;
+        let unassigned_conversations = assignment_service.auto_unassign_on_away(&agent_id).await?;
 
         tracing::info!(
             "Auto-unassigned {} conversations for agent {}",
@@ -148,7 +153,9 @@ pub async fn get_unassigned_conversations(
     );
 
     // Check permission via service
-    let permissions = assignment_service.get_user_permissions(&user.user.id).await?;
+    let permissions = assignment_service
+        .get_user_permissions(&user.user.id)
+        .await?;
     if !permissions
         .iter()
         .any(|p| p.name == "conversations:read_unassigned")
@@ -222,7 +229,9 @@ pub async fn get_team_conversations(
     );
 
     // Verify user is a member of the team via service
-    let is_member = assignment_service.is_team_member(&team_id, &user.user.id).await?;
+    let is_member = assignment_service
+        .is_team_member(&team_id, &user.user.id)
+        .await?;
     if !is_member {
         return Err(ApiError::Forbidden(
             "You are not a member of this team".to_string(),

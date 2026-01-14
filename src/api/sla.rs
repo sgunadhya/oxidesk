@@ -1,7 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -349,7 +348,10 @@ pub async fn apply_sla(
         .apply_sla(&req.conversation_id, &req.sla_policy_id, &base_timestamp)
         .await?;
 
-    Ok((StatusCode::CREATED, Json(AppliedSlaResponse::from(applied_sla))))
+    Ok((
+        StatusCode::CREATED,
+        Json(AppliedSlaResponse::from(applied_sla)),
+    ))
 }
 
 // ========================================

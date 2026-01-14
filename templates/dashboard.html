@@ -3,37 +3,72 @@
 {% block title %}Dashboard - Oxidesk{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h2>Welcome, {{ user_name }}!</h2>
-    <p style="color: #666; margin-top: 0.5rem;">Logged in as {{ user_email }}</p>
-</div>
-
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
-    <div class="card" style="text-align: center;">
-        <h3 style="color: #3498db; font-size: 2.5rem; margin-bottom: 0.5rem;">{{ stats.total_agents }}</h3>
-        <p style="color: #666;">Total Agents</p>
-        <a href="/agents" class="btn btn-primary" style="margin-top: 1rem;">Manage Agents</a>
+<div class="py-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+        <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
     </div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 mt-6">
+        <div class="bg-white overflow-hidden shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <h2 class="text-lg leading-6 font-medium text-gray-900">Welcome, {{ user_name }}!</h2>
+                <div class="mt-2 text-sm text-gray-500">
+                    <p>Logged in as {{ user_email }}</p>
+                </div>
+            </div>
+        </div>
 
-    <div class="card" style="text-align: center;">
-        <h3 style="color: #e67e22; font-size: 2.5rem; margin-bottom: 0.5rem;">{{ stats.total_contacts }}</h3>
-        <p style="color: #666;">Total Contacts</p>
-        <a href="/contacts" class="btn btn-primary" style="margin-top: 1rem;">Manage Contacts</a>
-    </div>
+        <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <dt class="text-sm font-medium text-gray-500 truncate">Total Agents</dt>
+                    <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ stats.total_agents }}</dd>
+                </div>
+                <div class="bg-gray-50 px-4 py-4 sm:px-6">
+                    <div class="text-sm">
+                        <a href="/agents" class="font-medium text-indigo-600 hover:text-indigo-500">Manage Agents</a>
+                    </div>
+                </div>
+            </div>
 
-    <div class="card" style="text-align: center;">
-        <h3 style="color: #9b59b6; font-size: 2.5rem; margin-bottom: 0.5rem;">{{ stats.total_roles }}</h3>
-        <p style="color: #666;">Total Roles</p>
-        <a href="/roles" class="btn btn-primary" style="margin-top: 1rem;">Manage Roles</a>
-    </div>
-</div>
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <dt class="text-sm font-medium text-gray-500 truncate">Total Contacts</dt>
+                    <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ stats.total_contacts }}</dd>
+                </div>
+                <div class="bg-gray-50 px-4 py-4 sm:px-6">
+                    <div class="text-sm">
+                        <a href="/contacts" class="font-medium text-indigo-600 hover:text-indigo-500">Manage
+                            Contacts</a>
+                    </div>
+                </div>
+            </div>
 
-<div class="card" style="margin-top: 2rem;">
-    <h3 style="margin-bottom: 1rem;">Your Roles</h3>
-    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        {% for role in user_roles %}
-        <span class="badge badge-primary">{{ role }}</span>
-        {% endfor %}
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <dt class="text-sm font-medium text-gray-500 truncate">Total Roles</dt>
+                    <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ stats.total_roles }}</dd>
+                </div>
+                <div class="bg-gray-50 px-4 py-4 sm:px-6">
+                    <div class="text-sm">
+                        <a href="/roles" class="font-medium text-indigo-600 hover:text-indigo-500">Manage Roles</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Your Roles</h3>
+                <div class="flex flex-wrap gap-2">
+                    {% for role in user_roles %}
+                    <span
+                        class="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                        {{ role }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

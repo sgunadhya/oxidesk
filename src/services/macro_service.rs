@@ -38,13 +38,25 @@ impl MacroService {
 
         // Define variable replacements
         let replacements = vec![
-            ("{{contact_name}}", context.contact_name.as_deref().unwrap_or("")),
-            ("{{agent_name}}", context.agent_name.as_deref().unwrap_or("")),
+            (
+                "{{contact_name}}",
+                context.contact_name.as_deref().unwrap_or(""),
+            ),
+            (
+                "{{agent_name}}",
+                context.agent_name.as_deref().unwrap_or(""),
+            ),
             ("{{conversation_id}}", &context.conversation_id),
             ("{{team_name}}", context.team_name.as_deref().unwrap_or("")),
-            ("{{contact_email}}", context.contact_email.as_deref().unwrap_or("")),
+            (
+                "{{contact_email}}",
+                context.contact_email.as_deref().unwrap_or(""),
+            ),
             ("{{conversation_status}}", &context.conversation_status),
-            ("{{conversation_priority}}", context.conversation_priority.as_deref().unwrap_or("")),
+            (
+                "{{conversation_priority}}",
+                context.conversation_priority.as_deref().unwrap_or(""),
+            ),
         ];
 
         // Replace each variable
@@ -200,7 +212,9 @@ impl MacroService {
             macro_id: macro_id.to_string(),
             agent_id: agent_id.to_string(),
             conversation_id: conversation_id.to_string(),
-            applied_at: now.format(&time::format_description::well_known::Rfc3339).unwrap(),
+            applied_at: now
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap(),
             actions_queued: serde_json::to_string(
                 &actions
                     .iter()
@@ -244,8 +258,12 @@ impl MacroService {
             name,
             message_content,
             created_by: created_by.to_string(),
-            created_at: now.format(&time::format_description::well_known::Rfc3339).unwrap(),
-            updated_at: now.format(&time::format_description::well_known::Rfc3339).unwrap(),
+            created_at: now
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap(),
+            updated_at: now
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap(),
             usage_count: 0,
             access_control,
             actions: None,
@@ -304,7 +322,9 @@ impl MacroService {
         }
 
         let now = OffsetDateTime::now_utc();
-        macro_obj.updated_at = now.format(&time::format_description::well_known::Rfc3339).unwrap();
+        macro_obj.updated_at = now
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap();
 
         // Validate
         macro_obj.validate().map_err(|e| ApiError::BadRequest(e))?;
@@ -369,10 +389,7 @@ impl MacroService {
     }
 
     /// List accessible macros for user
-    pub async fn list_accessible_macros(
-        db: &Database,
-        user_id: &str,
-    ) -> ApiResult<Vec<Macro>> {
+    pub async fn list_accessible_macros(db: &Database, user_id: &str) -> ApiResult<Vec<Macro>> {
         // Get all macros
         let all_macros = db.list_macros().await?;
 
@@ -428,7 +445,9 @@ impl MacroService {
             macro_id: macro_id.to_string(),
             entity_type: entity_type.to_string(),
             entity_id: entity_id.to_string(),
-            granted_at: now.format(&time::format_description::well_known::Rfc3339).unwrap(),
+            granted_at: now
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap(),
             granted_by: granted_by.to_string(),
         };
 
@@ -550,6 +569,10 @@ mod tests {
         let template = "Hello {contact_name} and {{{agent_name}}}";
         let (result, _) = MacroService::replace_variables(template, &context);
         // Malformed variables should remain unchanged
-        assert!(result.contains("{contact_name}") || result.contains("{{{agent_name}}}") || result.contains("Alice"));
+        assert!(
+            result.contains("{contact_name}")
+                || result.contains("{{{agent_name}}}")
+                || result.contains("Alice")
+        );
     }
 }

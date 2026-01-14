@@ -6,8 +6,8 @@ pub struct Role {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
-    pub permissions: Vec<String>,  // Permission strings like "conversations:read_assigned"
-    pub is_protected: bool,  // Prevents modification of Admin role
+    pub permissions: Vec<String>, // Permission strings like "conversations:read_assigned"
+    pub is_protected: bool,       // Prevents modification of Admin role
     pub created_at: String,
     pub updated_at: String,
 }
@@ -41,7 +41,7 @@ pub struct RoleResponse {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
-    pub permissions: Vec<String>,  // Array of permission strings
+    pub permissions: Vec<String>, // Array of permission strings
     pub is_protected: bool,
     pub created_at: String,
     pub updated_at: String,
@@ -60,14 +60,14 @@ pub struct PermissionResponse {
 pub struct CreateRoleRequest {
     pub name: String,
     pub description: Option<String>,
-    pub permissions: Vec<String>,  // Permission strings like "conversations:read_assigned"
+    pub permissions: Vec<String>, // Permission strings like "conversations:read_assigned"
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateRoleRequest {
     pub name: Option<String>,
     pub description: Option<String>,
-    pub permissions: Option<Vec<String>>,  // Permission strings
+    pub permissions: Option<Vec<String>>, // Permission strings
 }
 
 impl Role {
@@ -81,7 +81,7 @@ impl Role {
             name,
             description,
             permissions,
-            is_protected: false,  // Only Admin role should have this set to true
+            is_protected: false, // Only Admin role should have this set to true
             created_at: now.clone(),
             updated_at: now,
         }

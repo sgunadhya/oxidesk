@@ -25,7 +25,7 @@ async fn create_test_user(db: &Database, user_id: &str, email: &str) -> User {
 
     sqlx::query(
         "INSERT INTO users (id, email, user_type, created_at, updated_at)
-         VALUES (?, ?, 'agent', ?, ?)"
+         VALUES (?, ?, 'agent', ?, ?)",
     )
     .bind(user_id)
     .bind(email)
@@ -52,7 +52,8 @@ async fn test_manual_availability_change_to_online() {
     // Create test user and agent
     let user_id = "test-user-001";
     create_test_user(&db, user_id, "agent1@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent One", AgentAvailability::Offline).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent One", AgentAvailability::Offline).await;
 
     // Set availability to online (service expects user_id, not agent_id)
     availability_service
@@ -67,8 +68,14 @@ async fn test_manual_availability_change_to_online() {
         .expect("Failed to get availability");
 
     assert_eq!(response.availability_status, AgentAvailability::Online);
-    assert!(response.last_activity_at.is_some(), "last_activity_at should be set when going online");
-    assert!(response.away_since.is_none(), "away_since should be cleared when going online");
+    assert!(
+        response.last_activity_at.is_some(),
+        "last_activity_at should be set when going online"
+    );
+    assert!(
+        response.away_since.is_none(),
+        "away_since should be cleared when going online"
+    );
 
     // Verify activity log
     let log_count = get_activity_log_count(&db, &agent.id).await;
@@ -90,7 +97,8 @@ async fn test_manual_availability_change_to_away_manual() {
     // Create test user and agent
     let user_id = "test-user-002";
     create_test_user(&db, user_id, "agent2@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Two", AgentAvailability::Online).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Two", AgentAvailability::Online).await;
 
     // Set availability to away_manual
     availability_service
@@ -105,7 +113,10 @@ async fn test_manual_availability_change_to_away_manual() {
         .expect("Failed to get availability");
 
     assert_eq!(response.availability_status, AgentAvailability::AwayManual);
-    assert!(response.away_since.is_some(), "away_since should be set when going away_manual");
+    assert!(
+        response.away_since.is_some(),
+        "away_since should be set when going away_manual"
+    );
 
     // Verify activity log
     let log = get_latest_activity_log(&db, &agent.id).await.unwrap();
@@ -124,7 +135,8 @@ async fn test_return_to_online_from_away() {
     // Create test user and agent in away state
     let user_id = "test-user-003";
     create_test_user(&db, user_id, "agent3@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Three", AgentAvailability::Away).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Three", AgentAvailability::Away).await;
     set_agent_away_since(&db, &agent.id, Utc::now() - Duration::minutes(10)).await;
 
     // Return to online
@@ -140,8 +152,14 @@ async fn test_return_to_online_from_away() {
         .expect("Failed to get availability");
 
     assert_eq!(response.availability_status, AgentAvailability::Online);
-    assert!(response.away_since.is_none(), "away_since should be cleared");
-    assert!(response.last_activity_at.is_some(), "last_activity_at should be updated");
+    assert!(
+        response.away_since.is_none(),
+        "away_since should be cleared"
+    );
+    assert!(
+        response.last_activity_at.is_some(),
+        "last_activity_at should be updated"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -154,7 +172,8 @@ async fn test_automatic_away_transition() {
     // Create test user and online agent with old activity timestamp
     let user_id = "test-user-004";
     create_test_user(&db, user_id, "agent4@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Four", AgentAvailability::Online).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Four", AgentAvailability::Online).await;
 
     // Set last_activity_at to 10 minutes ago (exceeds default 5-minute threshold)
     set_agent_last_activity(&db, &agent.id, Utc::now() - Duration::minutes(10)).await;
@@ -194,7 +213,8 @@ async fn test_conversations_remain_assigned_on_away() {
     // Create test user, agent, and contact
     let user_id = "test-user-005";
     create_test_user(&db, user_id, "agent5@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Five", AgentAvailability::Online).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Five", AgentAvailability::Online).await;
 
     let contact_user_id = "contact-user-005";
     create_test_user(&db, contact_user_id, "contact5@example.com").await;
@@ -226,7 +246,10 @@ async fn test_conversations_remain_assigned_on_away() {
 
     // Verify conversation is still assigned
     let assigned_count_after = get_assigned_conversation_count(&db, user_id).await;
-    assert_eq!(assigned_count_after, 1, "Conversations should remain assigned when going away");
+    assert_eq!(
+        assigned_count_after, 1,
+        "Conversations should remain assigned when going away"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -239,7 +262,8 @@ async fn test_max_idle_reassignment() {
     // Create test user, agent, and contact
     let user_id = "test-user-006";
     create_test_user(&db, user_id, "agent6@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Six", AgentAvailability::Away).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Six", AgentAvailability::Away).await;
 
     let contact_user_id = "contact-user-006";
     create_test_user(&db, contact_user_id, "contact6@example.com").await;
@@ -276,7 +300,10 @@ async fn test_max_idle_reassignment() {
 
     // Verify conversations were unassigned
     let assigned_count_after = get_assigned_conversation_count(&db, user_id).await;
-    assert_eq!(assigned_count_after, 0, "Conversations should be unassigned");
+    assert_eq!(
+        assigned_count_after, 0,
+        "Conversations should be unassigned"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -289,7 +316,8 @@ async fn test_conversations_return_to_team_inbox() {
     // Create test user, agent, and contact
     let user_id = "test-user-007";
     create_test_user(&db, user_id, "agent7@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Seven", AgentAvailability::Away).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Seven", AgentAvailability::Away).await;
 
     let contact_user_id = "contact-user-007";
     create_test_user(&db, contact_user_id, "contact7@example.com").await;
@@ -325,7 +353,10 @@ async fn test_conversations_return_to_team_inbox() {
         .expect("Failed to fetch conversation");
 
     let assigned_user_id: Option<String> = row.try_get(0).ok();
-    assert!(assigned_user_id.is_none(), "Conversation should not be assigned to any user (back to team inbox)");
+    assert!(
+        assigned_user_id.is_none(),
+        "Conversation should not be assigned to any user (back to team inbox)"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -338,7 +369,8 @@ async fn test_agent_goes_offline_after_reassignment() {
     // Create test user and agent in away state
     let user_id = "test-user-008";
     create_test_user(&db, user_id, "agent8@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Eight", AgentAvailability::Away).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Eight", AgentAvailability::Away).await;
 
     // Set away_since to 35 minutes ago
     set_agent_away_since(&db, &agent.id, Utc::now() - Duration::minutes(35)).await;
@@ -382,13 +414,18 @@ async fn test_login_event_logging() {
         .expect("Failed to handle login");
 
     // Verify agent status
-    let agent = db.get_agent_by_user_id(user_id).await
+    let agent = db
+        .get_agent_by_user_id(user_id)
+        .await
         .expect("Failed to get agent")
         .expect("Agent not found");
 
     assert_eq!(agent.availability_status, AgentAvailability::Online);
     assert!(agent.last_login_at.is_some(), "last_login_at should be set");
-    assert!(agent.last_activity_at.is_some(), "last_activity_at should be set");
+    assert!(
+        agent.last_activity_at.is_some(),
+        "last_activity_at should be set"
+    );
 
     // Verify activity log
     let log = get_latest_activity_log(&db, &agent.id).await.unwrap();
@@ -414,7 +451,9 @@ async fn test_logout_event_logging() {
         .expect("Failed to handle logout");
 
     // Verify agent status
-    let agent = db.get_agent_by_user_id(user_id).await
+    let agent = db
+        .get_agent_by_user_id(user_id)
+        .await
         .expect("Failed to get agent")
         .expect("Agent not found");
 
@@ -435,7 +474,9 @@ async fn test_availability_change_logging() {
     // Create test user and agent
     let user_id = "test-user-011";
     create_test_user(&db, user_id, "agent11@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Eleven", AgentAvailability::Online).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Eleven", AgentAvailability::Online)
+            .await;
 
     // Change status multiple times
     availability_service
@@ -463,7 +504,9 @@ async fn test_activity_tracking() {
     // Create test user and agent
     let user_id = "test-user-012";
     create_test_user(&db, user_id, "agent12@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Twelve", AgentAvailability::Online).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Twelve", AgentAvailability::Online)
+            .await;
 
     // Record activity
     availability_service
@@ -472,11 +515,16 @@ async fn test_activity_tracking() {
         .expect("Failed to record activity");
 
     // Verify last_activity_at was updated
-    let agent_updated = db.get_agent_by_user_id(user_id).await
+    let agent_updated = db
+        .get_agent_by_user_id(user_id)
+        .await
         .expect("Failed to get agent")
         .expect("Agent not found");
 
-    assert!(agent_updated.last_activity_at.is_some(), "last_activity_at should be set");
+    assert!(
+        agent_updated.last_activity_at.is_some(),
+        "last_activity_at should be set"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -489,14 +537,19 @@ async fn test_invalid_status_transition_rejection() {
     // Create test user and agent
     let user_id = "test-user-013";
     create_test_user(&db, user_id, "agent13@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Thirteen", AgentAvailability::Online).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Thirteen", AgentAvailability::Online)
+            .await;
 
     // Try to manually set away_and_reassigning (should fail)
     let result = availability_service
         .set_availability(&agent.user_id, AgentAvailability::AwayAndReassigning)
         .await;
 
-    assert!(result.is_err(), "Should reject manual setting of away_and_reassigning");
+    assert!(
+        result.is_err(),
+        "Should reject manual setting of away_and_reassigning"
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -509,7 +562,9 @@ async fn test_activity_logs_pagination() {
     // Create test user and agent
     let user_id = "test-user-014";
     create_test_user(&db, user_id, "agent14@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Agent Fourteen", AgentAvailability::Online).await;
+    let agent =
+        create_test_agent_with_status(&db, user_id, "Agent Fourteen", AgentAvailability::Online)
+            .await;
 
     // Create multiple activity logs by changing status
     for _ in 0..5 {
@@ -574,17 +629,31 @@ async fn test_only_online_agents_transition_to_away() {
     // Create multiple agents in different states
     let user_id_online = "test-user-015";
     create_test_user(&db, user_id_online, "online@example.com").await;
-    let agent_online = create_test_agent_with_status(&db, user_id_online, "Online Agent", AgentAvailability::Online).await;
+    let agent_online = create_test_agent_with_status(
+        &db,
+        user_id_online,
+        "Online Agent",
+        AgentAvailability::Online,
+    )
+    .await;
     set_agent_last_activity(&db, &agent_online.id, Utc::now() - Duration::minutes(10)).await;
 
     let user_id_offline = "test-user-016";
     create_test_user(&db, user_id_offline, "offline@example.com").await;
-    let agent_offline = create_test_agent_with_status(&db, user_id_offline, "Offline Agent", AgentAvailability::Offline).await;
+    let agent_offline = create_test_agent_with_status(
+        &db,
+        user_id_offline,
+        "Offline Agent",
+        AgentAvailability::Offline,
+    )
+    .await;
     set_agent_last_activity(&db, &agent_offline.id, Utc::now() - Duration::minutes(10)).await;
 
     let user_id_away = "test-user-017";
     create_test_user(&db, user_id_away, "away@example.com").await;
-    let agent_away = create_test_agent_with_status(&db, user_id_away, "Away Agent", AgentAvailability::Away).await;
+    let agent_away =
+        create_test_agent_with_status(&db, user_id_away, "Away Agent", AgentAvailability::Away)
+            .await;
     set_agent_last_activity(&db, &agent_away.id, Utc::now() - Duration::minutes(10)).await;
 
     // Run inactivity check
@@ -608,12 +677,20 @@ async fn test_only_away_agents_transition_to_offline() {
     // Create agents in different states
     let user_id_away = "test-user-018";
     create_test_user(&db, user_id_away, "away18@example.com").await;
-    let agent_away = create_test_agent_with_status(&db, user_id_away, "Away Agent", AgentAvailability::Away).await;
+    let agent_away =
+        create_test_agent_with_status(&db, user_id_away, "Away Agent", AgentAvailability::Away)
+            .await;
     set_agent_away_since(&db, &agent_away.id, Utc::now() - Duration::minutes(35)).await;
 
     let user_id_online = "test-user-019";
     create_test_user(&db, user_id_online, "online19@example.com").await;
-    let _agent_online = create_test_agent_with_status(&db, user_id_online, "Online Agent", AgentAvailability::Online).await;
+    let _agent_online = create_test_agent_with_status(
+        &db,
+        user_id_online,
+        "Online Agent",
+        AgentAvailability::Online,
+    )
+    .await;
 
     // Run max idle check
     let affected = availability_service
@@ -626,10 +703,15 @@ async fn test_only_away_agents_transition_to_offline() {
     assert_eq!(affected[0], agent_away.id);
 
     // Verify online agent is still online
-    let agent_online_updated = db.get_agent_by_user_id(user_id_online).await
+    let agent_online_updated = db
+        .get_agent_by_user_id(user_id_online)
+        .await
         .expect("Failed to get agent")
         .expect("Agent not found");
-    assert_eq!(agent_online_updated.availability_status, AgentAvailability::Online);
+    assert_eq!(
+        agent_online_updated.availability_status,
+        AgentAvailability::Online
+    );
 
     teardown_test_db(test_db).await;
 }
@@ -642,7 +724,13 @@ async fn test_away_manual_agents_also_reassigned() {
     // Create away_manual agent with old away_since
     let user_id = "test-user-020";
     create_test_user(&db, user_id, "away-manual@example.com").await;
-    let agent = create_test_agent_with_status(&db, user_id, "Away Manual Agent", AgentAvailability::AwayManual).await;
+    let agent = create_test_agent_with_status(
+        &db,
+        user_id,
+        "Away Manual Agent",
+        AgentAvailability::AwayManual,
+    )
+    .await;
     set_agent_away_since(&db, &agent.id, Utc::now() - Duration::minutes(35)).await;
 
     // Create contact and conversation
@@ -679,10 +767,15 @@ async fn test_away_manual_agents_also_reassigned() {
     assert_eq!(assigned_count_after, 0);
 
     // Verify agent went offline
-    let agent_updated = db.get_agent_by_user_id(user_id).await
+    let agent_updated = db
+        .get_agent_by_user_id(user_id)
+        .await
         .expect("Failed to get agent")
         .expect("Agent not found");
-    assert_eq!(agent_updated.availability_status, AgentAvailability::Offline);
+    assert_eq!(
+        agent_updated.availability_status,
+        AgentAvailability::Offline
+    );
 
     teardown_test_db(test_db).await;
 }

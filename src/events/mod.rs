@@ -1,7 +1,6 @@
 use crate::models::conversation::ConversationStatus;
 use tokio::sync::broadcast;
 
-
 /// System events that can trigger automation rules
 #[derive(Debug, Clone)]
 pub enum SystemEvent {
@@ -70,7 +69,7 @@ pub enum SystemEvent {
         old_status: String,
         new_status: String,
         timestamp: String, // ISO 8601
-        reason: String,    // "manual", "inactivity_timeout", "max_idle_threshold", "login", "logout"
+        reason: String, // "manual", "inactivity_timeout", "max_idle_threshold", "login", "logout"
     },
     AgentLoggedIn {
         agent_id: String,
@@ -86,10 +85,10 @@ pub enum SystemEvent {
         event_id: String,
         applied_sla_id: String,
         conversation_id: String,
-        event_type: String, // "first_response", "resolution", "next_response"
+        event_type: String,  // "first_response", "resolution", "next_response"
         deadline_at: String, // ISO 8601
         breached_at: String, // ISO 8601
-        timestamp: String, // ISO 8601
+        timestamp: String,   // ISO 8601
     },
 }
 
@@ -110,7 +109,10 @@ impl EventBus {
     pub fn publish(&self, event: SystemEvent) {
         // Fire-and-forget - if no subscribers or channel full, just log and continue
         if let Err(e) = self.tx.send(event) {
-            tracing::warn!("Failed to publish event (no subscribers or channel full): {}", e);
+            tracing::warn!(
+                "Failed to publish event (no subscribers or channel full): {}",
+                e
+            );
         }
     }
 
@@ -159,7 +161,9 @@ mod tests {
         // Receive the event
         let received = rx.recv().await.unwrap();
         match received {
-            SystemEvent::ConversationStatusChanged { conversation_id, .. } => {
+            SystemEvent::ConversationStatusChanged {
+                conversation_id, ..
+            } => {
                 assert_eq!(conversation_id, "test-id");
             }
             _ => panic!("Unexpected event type"),
