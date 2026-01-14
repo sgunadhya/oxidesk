@@ -65,6 +65,14 @@ pub async fn create_role(
         return Err(ApiError::Conflict("Role name already exists".to_string()));
     }
 
+    // Feature 023: Validate cardinality invariants
+    // FR-012, FR-014: Role must have at least one permission
+    if request.permissions.is_empty() {
+        return Err(ApiError::BadRequest(
+            "Role must have at least one permission".to_string(),
+        ));
+    }
+
     // Validate permissions format (must match "resource:action" pattern)
     for permission in &request.permissions {
         if !permission.contains(':') {
@@ -119,8 +127,16 @@ pub async fn update_role(
         return Err(ApiError::Forbidden("Cannot modify Admin role".to_string()));
     }
 
-    // Validate permissions format if provided
+    // Feature 023: Validate cardinality invariants
+    // FR-013, FR-014: Role must have at least one permission
     if let Some(ref perms) = request.permissions {
+        if perms.is_empty() {
+            return Err(ApiError::BadRequest(
+                "Role must have at least one permission".to_string(),
+            ));
+        }
+
+        // Validate permissions format
         for permission in perms {
             if !permission.contains(':') {
                 return Err(ApiError::BadRequest(format!(

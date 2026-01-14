@@ -165,22 +165,33 @@ pub async fn create_conversation(
         ));
     }
 
+    // Feature 023: Validate cardinality invariants
+    request.validate().map_err(|e| ApiError::BadRequest(e))?;
+
     // TODO: Validate inbox exists when inbox management is implemented
     // let _inbox = db.get_inbox_by_id(&request.inbox_id).await?
     //     .ok_or_else(|| ApiError::NotFound("Inbox not found".to_string()))?;
 
-    // Validate contact exists
-    let contact = db
+    // Validate contact exists - request.contact_id should be a user_id
+    let user = db
         .get_user_by_id(&request.contact_id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Contact not found".to_string()))?;
 
-    if !matches!(contact.user_type, UserType::Contact) {
+    if !matches!(user.user_type, UserType::Contact) {
         return Err(ApiError::BadRequest("User is not a contact".to_string()));
     }
 
-    // Create conversation
-    let conversation = db.create_conversation(&request).await?;
+    // Get the contact record (FK constraint expects contacts.id, not users.id)
+    let contact = db
+        .get_contact_by_user_id(&user.id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("Contact record not found".to_string()))?;
+
+    // Create conversation with contact.id (not user.id)
+    let mut conversation_request = request.clone();
+    conversation_request.contact_id = contact.id;
+    let conversation = db.create_conversation(&conversation_request).await?;
 
     // Auto-apply SLA if conversation is assigned to a team with a default SLA policy
     if let Some(sla_svc) = sla_service {
