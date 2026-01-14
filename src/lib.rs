@@ -4,6 +4,7 @@ pub mod database;
 pub mod events;
 pub mod models;
 pub mod services;
+pub mod utils;
 pub mod web;
 
 pub use api::*;

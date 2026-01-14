@@ -18,5 +18,6 @@ pub mod notifications;
 pub mod webhooks;
 pub mod oidc_providers;
 pub mod api_keys;
+pub mod password_reset;
 
 pub use middleware::*;

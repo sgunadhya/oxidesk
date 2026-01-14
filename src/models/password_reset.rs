@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Entity: Password reset token stored in database
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct PasswordResetToken {
     pub id: String,
     pub user_id: String,
@@ -9,6 +10,31 @@ pub struct PasswordResetToken {
     pub expires_at: String,
     pub used: bool,
     pub created_at: String,
+}
+
+/// DTO: Request to initiate password reset
+#[derive(Debug, Clone, Deserialize)]
+pub struct RequestPasswordResetRequest {
+    pub email: String,
+}
+
+/// DTO: Response for password reset request
+#[derive(Debug, Clone, Serialize)]
+pub struct RequestPasswordResetResponse {
+    pub message: String,
+}
+
+/// DTO: Request to complete password reset
+#[derive(Debug, Clone, Deserialize)]
+pub struct ResetPasswordRequest {
+    pub token: String,
+    pub new_password: String,
+}
+
+/// DTO: Response for password reset completion
+#[derive(Debug, Clone, Serialize)]
+pub struct ResetPasswordResponse {
+    pub message: String,
 }
 
 impl PasswordResetToken {

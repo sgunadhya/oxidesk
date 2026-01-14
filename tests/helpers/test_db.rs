@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 pub struct TestDatabase {
     pub db: Database,
-    db_file: PathBuf,
+    pub(crate) db_file: PathBuf,
 }
 
 impl TestDatabase {
@@ -38,6 +38,16 @@ pub async fn setup_test_db() -> TestDatabase {
     // Install drivers for AnyPool (required for tests)
     sqlx::any::install_default_drivers();
 
+    // Set up SMTP environment variables for password reset tests
+    std::env::set_var("SMTP_HOST", "smtp.test.com");
+    std::env::set_var("SMTP_PORT", "587");
+    std::env::set_var("SMTP_USERNAME", "test@test.com");
+    std::env::set_var("SMTP_PASSWORD", "test_password");
+    std::env::set_var("SMTP_FROM_EMAIL", "noreply@test.com");
+    std::env::set_var("SMTP_FROM_NAME", "Test");
+    std::env::set_var("RESET_PASSWORD_BASE_URL", "http://localhost:3000");
+    std::env::set_var("PASSWORD_RESET_RATE_LIMIT", "5");
+
     // Use file-based SQLite for tests (unique UUID per test for parallel execution)
     use uuid::Uuid;
     let temp_file = format!("test_{}.db", Uuid::new_v4());
@@ -68,6 +78,25 @@ async fn run_migrations(db: &Database) {
 
 /// Teardown test database - cleans up SQLite database files
 pub async fn teardown_test_db(test_db: TestDatabase) {
-    // Drop will handle cleanup automatically
+    // Close the database connection pool first
+    let db_file = test_db.db_file.clone();
+    test_db.db.pool().close().await;
+
+    // Drop the test_db to trigger cleanup
     drop(test_db);
+
+    // Give a moment for file handles to release
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+    // Force cleanup of any remaining files
+    let _ = fs::remove_file(&db_file);
+    let mut journal_file = db_file.clone();
+    journal_file.set_extension("db-journal");
+    let _ = fs::remove_file(&journal_file);
+    let mut wal_file = db_file.clone();
+    wal_file.set_extension("db-wal");
+    let _ = fs::remove_file(&wal_file);
+    let mut shm_file = db_file.clone();
+    shm_file.set_extension("db-shm");
+    let _ = fs::remove_file(&shm_file);
 }
