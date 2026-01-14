@@ -16,6 +16,9 @@ fn test_all_valid_transitions_pass() {
     // Resolved -> Open
     assert!(validate_transition(ConversationStatus::Resolved, ConversationStatus::Open).is_ok());
 
+    // Resolved -> Closed (Feature 019)
+    assert!(validate_transition(ConversationStatus::Resolved, ConversationStatus::Closed).is_ok());
+
     // Same state (should be allowed)
     assert!(validate_transition(ConversationStatus::Open, ConversationStatus::Open).is_ok());
     assert!(validate_transition(ConversationStatus::Snoozed, ConversationStatus::Snoozed).is_ok());
@@ -38,10 +41,7 @@ fn test_all_invalid_transitions_fail() {
     // Resolved -> Snoozed
     assert!(validate_transition(ConversationStatus::Resolved, ConversationStatus::Snoozed).is_err());
 
-    // Resolved -> Closed
-    assert!(validate_transition(ConversationStatus::Resolved, ConversationStatus::Closed).is_err());
-
-    // Closed -> anything (Closed is terminal)
+    // Closed -> anything (Closed is terminal, except Closed->Closed which is tested in valid)
     assert!(validate_transition(ConversationStatus::Closed, ConversationStatus::Open).is_err());
     assert!(validate_transition(ConversationStatus::Closed, ConversationStatus::Snoozed).is_err());
     assert!(validate_transition(ConversationStatus::Closed, ConversationStatus::Resolved).is_err());

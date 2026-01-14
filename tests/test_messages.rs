@@ -130,6 +130,7 @@ async fn create_test_conversation(
         contact_id: contact_id.to_string(),
         subject: None,
         resolved_at: None,
+        closed_at: None,  // Feature 019
         snoozed_until: None,
         assigned_user_id: None,
         assigned_team_id: None,

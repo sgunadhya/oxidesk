@@ -45,10 +45,20 @@ pub async fn update_conversation_status(
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap();
 
-    let resolved_at = if update_request.status == ConversationStatus::Resolved {
+    // Feature 019: Handle resolved_at timestamp
+    // - Set when transitioning TO Resolved
+    // - Clear when reopening (transitioning TO Open from any status)
+    let resolved_at = match update_request.status {
+        ConversationStatus::Resolved => Some(now.clone()),
+        ConversationStatus::Open => None,  // Clear resolved_at when reopening
+        _ => current.resolved_at.clone(),  // Preserve existing value for other statuses
+    };
+
+    // Feature 019: Set closed_at when transitioning TO Closed
+    let closed_at = if update_request.status == ConversationStatus::Closed {
         Some(now.clone())
     } else {
-        None
+        current.closed_at.clone()  // Preserve existing value
     };
 
     let snoozed_until = if update_request.status == ConversationStatus::Snoozed {
@@ -66,7 +76,7 @@ pub async fn update_conversation_status(
 
     // Update the conversation in database
     let updated = db
-        .update_conversation_fields(conversation_id, update_request.status, resolved_at, snoozed_until)
+        .update_conversation_fields(conversation_id, update_request.status, resolved_at, closed_at, snoozed_until)
         .await?;
 
     tracing::info!(

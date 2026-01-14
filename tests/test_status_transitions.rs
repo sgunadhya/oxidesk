@@ -194,3 +194,187 @@ async fn test_automation_rules_evaluated_on_status_change() {
         _ => panic!("Expected ConversationStatusChanged event"),
     }
 }
+
+// Feature 019: Test Resolved → Closed transition
+#[tokio::test]
+async fn test_resolved_to_closed_transition() {
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
+    let auth_user = create_test_auth_user(&db).await;
+    let event_bus = EventBus::new(10);
+
+    let contact = create_test_contact(&db, "customer6@example.com").await;
+    let inbox_id = "inbox-001".to_string();
+    let conversation = create_test_conversation(
+        &db,
+        inbox_id.clone(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
+
+    // First, resolve the conversation
+    let resolve_request = UpdateStatusRequest {
+        status: ConversationStatus::Resolved,
+        snooze_duration: None,
+    };
+
+    conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        resolve_request,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus)
+    )
+    .await
+    .expect("Failed to resolve conversation");
+
+    // Now close it
+    let close_request = UpdateStatusRequest {
+        status: ConversationStatus::Closed,
+        snooze_duration: None,
+    };
+
+    let result = conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        close_request,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus)
+    )
+    .await;
+
+    assert!(result.is_ok(), "Failed to close resolved conversation: {:?}", result.err());
+
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .expect("Failed to fetch conversation")
+        .expect("Conversation not found");
+
+    assert_eq!(updated.status, ConversationStatus::Closed);
+}
+
+// Feature 019: Test closed_at timestamp is set
+#[tokio::test]
+async fn test_closed_at_timestamp_set() {
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
+    let auth_user = create_test_auth_user(&db).await;
+    let event_bus = EventBus::new(10);
+
+    let contact = create_test_contact(&db, "customer7@example.com").await;
+    let inbox_id = "inbox-001".to_string();
+    let conversation = create_test_conversation(
+        &db,
+        inbox_id.clone(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
+
+    // Resolve then close
+    let resolve_request = UpdateStatusRequest {
+        status: ConversationStatus::Resolved,
+        snooze_duration: None,
+    };
+
+    conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        resolve_request,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus)
+    )
+    .await
+    .expect("Failed to resolve");
+
+    assert!(db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap().closed_at.is_none());
+
+    let close_request = UpdateStatusRequest {
+        status: ConversationStatus::Closed,
+        snooze_duration: None,
+    };
+
+    conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        close_request,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus)
+    )
+    .await
+    .expect("Failed to close");
+
+    let updated = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .expect("Failed to fetch conversation")
+        .expect("Conversation not found");
+
+    assert!(updated.closed_at.is_some(), "closed_at should be set when conversation is closed");
+}
+
+// Feature 019: Test reopening clears resolved_at
+#[tokio::test]
+async fn test_reopening_clears_resolved_at() {
+    let test_db = setup_test_db().await;
+    let db = test_db.db();
+    let auth_user = create_test_auth_user(&db).await;
+    let event_bus = EventBus::new(10);
+
+    let contact = create_test_contact(&db, "customer8@example.com").await;
+    let inbox_id = "inbox-001".to_string();
+    let conversation = create_test_conversation(
+        &db,
+        inbox_id.clone(),
+        contact.id.clone(),
+        ConversationStatus::Open,
+    )
+    .await;
+
+    // Resolve the conversation
+    let resolve_request = UpdateStatusRequest {
+        status: ConversationStatus::Resolved,
+        snooze_duration: None,
+    };
+
+    conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        resolve_request,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus)
+    )
+    .await
+    .expect("Failed to resolve");
+
+    let resolved = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
+    assert!(resolved.resolved_at.is_some(), "resolved_at should be set");
+
+    // Reopen the conversation
+    let reopen_request = UpdateStatusRequest {
+        status: ConversationStatus::Open,
+        snooze_duration: None,
+    };
+
+    conversation_service::update_conversation_status(
+        &db,
+        &conversation.id,
+        reopen_request,
+        Some(auth_user.user.id.clone()),
+        Some(&event_bus)
+    )
+    .await
+    .expect("Failed to reopen");
+
+    let reopened = db
+        .get_conversation_by_id(&conversation.id)
+        .await
+        .expect("Failed to fetch conversation")
+        .expect("Conversation not found");
+
+    assert_eq!(reopened.status, ConversationStatus::Open);
+    assert!(reopened.resolved_at.is_none(), "resolved_at should be cleared when reopening");
+}
+
