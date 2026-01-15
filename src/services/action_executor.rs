@@ -1,3 +1,4 @@
+use crate::database::agents::AgentRepository;
 use crate::api::middleware::ApiError;
 use crate::database::Database;
 use crate::models::{ActionType, ConversationStatus, RuleAction};
@@ -180,7 +181,11 @@ impl ActionExecutor {
 
         // Assign conversation to user
         self.db
-            .assign_conversation_to_user(conversation_id, user_id, assigned_by)
+            .assign_conversation_to_user(
+                conversation_id,
+                Some(user_id.to_string()),
+                Some(assigned_by.to_string()),
+            )
             .await?;
 
         tracing::info!(
@@ -214,7 +219,11 @@ impl ActionExecutor {
 
         // Assign conversation to team
         self.db
-            .assign_conversation_to_team(conversation_id, team_id, assigned_by)
+            .assign_conversation_to_team(
+                conversation_id,
+                Some(team_id.to_string()),
+                Some(assigned_by.to_string()),
+            )
             .await?;
 
         tracing::info!(

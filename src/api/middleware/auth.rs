@@ -1,3 +1,4 @@
+use crate::database::agents::AgentRepository;
 use crate::{
     api::middleware::error::ApiError, database::Database, models::*,
     services::connection_manager::ConnectionManager,

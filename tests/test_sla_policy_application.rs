@@ -235,9 +235,13 @@ async fn test_deadline_calculation_with_business_hours() {
     .await;
 
     // Assign conversation to team
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
-        .await
-        .unwrap();
+    db.assign_conversation_to_team(
+        &conversation.id,
+        Some(team.id.clone()),
+        Some("system".to_string()),
+    )
+    .await
+    .unwrap();
 
     // Apply SLA during business hours (e.g., Monday 10:00 AM EST)
     let base_timestamp = "2024-01-08T15:00:00Z"; // Monday 10:00 AM EST (UTC-5)
@@ -292,9 +296,13 @@ async fn test_deadline_skips_weekend() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
-        .await
-        .unwrap();
+    db.assign_conversation_to_team(
+        &conversation.id,
+        Some(team.id.clone()),
+        Some("system".to_string()),
+    )
+    .await
+    .unwrap();
 
     // Friday 4:30 PM EST (21:30 UTC) + 1h should roll to Monday 10:30 AM EST
     let base_timestamp = "2024-01-12T21:30:00Z"; // Friday 4:30 PM EST
@@ -356,9 +364,13 @@ async fn test_deadline_skips_evenings() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
-        .await
-        .unwrap();
+    db.assign_conversation_to_team(
+        &conversation.id,
+        Some(team.id.clone()),
+        Some("system".to_string()),
+    )
+    .await
+    .unwrap();
 
     // Monday 4:30 PM EST (21:30 UTC) + 2h should roll to Tuesday 11:30 AM EST
     let base_timestamp = "2024-01-08T21:30:00Z"; // Monday 4:30 PM EST
@@ -408,9 +420,13 @@ async fn test_deadline_calculation_without_business_hours() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
-        .await
-        .unwrap();
+    db.assign_conversation_to_team(
+        &conversation.id,
+        Some(team.id.clone()),
+        Some("system".to_string()),
+    )
+    .await
+    .unwrap();
 
     // Use a timestamp that would normally skip to next business day
     let base_timestamp = "2024-01-12T21:30:00Z"; // Friday 4:30 PM EST
@@ -473,9 +489,13 @@ async fn test_business_hours_timezone_handling() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
-        .await
-        .unwrap();
+    db.assign_conversation_to_team(
+        &conversation.id,
+        Some(team.id.clone()),
+        Some("system".to_string()),
+    )
+    .await
+    .unwrap();
 
     // Use UTC timestamp that corresponds to EST business hours
     let base_timestamp = "2024-01-08T15:00:00Z"; // Monday 10:00 AM EST
@@ -1095,9 +1115,13 @@ async fn test_full_sla_application_workflow() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
-        .await
-        .unwrap();
+    db.assign_conversation_to_team(
+        &conversation.id,
+        Some(team.id.clone()),
+        Some("system".to_string()),
+    )
+    .await
+    .unwrap();
 
     // Apply SLA
     let sla_service = oxidesk::SlaService::new(
@@ -1193,9 +1217,13 @@ async fn test_business_hours_edge_cases() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
-        .await
-        .unwrap();
+    db.assign_conversation_to_team(
+        &conversation.id,
+        Some(team.id.clone()),
+        Some("system".to_string()),
+    )
+    .await
+    .unwrap();
 
     // Saturday 10:00 AM EST
     let saturday_timestamp = "2024-01-13T15:00:00Z";
@@ -1229,9 +1257,13 @@ async fn test_business_hours_edge_cases() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation2.id, &team2.id, "system")
-        .await
-        .unwrap();
+    db.assign_conversation_to_team(
+        &conversation2.id,
+        Some(team2.id.clone()),
+        Some("system".to_string()),
+    )
+    .await
+    .unwrap();
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
     let result = sla_service
@@ -1284,9 +1316,13 @@ async fn test_final_integration_verification() {
     )
     .await;
 
-    db.assign_conversation_to_team(&conversation.id, &team.id, "system")
-        .await
-        .unwrap();
+    db.assign_conversation_to_team(
+        &conversation.id,
+        Some(team.id.clone()),
+        Some("system".to_string()),
+    )
+    .await
+    .unwrap();
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),

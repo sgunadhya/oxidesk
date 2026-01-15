@@ -1,6 +1,7 @@
+use crate::database::agents::AgentRepository;
 use crate::{
     api::middleware::{AppState, AuthenticatedUser},
-    models::{CreateAgentRequest, Role, UserType},
+    models::CreateAgentRequest,
     services,
 };
 use askama::Template;
@@ -455,7 +456,7 @@ pub async fn show_contacts(
     let mut contact_data = Vec::new();
     for (user, contact) in contacts {
         // Get channels for this contact
-        let channels = match state.db.get_contact_channels(&contact.id).await {
+        let channels = match state.db.find_contact_channels(&contact.id).await {
             Ok(c) => c,
             _ => vec![],
         };
@@ -678,7 +679,7 @@ pub async fn show_inbox(
     let mut conversation_data = Vec::new();
     for conv in conversations {
         let contact_name = match state.db.get_user_by_id(&conv.contact_id).await {
-            Ok(Some(u)) => match state.db.get_contact_by_user_id(&u.id).await {
+            Ok(Some(u)) => match state.db.find_contact_by_user_id(&u.id).await {
                 Ok(Some(c)) => c.first_name.unwrap_or_else(|| u.email.clone()),
                 _ => u.email,
             },
@@ -716,7 +717,7 @@ pub async fn show_inbox(
 
 pub async fn show_conversation(
     State(state): State<AppState>,
-    axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
+    axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
     Path(id): Path<String>,
     headers: axum::http::HeaderMap,
 ) -> impl IntoResponse {
@@ -731,7 +732,7 @@ pub async fn show_conversation(
 
     // Fetch contact name for detail view
     let contact_name = match state.db.get_user_by_id(&conversation.contact_id).await {
-        Ok(Some(u)) => match state.db.get_contact_by_user_id(&u.id).await {
+        Ok(Some(u)) => match state.db.find_contact_by_user_id(&u.id).await {
             Ok(Some(c)) => c.first_name.unwrap_or_else(|| u.email.clone()),
             _ => u.email,
         },
@@ -809,7 +810,7 @@ pub async fn show_conversation(
         let mut conversation_data = Vec::new();
         for conv in all_convs {
             let c_name = match state.db.get_user_by_id(&conv.contact_id).await {
-                Ok(Some(u)) => match state.db.get_contact_by_user_id(&u.id).await {
+                Ok(Some(u)) => match state.db.find_contact_by_user_id(&u.id).await {
                     Ok(Some(c)) => c.first_name.unwrap_or_else(|| u.email.clone()),
                     _ => u.email,
                 },
@@ -1001,7 +1002,7 @@ pub async fn send_message(
 
 pub async fn show_contact_profile(
     State(state): State<AppState>,
-    axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
+    axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
     Path(id): Path<String>, // This is the user_id (since contacts list uses user.id)
 ) -> impl IntoResponse {
     // 1. Fetch User (to get email and created_at)
@@ -1012,14 +1013,14 @@ pub async fn show_contact_profile(
     };
 
     // 2. Fetch Contact (to get Name)
-    let contact = match state.db.get_contact_by_user_id(&id).await {
+    let contact = match state.db.find_contact_by_user_id(&id).await {
         Ok(Some(c)) => c,
         Ok(None) => return Html("Contact not found").into_response(), // Should theoretically exist if listed
         Err(_) => return Html("Error fetching contact").into_response(),
     };
 
     // 3. Fetch Channels
-    let channels = match state.db.get_contact_channels(&contact.id).await {
+    let channels = match state.db.find_contact_channels(&contact.id).await {
         Ok(c) => c,
         Err(_) => vec![],
     };
@@ -1088,7 +1089,7 @@ pub async fn show_contact_edit(
         Err(_) => return Html("Error fetching user").into_response(),
     };
 
-    let contact = match state.db.get_contact_by_user_id(&id).await {
+    let contact = match state.db.find_contact_by_user_id(&id).await {
         Ok(Some(c)) => c,
         Ok(None) => return Html("Contact not found").into_response(),
         Err(_) => return Html("Error fetching contact").into_response(),

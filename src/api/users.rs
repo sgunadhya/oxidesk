@@ -1,3 +1,4 @@
+use crate::database::agents::AgentRepository;
 use crate::{
     api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
     models::*,
@@ -96,8 +97,8 @@ pub async fn list_users(
             }
             UserType::Contact => {
                 // Get contact details
-                if let Some(contact) = state.db.get_contact_by_user_id(&user.id).await? {
-                    let channels = state.db.get_contact_channels(&contact.id).await?;
+                if let Some(contact) = state.db.find_contact_by_user_id(&user.id).await? {
+                    let channels = state.db.find_contact_channels(&contact.id).await?;
 
                     user_responses.push(UserSummary::Contact {
                         id: user.id.clone(),
@@ -172,11 +173,11 @@ pub async fn get_user(
             // Get contact details
             let contact = state
                 .db
-                .get_contact_by_user_id(&user.id)
+                .find_contact_by_user_id(&user.id)
                 .await?
                 .ok_or_else(|| ApiError::NotFound("Contact details not found".to_string()))?;
 
-            let channels = state.db.get_contact_channels(&contact.id).await?;
+            let channels = state.db.find_contact_channels(&contact.id).await?;
 
             Ok(Json(UserDetail::Contact(ContactResponse {
                 id: user.id.clone(),

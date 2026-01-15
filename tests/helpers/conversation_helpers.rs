@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use oxidesk::database::agents::AgentRepository;
 use oxidesk::api::middleware::AuthenticatedUser;
 use oxidesk::database::Database;
 use oxidesk::models::conversation::{Conversation, ConversationStatus};

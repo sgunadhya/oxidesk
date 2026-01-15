@@ -1,3 +1,4 @@
+use oxidesk::database::agents::AgentRepository;
 /// Feature 025: Mutual Exclusion Invariants - Integration Tests
 ///
 /// This test suite validates that mutual exclusion constraints are properly enforced:
@@ -8,12 +9,7 @@
 mod helpers;
 
 use helpers::test_db::setup_test_db;
-use oxidesk::{
-    database::Database,
-    models::*,
-    services::sla_service::SlaService,
-    events::EventBus,
-};
+use oxidesk::{database::Database, events::EventBus, models::*, services::sla_service::SlaService};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -54,6 +50,8 @@ async fn create_test_inbox(db: &Database) -> Inbox {
         channel_type: "email".to_string(),
         created_at: now.clone(),
         updated_at: now,
+        deleted_at: None,
+        deleted_by: None,
     };
     db.create_inbox(&inbox).await.unwrap();
     inbox
@@ -118,7 +116,10 @@ async fn test_sla_event_cannot_be_met_and_breached() {
         .unwrap();
 
     // Get the first response event
-    let events = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
+    let events = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
     let first_response_event = events
         .iter()
         .find(|e| matches!(e.event_type, SlaEventType::FirstResponse))
@@ -132,9 +133,14 @@ async fn test_sla_event_cannot_be_met_and_breached() {
 
     // Try to mark the same event as breached (should fail)
     let breached_at = chrono::Utc::now().to_rfc3339();
-    let result = db.mark_sla_event_breached(&first_response_event.id, &breached_at).await;
+    let result = db
+        .mark_sla_event_breached(&first_response_event.id, &breached_at)
+        .await;
 
-    assert!(result.is_err(), "Expected error when marking met event as breached");
+    assert!(
+        result.is_err(),
+        "Expected error when marking met event as breached"
+    );
     let error = result.unwrap_err();
     assert!(
         error.to_string().contains("SLA event status is exclusive"),
@@ -163,7 +169,10 @@ async fn test_sla_status_transition_pending_to_met() {
         .unwrap();
 
     // Get the first response event
-    let events = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
+    let events = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
     let first_response_event = events
         .iter()
         .find(|e| matches!(e.event_type, SlaEventType::FirstResponse))
@@ -181,7 +190,11 @@ async fn test_sla_status_transition_pending_to_met() {
         .unwrap();
 
     // Verify event is now met
-    let updated_event = db.get_sla_event(&first_response_event.id).await.unwrap().unwrap();
+    let updated_event = db
+        .get_sla_event(&first_response_event.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated_event.status, SlaEventStatus::Met);
     assert!(updated_event.met_at.is_some());
     assert!(updated_event.breached_at.is_none());
@@ -207,7 +220,10 @@ async fn test_sla_status_transition_pending_to_breached() {
         .unwrap();
 
     // Get the first response event
-    let events = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
+    let events = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
     let first_response_event = events
         .iter()
         .find(|e| matches!(e.event_type, SlaEventType::FirstResponse))
@@ -223,7 +239,11 @@ async fn test_sla_status_transition_pending_to_breached() {
         .unwrap();
 
     // Verify event is now breached
-    let updated_event = db.get_sla_event(&first_response_event.id).await.unwrap().unwrap();
+    let updated_event = db
+        .get_sla_event(&first_response_event.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(updated_event.status, SlaEventStatus::Breached);
     assert!(updated_event.met_at.is_none());
     assert!(updated_event.breached_at.is_some());
@@ -249,7 +269,10 @@ async fn test_sla_breached_cannot_become_met() {
         .unwrap();
 
     // Get the resolution event
-    let events = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
+    let events = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
     let resolution_event = events
         .iter()
         .find(|e| matches!(e.event_type, SlaEventType::Resolution))
@@ -265,7 +288,10 @@ async fn test_sla_breached_cannot_become_met() {
     let met_at = chrono::Utc::now().to_rfc3339();
     let result = db.mark_sla_event_met(&resolution_event.id, &met_at).await;
 
-    assert!(result.is_err(), "Expected error when marking breached event as met");
+    assert!(
+        result.is_err(),
+        "Expected error when marking breached event as met"
+    );
     let error = result.unwrap_err();
     assert!(
         error.to_string().contains("SLA event status is exclusive"),
@@ -294,7 +320,10 @@ async fn test_sla_status_exclusivity_error_message() {
         .unwrap();
 
     // Get an event
-    let events = db.get_sla_events_by_applied_sla(&applied_sla.id).await.unwrap();
+    let events = db
+        .get_sla_events_by_applied_sla(&applied_sla.id)
+        .await
+        .unwrap();
     let event = &events[0];
 
     // Mark as met
@@ -394,16 +423,15 @@ async fn test_message_type_immutability_validation() {
     let author_id = uuid::Uuid::new_v4().to_string();
 
     // Create an incoming message
-    let message = Message::new_incoming(
-        conversation_id,
-        "Test message".to_string(),
-        author_id,
-    );
+    let message = Message::new_incoming(conversation_id, "Test message".to_string(), author_id);
 
     // Try to change to Outgoing (should fail validation)
     let result = message.validate_type_immutable(&MessageType::Outgoing);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), "Message type cannot be changed after creation");
+    assert_eq!(
+        result.unwrap_err(),
+        "Message type cannot be changed after creation"
+    );
 
     // Same type should pass
     let result = message.validate_type_immutable(&MessageType::Incoming);
@@ -415,11 +443,7 @@ async fn test_message_type_change_error_message() {
     let conversation_id = uuid::Uuid::new_v4().to_string();
     let author_id = uuid::Uuid::new_v4().to_string();
 
-    let message = Message::new_outgoing(
-        conversation_id,
-        "Test message".to_string(),
-        author_id,
-    );
+    let message = Message::new_outgoing(conversation_id, "Test message".to_string(), author_id);
 
     let result = message.validate_type_immutable(&MessageType::Incoming);
 
@@ -446,7 +470,10 @@ async fn test_protected_role_exists_and_is_marked() {
 
     // Verify it's protected
     assert!(admin_role.is_protected, "Admin role should be protected");
-    assert_eq!(admin_role.name, "Admin", "Protected role should be named Admin");
+    assert_eq!(
+        admin_role.name, "Admin",
+        "Protected role should be named Admin"
+    );
 }
 
 #[tokio::test]
@@ -458,6 +485,9 @@ async fn test_admin_role_contains_admin_permissions() {
     let admin_role = db.get_role_by_name("Admin").await.unwrap().unwrap();
 
     // Verify it has administrative permissions
-    assert!(!admin_role.permissions.is_empty(), "Admin role should have permissions");
+    assert!(
+        !admin_role.permissions.is_empty(),
+        "Admin role should have permissions"
+    );
     assert!(admin_role.is_protected, "Admin role should be protected");
 }

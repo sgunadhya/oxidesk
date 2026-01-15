@@ -87,7 +87,7 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
         // Get contact's email address from contact channels
         let contact_channels = self
             .db
-            .get_contact_channels(&conversation.contact_id)
+            .find_contact_channels(&conversation.contact_id)
             .await
             .map_err(|e| format!("Failed to load contact channels: {}", e))?;
 

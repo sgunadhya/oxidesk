@@ -1,3 +1,4 @@
+use oxidesk::database::agents::AgentRepository;
 mod helpers;
 
 use chrono::{Duration, Utc};
@@ -41,6 +42,8 @@ async fn create_test_user(db: &Database, user_id: &str, email: &str) -> User {
         user_type: UserType::Agent,
         created_at: now.clone(),
         updated_at: now,
+        deleted_at: None,
+        deleted_by: None,
     }
 }
 

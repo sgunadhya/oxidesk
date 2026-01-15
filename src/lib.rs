@@ -15,3 +15,4 @@ pub use database::*;
 pub use events::{EventBus, SystemEvent};
 pub use models::*;
 pub use services::*;
+pub mod domain;

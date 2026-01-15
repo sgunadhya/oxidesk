@@ -184,7 +184,7 @@ pub async fn create_conversation(
 
     // Get the contact record (FK constraint expects contacts.id, not users.id)
     let contact = db
-        .get_contact_by_user_id(&user.id)
+        .find_contact_by_user_id(&user.id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Contact record not found".to_string()))?;
 
@@ -368,7 +368,7 @@ pub async fn assign_conversation(
     assigned_by: &str,
 ) -> ApiResult<()> {
     // Validate agent exists
-    let agent = db
+    let _agent = db
         .get_user_by_id(agent_id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
@@ -376,12 +376,16 @@ pub async fn assign_conversation(
     // Check if user is actually an agent
     // (Optional: enforce role check)
 
-    let now = time::OffsetDateTime::now_utc()
+    let _now = time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap();
 
-    db.assign_conversation_to_user(conversation_id, agent_id, assigned_by)
-        .await?;
+    db.assign_conversation_to_user(
+        conversation_id,
+        Some(agent_id.to_string()),
+        Some(assigned_by.to_string()),
+    )
+    .await?;
 
     tracing::info!(
         "Assigned conversation {} to agent {}",

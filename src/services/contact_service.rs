@@ -49,7 +49,7 @@ pub async fn create_contact(
     }
 
     // Get channels for response
-    let channels = db.get_contact_channels(&contact.id).await?;
+    let channels = db.find_contact_channels(&contact.id).await?;
 
     Ok(ContactResponse {
         id: user.id.clone(),
@@ -77,12 +77,12 @@ pub async fn get_contact(db: &Database, id: &str) -> ApiResult<ContactResponse> 
 
     // Get contact
     let contact = db
-        .get_contact_by_user_id(&user.id)
+        .find_contact_by_user_id(&user.id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Contact not found".to_string()))?;
 
     // Get channels
-    let channels = db.get_contact_channels(&contact.id).await?;
+    let channels = db.find_contact_channels(&contact.id).await?;
 
     Ok(ContactResponse {
         id: user.id.clone(),
@@ -148,7 +148,7 @@ pub async fn list_contacts(
     // Build contact responses with channels
     let mut contact_responses = Vec::new();
     for (user, contact) in contacts_data {
-        let channels = db.get_contact_channels(&contact.id).await?;
+        let channels = db.find_contact_channels(&contact.id).await?;
 
         contact_responses.push(ContactResponse {
             id: user.id.clone(),
@@ -198,7 +198,7 @@ pub async fn update_contact(
 
     // Get contact
     let contact = db
-        .get_contact_by_user_id(&user.id)
+        .find_contact_by_user_id(&user.id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Contact not found".to_string()))?;
 
@@ -206,7 +206,7 @@ pub async fn update_contact(
     db.update_contact(&contact.id, &request.first_name).await?;
 
     // Get channels for response
-    let channels = db.get_contact_channels(&contact.id).await?;
+    let channels = db.find_contact_channels(&contact.id).await?;
 
     Ok(ContactResponse {
         id: user.id.clone(),
@@ -229,7 +229,7 @@ pub async fn update_contact_details(
 ) -> ApiResult<()> {
     // Validate contact exists
     let contact = db
-        .get_contact_by_user_id(id)
+        .find_contact_by_user_id(id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Contact not found".to_string()))?;
 
@@ -252,7 +252,7 @@ pub async fn resolve_contact_id_from_user_id(db: &Database, user_id: &str) -> Ap
     let id = user_id.trim();
     tracing::info!("Resolving contact for user_id: '{}'", id);
 
-    let contact = db.get_contact_by_user_id(id).await?.ok_or_else(|| {
+    let contact = db.find_contact_by_user_id(id).await?.ok_or_else(|| {
         tracing::warn!("Contact resolution failed for user_id: '{}'", id);
         ApiError::NotFound("Contact not found".to_string())
     })?;

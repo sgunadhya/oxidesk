@@ -1,3 +1,4 @@
+use crate::database::agents::AgentRepository;
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
@@ -87,7 +88,11 @@ impl AssignmentService {
         for attempt in 0..=MAX_RETRIES {
             match self
                 .db
-                .assign_conversation_to_user(conversation_id, agent_id, agent_id)
+                .assign_conversation_to_user(
+                    conversation_id,
+                    Some(agent_id.to_string()),
+                    Some(agent_id.to_string()),
+                )
                 .await
             {
                 Ok(_) => break, // Success - exit retry loop
@@ -110,7 +115,7 @@ impl AssignmentService {
         // 4. Add as participant (ignore if already exists)
         let _ = self
             .db
-            .add_conversation_participant(conversation_id, agent_id, Some(agent_id))
+            .add_conversation_participant(conversation_id, agent_id, "assignee")
             .await;
 
         // 5. Record in history
@@ -215,7 +220,11 @@ impl AssignmentService {
         for attempt in 0..=MAX_RETRIES {
             match self
                 .db
-                .assign_conversation_to_user(conversation_id, target_agent_id, assigning_agent_id)
+                .assign_conversation_to_user(
+                    conversation_id,
+                    Some(target_agent_id.to_string()),
+                    Some(assigning_agent_id.to_string()),
+                )
                 .await
             {
                 Ok(_) => break, // Success - exit retry loop
@@ -238,11 +247,7 @@ impl AssignmentService {
         // 5. Add target agent as participant (ignore if already exists)
         let _ = self
             .db
-            .add_conversation_participant(
-                conversation_id,
-                target_agent_id,
-                Some(assigning_agent_id),
-            )
+            .add_conversation_participant(conversation_id, target_agent_id, "assignee")
             .await;
 
         // 6. Record in history
@@ -332,7 +337,11 @@ impl AssignmentService {
 
         // 4. Assign to database
         self.db
-            .assign_conversation_to_team(conversation_id, team_id, assigning_agent_id)
+            .assign_conversation_to_team(
+                conversation_id,
+                Some(team_id.to_string()),
+                Some(assigning_agent_id.to_string()),
+            )
             .await?;
 
         // 5. Apply team SLA (stub)

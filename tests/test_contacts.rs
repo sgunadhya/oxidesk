@@ -28,7 +28,7 @@ async fn test_contact_creation_success() {
     assert_eq!(retrieved.unwrap().email, email);
 
     // Verify contact details
-    let contact_details = db.get_contact_by_user_id(&user.id).await.unwrap();
+    let contact_details = db.find_contact_by_user_id(&user.id).await.unwrap();
     assert!(contact_details.is_some());
     let contact_details = contact_details.unwrap();
     assert_eq!(contact_details.first_name, Some("John Doe".to_string()));
@@ -118,7 +118,7 @@ async fn test_contact_channel_linking() {
     db.create_contact_channel(&channel).await.unwrap();
 
     // Verify channel was created
-    let channels = db.get_contact_channels(&contact.id).await.unwrap();
+    let channels = db.find_contact_channels(&contact.id).await.unwrap();
     assert_eq!(channels.len(), 1);
     assert_eq!(channels[0].inbox_id, inbox_id);
     assert_eq!(channels[0].email, channel_email);
@@ -149,7 +149,7 @@ async fn test_get_contact_by_id() {
     assert!(matches!(retrieved_user.user_type, UserType::Contact));
 
     // Retrieve contact details
-    let retrieved_contact = db.get_contact_by_user_id(&user.id).await.unwrap();
+    let retrieved_contact = db.find_contact_by_user_id(&user.id).await.unwrap();
     assert!(retrieved_contact.is_some());
 
     let retrieved_contact = retrieved_contact.unwrap();
@@ -175,7 +175,7 @@ async fn test_contact_without_name() {
     db.create_contact(&contact).await.unwrap();
 
     // Verify contact was created
-    let retrieved = db.get_contact_by_user_id(&user.id).await.unwrap();
+    let retrieved = db.find_contact_by_user_id(&user.id).await.unwrap();
     assert!(retrieved.is_some());
     assert_eq!(retrieved.unwrap().first_name, None);
 

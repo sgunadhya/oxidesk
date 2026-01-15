@@ -1,5 +1,6 @@
 // Modules are imported from the library crate
 
+use oxidesk::database::agents::AgentRepository;
 use oxidesk::{
     api::{
         self,

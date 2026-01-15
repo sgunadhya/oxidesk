@@ -22,6 +22,8 @@ async fn create_test_user(db: &Database, email: &str, user_type: UserType) -> Us
         updated_at: time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap(),
+        deleted_at: None,
+        deleted_by: None,
     };
 
     db.create_user(&user).await.unwrap();
@@ -44,6 +46,8 @@ async fn create_test_user(db: &Database, email: &str, user_type: UserType) -> Us
             user_type: user.user_type,
             created_at: user.created_at,
             updated_at: user.updated_at,
+            deleted_at: user.deleted_at,
+            deleted_by: user.deleted_by,
         };
     }
 
@@ -442,6 +446,8 @@ async fn test_immutability_violation() {
         updated_at: time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap(),
+        deleted_at: None,
+        deleted_by: None,
     };
     db.create_user(&user).await.unwrap();
 

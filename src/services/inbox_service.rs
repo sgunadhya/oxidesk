@@ -1,4 +1,4 @@
-use crate::api::middleware::{ApiError, ApiResult};
+use crate::api::middleware::ApiResult;
 use crate::database::Database;
 use crate::models::Inbox;
 use time;

@@ -1,3 +1,4 @@
+use oxidesk::database::agents::AgentRepository;
 mod helpers;
 use uuid::Uuid;
 
