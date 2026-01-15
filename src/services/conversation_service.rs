@@ -11,7 +11,7 @@ pub async fn update_conversation_status(
     conversation_id: &str,
     update_request: UpdateStatusRequest,
     agent_id: Option<String>,
-    event_bus: Option<&EventBus>,
+    event_bus: Option<&dyn EventBus>,
 ) -> ApiResult<Conversation> {
     // Get current conversation
     let current = db

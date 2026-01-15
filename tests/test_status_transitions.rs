@@ -4,13 +4,14 @@ use oxidesk::EventBus;
 
 mod helpers;
 use helpers::*;
+use tokio_stream::StreamExt;
 
 #[tokio::test]
 async fn test_agent_can_update_open_to_resolved() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let auth_user = create_test_auth_user(&db).await;
-    let event_bus = EventBus::new(10); // Minimal event bus
+    let event_bus = oxidesk::LocalEventBus::new(10); // Minimal event bus
 
     // Create test contact and conversation
     let contact = create_test_contact(&db, "customer@example.com").await;
@@ -62,7 +63,7 @@ async fn test_resolved_at_timestamp_set_on_status_change() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let auth_user = create_test_auth_user(&db).await;
-    let event_bus = EventBus::new(10);
+    let event_bus = oxidesk::LocalEventBus::new(10);
 
     let contact = create_test_contact(&db, "customer2@example.com").await;
     let inbox_id = "inbox-001".to_string();
@@ -106,7 +107,7 @@ async fn test_invalid_status_transition_rejected() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let auth_user = create_test_auth_user(&db).await;
-    let event_bus = EventBus::new(10);
+    let event_bus = oxidesk::LocalEventBus::new(10);
 
     let contact = create_test_contact(&db, "customer3@example.com").await;
     let inbox_id = "inbox-001".to_string();
@@ -171,7 +172,7 @@ async fn test_automation_rules_evaluated_on_status_change() {
     let auth_user = create_test_auth_user(&db).await;
 
     // Create event bus with subscriber
-    let event_bus = EventBus::new(10);
+    let event_bus = oxidesk::LocalEventBus::new(10);
     let mut receiver = event_bus.subscribe();
 
     let contact = create_test_contact(&db, "customer5@example.com").await;
@@ -201,10 +202,11 @@ async fn test_automation_rules_evaluated_on_status_change() {
     .expect("Failed to update status");
 
     // Verify event was published
-    let event = tokio::time::timeout(tokio::time::Duration::from_secs(1), receiver.recv())
+    let event = tokio::time::timeout(tokio::time::Duration::from_secs(1), receiver.next())
         .await
         .expect("Timeout waiting for event")
-        .expect("Failed to receive event");
+        .expect("Failed to receive event")
+        .expect("Broadcast error");
 
     // Verify event details
     match event {
@@ -230,7 +232,7 @@ async fn test_resolved_to_closed_transition() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let auth_user = create_test_auth_user(&db).await;
-    let event_bus = EventBus::new(10);
+    let event_bus = oxidesk::LocalEventBus::new(10);
 
     let contact = create_test_contact(&db, "customer6@example.com").await;
     let inbox_id = "inbox-001".to_string();
@@ -294,7 +296,7 @@ async fn test_closed_at_timestamp_set() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let auth_user = create_test_auth_user(&db).await;
-    let event_bus = EventBus::new(10);
+    let event_bus = oxidesk::LocalEventBus::new(10);
 
     let contact = create_test_contact(&db, "customer7@example.com").await;
     let inbox_id = "inbox-001".to_string();
@@ -363,7 +365,7 @@ async fn test_reopening_clears_resolved_at() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let auth_user = create_test_auth_user(&db).await;
-    let event_bus = EventBus::new(10);
+    let event_bus = oxidesk::LocalEventBus::new(10);
 
     let contact = create_test_contact(&db, "customer8@example.com").await;
     let inbox_id = "inbox-001".to_string();

@@ -6,18 +6,17 @@ use crate::{
 };
 use chrono::Timelike;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::info;
 
 /// Service for managing SLA policies, applied SLAs, and SLA events
 pub struct SlaService {
     db: Database,
-    event_bus: Arc<RwLock<EventBus>>,
+    event_bus: Arc<dyn EventBus>,
 }
 
 impl SlaService {
     /// Create a new SLA service
-    pub fn new(db: Database, event_bus: Arc<RwLock<EventBus>>) -> Self {
+    pub fn new(db: Database, event_bus: Arc<dyn EventBus>) -> Self {
         Self { db, event_bus }
     }
 
@@ -246,7 +245,8 @@ impl SlaService {
         let first_response_deadline = if let Some(ref bh) = business_hours {
             let duration_seconds = crate::parse_duration(&policy.first_response_time)
                 .map_err(|e| ApiError::BadRequest(format!("Invalid first_response_time: {}", e)))?;
-            self.calculate_deadline_with_business_hours(base_timestamp, duration_seconds, bh).await?
+            self.calculate_deadline_with_business_hours(base_timestamp, duration_seconds, bh)
+                .await?
         } else {
             self.calculate_deadline(base_timestamp, &policy.first_response_time)?
         };
@@ -254,7 +254,8 @@ impl SlaService {
         let resolution_deadline = if let Some(ref bh) = business_hours {
             let duration_seconds = crate::parse_duration(&policy.resolution_time)
                 .map_err(|e| ApiError::BadRequest(format!("Invalid resolution_time: {}", e)))?;
-            self.calculate_deadline_with_business_hours(base_timestamp, duration_seconds, bh).await?
+            self.calculate_deadline_with_business_hours(base_timestamp, duration_seconds, bh)
+                .await?
         } else {
             self.calculate_deadline(base_timestamp, &policy.resolution_time)?
         };
@@ -417,9 +418,7 @@ impl SlaService {
             .get_applied_sla_by_conversation(conversation_id)
             .await?
             .ok_or_else(|| {
-                ApiError::BadRequest(
-                    "SLA must be applied before event creation".to_string()
-                )
+                ApiError::BadRequest("SLA must be applied before event creation".to_string())
             })?;
 
         // Get the SLA policy to know the next_response_time
@@ -590,14 +589,18 @@ impl SlaService {
             // Convert current time to team timezone for business hours check
             let current_in_tz = current.with_timezone(&tz);
 
-            if self.is_working_hour(&current_in_tz, business_hours, &tz).await? {
+            if self
+                .is_working_hour(&current_in_tz, business_hours, &tz)
+                .await?
+            {
                 // We're in working hours, advance by 1 minute
                 current = current + chrono::Duration::minutes(1);
                 remaining_seconds -= 60;
             } else {
                 // We're outside working hours, jump to next working hour
                 current = self
-                    .next_working_hour(&current_in_tz, business_hours, &tz).await?
+                    .next_working_hour(&current_in_tz, business_hours, &tz)
+                    .await?
                     .with_timezone(&chrono::Utc);
             }
         }
@@ -615,7 +618,12 @@ impl SlaService {
         use chrono::Datelike;
 
         // Check if this date is a holiday (Feature 029)
-        let date_str = format!("{:04}-{:02}-{:02}", datetime.year(), datetime.month(), datetime.day());
+        let date_str = format!(
+            "{:04}-{:02}-{:02}",
+            datetime.year(),
+            datetime.month(),
+            datetime.day()
+        );
         if self.db.is_holiday(&date_str).await? {
             return Ok(false); // Holidays are non-working days
         }
@@ -670,8 +678,9 @@ impl SlaService {
 
     /// Publish event to the event bus
     async fn publish_event(&self, event: SystemEvent) {
-        let bus = self.event_bus.read().await;
-        bus.publish(event);
+        if let Err(e) = self.event_bus.publish(event) {
+            tracing::error!("Failed to publish SLA event: {}", e);
+        }
     }
 }
 

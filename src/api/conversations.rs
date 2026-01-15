@@ -9,6 +9,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+
 use serde::Deserialize;
 
 /// Create a new conversation
@@ -94,7 +95,7 @@ pub async fn update_conversation_status(
         &id,
         request,
         Some(auth_user.user.id.clone()),
-        Some(&state.event_bus),
+        Some(state.event_bus.as_ref()),
     )
     .await?;
     Ok(Json(conversation))
@@ -289,15 +290,13 @@ pub async fn update_conversation_priority(
 
     // Use the priority service to update the conversation
     let priority_service =
-        crate::services::conversation_priority_service::ConversationPriorityService::new(&state.db);
+        crate::services::conversation_priority_service::ConversationPriorityService::new(
+            state.db.clone(),
+            Some(state.event_bus.clone()),
+        );
 
     let updated = priority_service
-        .update_conversation_priority(
-            &id,
-            request.priority,
-            &auth_user.user.id,
-            Some(&state.event_bus),
-        )
+        .update_conversation_priority(&id, request.priority, &auth_user.user.id)
         .await?;
 
     Ok(Json(updated))

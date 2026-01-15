@@ -8,7 +8,6 @@ use serde::Deserialize;
 use crate::{
     api::middleware::{ApiResult, AppState, AuthenticatedUser},
     models::*,
-    services::TagService,
 };
 
 #[derive(Debug, Deserialize)]
@@ -33,9 +32,11 @@ pub async fn create_tag(
     axum::Extension(user): axum::Extension<AuthenticatedUser>,
     Json(req): Json<CreateTagRequest>,
 ) -> ApiResult<Json<TagResponse>> {
-
     // Get user permissions
-    let permissions = state.tag_service.get_user_permissions(&user.user.id).await?;
+    let permissions = state
+        .tag_service
+        .get_user_permissions(&user.user.id)
+        .await?;
 
     // Create tag
     let tag = state.tag_service.create_tag(req, &permissions).await?;
@@ -49,13 +50,16 @@ pub async fn list_tags(
     axum::Extension(user): axum::Extension<AuthenticatedUser>,
     Query(params): Query<PaginationQuery>,
 ) -> ApiResult<Json<TagListResponse>> {
-
     // Get user permissions
-    let permissions = state.tag_service.get_user_permissions(&user.user.id).await?;
+    let permissions = state
+        .tag_service
+        .get_user_permissions(&user.user.id)
+        .await?;
 
     // List tags
     let offset = (params.page - 1) * params.per_page;
-    let (tags, total) = state.tag_service
+    let (tags, total) = state
+        .tag_service
         .list_tags(params.per_page, offset, &permissions)
         .await?;
 
@@ -80,9 +84,11 @@ pub async fn get_tag(
     axum::Extension(user): axum::Extension<AuthenticatedUser>,
     Path(tag_id): Path<String>,
 ) -> ApiResult<Json<TagResponse>> {
-
     // Get user permissions
-    let permissions = state.tag_service.get_user_permissions(&user.user.id).await?;
+    let permissions = state
+        .tag_service
+        .get_user_permissions(&user.user.id)
+        .await?;
 
     // Get tag
     let tag = state.tag_service.get_tag(&tag_id, &permissions).await?;
@@ -97,12 +103,17 @@ pub async fn update_tag(
     Path(tag_id): Path<String>,
     Json(req): Json<UpdateTagRequest>,
 ) -> ApiResult<Json<TagResponse>> {
-
     // Get user permissions
-    let permissions = state.tag_service.get_user_permissions(&user.user.id).await?;
+    let permissions = state
+        .tag_service
+        .get_user_permissions(&user.user.id)
+        .await?;
 
     // Update tag
-    let tag = state.tag_service.update_tag(&tag_id, req, &permissions).await?;
+    let tag = state
+        .tag_service
+        .update_tag(&tag_id, req, &permissions)
+        .await?;
 
     Ok(Json(TagResponse::from(tag)))
 }
@@ -113,9 +124,11 @@ pub async fn delete_tag(
     axum::Extension(user): axum::Extension<AuthenticatedUser>,
     Path(tag_id): Path<String>,
 ) -> ApiResult<StatusCode> {
-
     // Get user permissions
-    let permissions = state.tag_service.get_user_permissions(&user.user.id).await?;
+    let permissions = state
+        .tag_service
+        .get_user_permissions(&user.user.id)
+        .await?;
 
     // Delete tag
     state.tag_service.delete_tag(&tag_id, &permissions).await?;

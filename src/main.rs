@@ -14,6 +14,7 @@ use oxidesk::{
         *,
     },
     web,
+    EventBus,
 };
 // Re-import initialize_admin for main.rs usage if it was public in lib?
 // initialize_admin was defined in main.rs (line 305). Wait.
@@ -26,6 +27,7 @@ use axum::{
     Router,
 };
 use std::sync::Arc;
+use tokio_stream::StreamExt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -75,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     // Initialize event bus for automation rules
-    let event_bus = oxidesk::EventBus::new(100);
+    let event_bus = std::sync::Arc::new(oxidesk::LocalEventBus::new(100));
     tracing::info!("Event bus initialized with capacity 100");
 
     // Initialize delivery service with mock provider
@@ -92,8 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Availability service initialized");
 
     // Initialize SLA service
-    let event_bus_arc = std::sync::Arc::new(tokio::sync::RwLock::new(event_bus.clone()));
-    let sla_service = oxidesk::SlaService::new(db.clone(), event_bus_arc);
+    let sla_service = oxidesk::SlaService::new(db.clone(), event_bus.clone());
     tracing::info!("SLA service initialized");
 
     // Initialize automation service
@@ -102,9 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         AutomationConfig::default(),
     );
     // Initialize webhook service
-    let webhook_service = oxidesk::WebhookService::new(
-        db.clone(),
-    );
+    let webhook_service = oxidesk::WebhookService::new(db.clone());
     let conversation_tag_service = ConversationTagService::new(db.clone(), event_bus.clone());
     let tag_service = TagService::new(db.clone());
     tracing::info!("Automation service initialized");
@@ -115,8 +114,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rate_limiter = oxidesk::services::AuthRateLimiter::new();
     tracing::info!("Rate limiter initialized (5 attempts per 15 minutes)");
 
-    // Clone rate limiter for background task before moving into state
-    let cleanup_rate_limiter = rate_limiter.clone();
+    // Initialize TaskQueue
+    let task_queue = std::sync::Arc::new(oxidesk::services::SqliteTaskQueue::new(db.clone()));
+
+    // Enqueue initial maintenance jobs
+    let q_init = task_queue.clone();
+    tokio::spawn(async move {
+        if let Err(e) = q_init
+            .enqueue("cleanup_sessions", serde_json::Value::Null, 3)
+            .await
+        {
+            tracing::error!("Failed to enqueue initial cleanup_sessions: {}", e);
+        }
+        if let Err(e) = q_init
+            .enqueue("cleanup_rate_limiter", serde_json::Value::Null, 3)
+            .await
+        {
+            tracing::error!("Failed to enqueue initial cleanup_rate_limiter: {}", e);
+        }
+        if let Err(e) = q_init
+            .enqueue("cleanup_oidc_states", serde_json::Value::Null, 3)
+            .await
+        {
+            tracing::error!("Failed to enqueue initial cleanup_oidc_states: {}", e);
+        }
+        if let Err(e) = q_init
+            .enqueue("check_availability", serde_json::Value::Null, 3)
+            .await
+        {
+            tracing::error!("Failed to enqueue initial check_availability: {}", e);
+        }
+        if let Err(e) = q_init
+            .enqueue("check_sla_breaches", serde_json::Value::Null, 3)
+            .await
+        {
+            tracing::error!("Failed to enqueue initial check_sla_breaches: {}", e);
+        }
+    });
+
+    // Start JobProcessor
+    let job_processor = oxidesk::services::JobProcessor::new(
+        task_queue.clone(),
+        db.clone(),
+        rate_limiter.clone(),
+        availability_service.clone(),
+        sla_service.clone(),
+    );
+    tokio::spawn(async move {
+        job_processor.start().await;
+    });
 
     // Create application state
     let state = AppState {
@@ -128,60 +174,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         availability_service: availability_service.clone(),
         sla_service: sla_service.clone(),
         automation_service: automation_service.clone(),
-        conversation_tag_service: conversation_tag_service,
+        conversation_tag_service: conversation_tag_service.clone(),
         connection_manager,
         rate_limiter,
         webhook_service: webhook_service.clone(),
-        tag_service: tag_service,
+        tag_service: tag_service.clone(),
     };
-
-    // Start session cleanup background task
-    let cleanup_db = db.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600)); // Run every hour
-        loop {
-            interval.tick().await;
-            match cleanup_db.cleanup_expired_sessions().await {
-                Ok(count) => {
-                    if count > 0 {
-                        tracing::info!("Cleaned up {} expired sessions", count);
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to cleanup expired sessions: {}", e);
-                }
-            }
-        }
-    });
-
-    // Start rate limiter cleanup background task
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(900)); // Run every 15 minutes
-        loop {
-            interval.tick().await;
-            cleanup_rate_limiter.cleanup().await;
-            tracing::debug!("Rate limiter cleanup completed");
-        }
-    });
-
-    // Start OIDC state cleanup background task
-    let oidc_cleanup_db = db.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(600)); // Run every 10 minutes
-        loop {
-            interval.tick().await;
-            match oidc_cleanup_db.cleanup_expired_oidc_states().await {
-                Ok(count) => {
-                    if count > 0 {
-                        tracing::debug!("Cleaned up {} expired OIDC states", count);
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to cleanup expired OIDC states: {}", e);
-                }
-            }
-        }
-    });
 
     // Start automation listener background task
     let automation_event_bus = event_bus.clone();
@@ -198,8 +196,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut receiver = automation_event_bus.subscribe();
         tracing::info!("Automation listener started");
 
-        loop {
-            match receiver.recv().await {
+        while let Some(msg) = receiver.next().await {
+            match msg {
                 Ok(event) => {
                     tracing::debug!("Automation listener received event: {:?}", event);
 
@@ -682,8 +680,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(e) => {
                     tracing::error!("Automation listener error: {}", e);
-                    // Sleep briefly before retrying
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                    // Sleep briefly before retrying - Not needed for stream
                 }
             }
         }
@@ -692,83 +689,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start webhook worker background task
     let webhook_db = db.clone();
     let webhook_event_bus = event_bus.clone();
-    let webhook_worker = oxidesk::WebhookWorker::new(webhook_db, webhook_event_bus);
+    // Pass task_queue to WebhookWorker
+    let webhook_worker =
+        oxidesk::WebhookWorker::new(webhook_db, webhook_event_bus, task_queue.clone());
     webhook_worker.start();
     tracing::info!("Webhook worker started");
-
-    // Start webhook delivery processor background task
-    let delivery_db = db.clone();
-    let delivery_service = oxidesk::WebhookDeliveryService::new(delivery_db);
-    delivery_service.start_processor();
-    tracing::info!("Webhook delivery processor started");
-
-    // Start availability inactivity checker background task
-    let availability_service_inactivity = availability_service.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
-        tracing::info!("Availability inactivity checker started (every 30 seconds)");
-
-        loop {
-            interval.tick().await;
-
-            match availability_service_inactivity
-                .check_inactivity_timeouts()
-                .await
-            {
-                Ok(affected) => {
-                    if !affected.is_empty() {
-                        tracing::info!(
-                            "Inactivity check: {} agents transitioned to away",
-                            affected.len()
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to check inactivity timeouts: {}", e);
-                }
-            }
-        }
-    });
-
-    // Start availability max idle checker background task
-    let availability_service_idle = availability_service.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
-        tracing::info!("Availability max idle checker started (every 30 seconds)");
-
-        loop {
-            interval.tick().await;
-
-            match availability_service_idle.check_max_idle_thresholds().await {
-                Ok(affected) => {
-                    if !affected.is_empty() {
-                        tracing::info!(
-                            "Max idle check: {} agents reassigned and went offline",
-                            affected.len()
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to check max idle thresholds: {}", e);
-                }
-            }
-        }
-    });
-
-    // Start SLA breach detection background task
-    let breach_sla_service = sla_service.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
-        tracing::info!("SLA breach detection started (every 60 seconds)");
-
-        loop {
-            interval.tick().await;
-
-            if let Err(e) = breach_sla_service.check_breaches().await {
-                tracing::error!("Failed to check SLA breaches: {}", e);
-            }
-        }
-    });
 
     // Build protected routes (require authentication)
     let protected = Router::new()

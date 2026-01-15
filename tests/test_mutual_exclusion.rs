@@ -11,7 +11,6 @@ mod helpers;
 use helpers::test_db::setup_test_db;
 use oxidesk::{database::Database, events::EventBus, models::*, services::sla_service::SlaService};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 // ===== Test Helpers =====
 
@@ -100,7 +99,7 @@ async fn create_test_sla_policy(db: &Database) -> SlaPolicy {
 async fn test_sla_event_cannot_be_met_and_breached() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
-    let event_bus = Arc::new(RwLock::new(EventBus::new(100)));
+    let event_bus = Arc::new(oxidesk::LocalEventBus::new(100));
     let sla_service = SlaService::new(db.clone(), event_bus);
 
     // Create prerequisite data
@@ -153,7 +152,7 @@ async fn test_sla_event_cannot_be_met_and_breached() {
 async fn test_sla_status_transition_pending_to_met() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
-    let event_bus = Arc::new(RwLock::new(EventBus::new(100)));
+    let event_bus = Arc::new(oxidesk::LocalEventBus::new(100));
     let sla_service = SlaService::new(db.clone(), event_bus);
 
     // Create prerequisite data
@@ -204,7 +203,7 @@ async fn test_sla_status_transition_pending_to_met() {
 async fn test_sla_status_transition_pending_to_breached() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
-    let event_bus = Arc::new(RwLock::new(EventBus::new(100)));
+    let event_bus = Arc::new(oxidesk::LocalEventBus::new(100));
     let sla_service = SlaService::new(db.clone(), event_bus);
 
     // Create prerequisite data
@@ -253,7 +252,7 @@ async fn test_sla_status_transition_pending_to_breached() {
 async fn test_sla_breached_cannot_become_met() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
-    let event_bus = Arc::new(RwLock::new(EventBus::new(100)));
+    let event_bus = Arc::new(oxidesk::LocalEventBus::new(100));
     let sla_service = SlaService::new(db.clone(), event_bus);
 
     // Create prerequisite data
@@ -304,7 +303,7 @@ async fn test_sla_breached_cannot_become_met() {
 async fn test_sla_status_exclusivity_error_message() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
-    let event_bus = Arc::new(RwLock::new(EventBus::new(100)));
+    let event_bus = Arc::new(oxidesk::LocalEventBus::new(100));
     let sla_service = SlaService::new(db.clone(), event_bus);
 
     // Create prerequisite data

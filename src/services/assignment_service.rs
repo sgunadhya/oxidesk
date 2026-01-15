@@ -14,32 +14,34 @@ use crate::{
 };
 use std::sync::Arc;
 
+/// Service for handling conversation assignment logic
+#[derive(Clone)]
 pub struct AssignmentService {
     db: Database,
-    event_bus: EventBus,
-    _notification_service: NotificationService,
+    event_bus: Arc<dyn EventBus>,
+    notification_service: NotificationService,
     connection_manager: Arc<dyn ConnectionManager>,
-    sla_service: Option<SlaService>,
+    sla_service: Option<Arc<SlaService>>,
 }
 
 impl AssignmentService {
     pub fn new(
         db: Database,
-        event_bus: EventBus,
+        event_bus: Arc<dyn EventBus>,
         notification_service: NotificationService,
         connection_manager: Arc<dyn ConnectionManager>,
     ) -> Self {
         Self {
             db,
             event_bus,
-            _notification_service: notification_service,
+            notification_service,
             connection_manager,
             sla_service: None,
         }
     }
 
     /// Set the SLA service (called after initialization to avoid circular dependencies)
-    pub fn set_sla_service(&mut self, sla_service: SlaService) {
+    pub fn set_sla_service(&mut self, sla_service: Arc<SlaService>) {
         self.sla_service = Some(sla_service);
     }
 

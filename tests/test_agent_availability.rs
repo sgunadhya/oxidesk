@@ -11,10 +11,14 @@ use oxidesk::{
 };
 use sqlx::Row;
 
-async fn setup() -> (TestDatabase, EventBus, AvailabilityService) {
+async fn setup() -> (
+    TestDatabase,
+    std::sync::Arc<oxidesk::LocalEventBus>,
+    AvailabilityService,
+) {
     let test_db = setup_test_db().await;
     let db = test_db.db();
-    let event_bus = EventBus::new(100); // Capacity of 100 events
+    let event_bus = std::sync::Arc::new(oxidesk::LocalEventBus::new(100)); // Capacity of 100 events
     let availability_service = AvailabilityService::new(db.clone(), event_bus.clone());
     (test_db, event_bus, availability_service)
 }

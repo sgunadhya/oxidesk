@@ -10,7 +10,7 @@ use std::sync::Arc;
 pub struct MessageService {
     db: Database,
     delivery_service: Option<DeliveryService>,
-    event_bus: Option<EventBus>,
+    event_bus: Option<Arc<dyn EventBus>>,
     connection_manager: Option<Arc<dyn ConnectionManager>>,
 }
 
@@ -36,7 +36,7 @@ impl MessageService {
     pub fn with_delivery_and_events(
         db: Database,
         delivery_service: DeliveryService,
-        event_bus: EventBus,
+        event_bus: Arc<dyn EventBus>,
     ) -> Self {
         Self {
             db,
@@ -49,7 +49,7 @@ impl MessageService {
     pub fn with_all_services(
         db: Database,
         delivery_service: DeliveryService,
-        event_bus: EventBus,
+        event_bus: Arc<dyn EventBus>,
         connection_manager: Arc<dyn ConnectionManager>,
     ) -> Self {
         Self {
@@ -86,9 +86,9 @@ impl MessageService {
 
         // Feature 023: Contact ID must be resolved by this point (cardinality invariant)
         // FR-007, FR-008: Message must have exactly one sender
-        let contact_id = request
-            .contact_id
-            .ok_or_else(|| ApiError::BadRequest("Message must have exactly one sender".to_string()))?;
+        let contact_id = request.contact_id.ok_or_else(|| {
+            ApiError::BadRequest("Message must have exactly one sender".to_string())
+        })?;
 
         // Create incoming message
         let message =

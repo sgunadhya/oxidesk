@@ -14,7 +14,7 @@ use std::sync::Arc;
 pub struct AppState {
     pub db: Database,
     pub session_duration_hours: i64,
-    pub event_bus: crate::events::EventBus,
+    pub event_bus: Arc<dyn crate::events::EventBus>,
     pub delivery_service: crate::services::DeliveryService,
     pub notification_service: crate::services::NotificationService,
     pub availability_service: crate::services::AvailabilityService,

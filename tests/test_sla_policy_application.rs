@@ -38,7 +38,7 @@ async fn test_apply_sla_requires_permission() {
     // The API layer permission check will be added in T026
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -65,7 +65,7 @@ async fn test_apply_sla_validates_conversation_exists() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -103,7 +103,7 @@ async fn test_apply_sla_validates_policy_exists() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -144,7 +144,7 @@ async fn test_apply_sla_creates_applied_sla_and_events() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -248,7 +248,7 @@ async fn test_deadline_calculation_with_business_hours() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let applied_sla = sla_service
@@ -309,7 +309,7 @@ async fn test_deadline_skips_weekend() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let applied_sla = sla_service
@@ -377,7 +377,7 @@ async fn test_deadline_skips_evenings() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let applied_sla = sla_service
@@ -433,7 +433,7 @@ async fn test_deadline_calculation_without_business_hours() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let applied_sla = sla_service
@@ -502,7 +502,7 @@ async fn test_business_hours_timezone_handling() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let result = sla_service
@@ -541,7 +541,7 @@ async fn test_duplicate_sla_application_rejected() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -581,7 +581,7 @@ async fn test_duplicate_sla_error_message() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -637,7 +637,7 @@ async fn test_apply_sla_to_different_conversations_succeeds() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -681,7 +681,7 @@ async fn test_apply_same_policy_twice_to_conversation_rejected() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -724,7 +724,7 @@ async fn test_apply_different_policy_to_conversation_rejected() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -782,7 +782,7 @@ async fn test_delete_sla_policy_cascades_to_applied_slas() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -836,7 +836,7 @@ async fn test_delete_applied_sla_cascades_to_sla_events() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -888,7 +888,7 @@ async fn test_cascade_delete_with_multiple_conversations() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -949,7 +949,7 @@ async fn test_delete_policy_with_no_applied_slas() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Delete the policy - should succeed even with no applied SLAs
@@ -984,7 +984,7 @@ async fn test_cascade_delete_is_transactional() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -1028,7 +1028,7 @@ async fn test_sla_events_orphaned_check() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     let base_timestamp = chrono::Utc::now().to_rfc3339();
@@ -1126,7 +1126,7 @@ async fn test_full_sla_application_workflow() {
     // Apply SLA
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Monday 10:00 AM EST
@@ -1187,7 +1187,7 @@ async fn test_business_hours_edge_cases() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Test case 1: SLA applied during weekend should start on next Monday
@@ -1326,7 +1326,7 @@ async fn test_final_integration_verification() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Wednesday 2:00 PM EST (19:00 UTC)

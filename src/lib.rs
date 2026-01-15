@@ -12,7 +12,7 @@ pub use api::*;
 pub use config::*;
 pub use database::*;
 // Re-export specific types from events to avoid conflicts
-pub use events::{EventBus, SystemEvent};
+pub use events::{EventBus, LocalEventBus, SystemEvent};
 pub use models::*;
 pub use services::*;
 pub mod domain;

@@ -39,6 +39,9 @@ impl Database {
 
 impl Database {
     pub async fn connect(database_url: &str) -> Result<Self, sqlx::Error> {
+        // Ensure drivers are installed for AnyPool
+        sqlx::any::install_default_drivers();
+
         let pool = AnyPoolOptions::new()
             .max_connections(20)
             .min_connections(5)
