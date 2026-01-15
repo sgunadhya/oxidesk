@@ -59,6 +59,8 @@ pub struct User {
     pub user_type: UserType,
     pub created_at: String,
     pub updated_at: String,
+    pub deleted_at: Option<String>,
+    pub deleted_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -241,6 +243,8 @@ impl User {
             user_type,
             created_at: now.clone(),
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         }
     }
 

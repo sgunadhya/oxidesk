@@ -7,4 +7,6 @@ pub struct Inbox {
     pub channel_type: String,
     pub created_at: String,
     pub updated_at: String,
+    pub deleted_at: Option<String>,
+    pub deleted_by: Option<String>,
 }

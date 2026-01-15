@@ -78,9 +78,9 @@ impl Database {
         };
 
         let row = sqlx::query(
-            "SELECT id, email, user_type, created_at, updated_at
+            "SELECT id, email, user_type, created_at, updated_at, deleted_at, deleted_by
              FROM users
-             WHERE email = ? AND user_type = ?",
+             WHERE email = ? AND user_type = ? AND deleted_at IS NULL",
         )
         .bind(email)
         .bind(user_type_str)
@@ -98,6 +98,8 @@ impl Database {
                 },
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+                deleted_at: row.try_get("deleted_at").ok(),
+                deleted_by: row.try_get("deleted_by").ok(),
             }))
         } else {
             Ok(None)
@@ -106,9 +108,9 @@ impl Database {
 
     pub async fn get_user_by_id(&self, id: &str) -> ApiResult<Option<User>> {
         let row = sqlx::query(
-            "SELECT id, email, user_type, created_at, updated_at
+            "SELECT id, email, user_type, created_at, updated_at, deleted_at, deleted_by
              FROM users
-             WHERE id = ?",
+             WHERE id = ? AND deleted_at IS NULL",
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -125,6 +127,8 @@ impl Database {
                 },
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+                deleted_at: row.try_get("deleted_at").ok(),
+                deleted_by: row.try_get("deleted_by").ok(),
             }))
         } else {
             Ok(None)
@@ -446,12 +450,12 @@ impl Database {
     // List agents with pagination
     pub async fn list_agents(&self, limit: i64, offset: i64) -> ApiResult<Vec<(User, Agent)>> {
         let rows = sqlx::query(
-            "SELECT u.id, u.email, u.user_type, u.created_at, u.updated_at,
+            "SELECT u.id, u.email, u.user_type, u.created_at, u.updated_at, u.deleted_at, u.deleted_by,
                     a.id as agent_id, a.user_id as agent_user_id, a.first_name, a.last_name, a.password_hash,
                     a.availability_status, a.last_login_at, a.last_activity_at, a.away_since
              FROM users u
              INNER JOIN agents a ON a.user_id = u.id
-             WHERE u.user_type = 'agent'
+             WHERE u.user_type = 'agent' AND u.deleted_at IS NULL
              ORDER BY u.created_at DESC
              LIMIT ? OFFSET ?",
         )
@@ -468,6 +472,8 @@ impl Database {
                 user_type: UserType::Agent,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+                deleted_at: row.try_get("deleted_at").ok(),
+                deleted_by: row.try_get("deleted_by").ok(),
             };
 
             let status_str: String = row
@@ -504,7 +510,7 @@ impl Database {
         let row = sqlx::query(
             "SELECT COUNT(*) as count
              FROM users
-             WHERE user_type = 'agent'",
+             WHERE user_type = 'agent' AND deleted_at IS NULL",
         )
         .fetch_one(&self.pool)
         .await?;
@@ -667,6 +673,105 @@ impl Database {
         Ok(contact.id)
     }
 
+    // Soft Delete operations (Feature 027)
+    /// Soft delete a user (agent or contact)
+    /// Sets deleted_at timestamp and records who performed the deletion
+    pub async fn soft_delete_user(&self, user_id: &str, deleted_by: &str) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let result = sqlx::query(
+            "UPDATE users
+             SET deleted_at = ?, deleted_by = ?
+             WHERE id = ? AND deleted_at IS NULL",
+        )
+        .bind(&now)
+        .bind(deleted_by)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "User not found or already deleted".to_string(),
+            ));
+        }
+
+        // Invalidate all sessions for the soft deleted user
+        sqlx::query("DELETE FROM sessions WHERE user_id = ?")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Restore a soft deleted user
+    /// Clears deleted_at and deleted_by fields
+    pub async fn restore_user(&self, user_id: &str) -> ApiResult<()> {
+        let result = sqlx::query(
+            "UPDATE users
+             SET deleted_at = NULL, deleted_by = NULL
+             WHERE id = ? AND deleted_at IS NOT NULL",
+        )
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "User not found or not deleted".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Soft delete an inbox
+    /// Sets deleted_at timestamp and records who performed the deletion
+    pub async fn soft_delete_inbox(&self, inbox_id: &str, deleted_by: &str) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let result = sqlx::query(
+            "UPDATE inboxes
+             SET deleted_at = ?, deleted_by = ?
+             WHERE id = ? AND deleted_at IS NULL",
+        )
+        .bind(&now)
+        .bind(deleted_by)
+        .bind(inbox_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Inbox not found or already deleted".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Restore a soft deleted inbox
+    /// Clears deleted_at and deleted_by fields
+    pub async fn restore_inbox(&self, inbox_id: &str) -> ApiResult<()> {
+        let result = sqlx::query(
+            "UPDATE inboxes
+             SET deleted_at = NULL, deleted_by = NULL
+             WHERE id = ? AND deleted_at IS NOT NULL",
+        )
+        .bind(inbox_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Inbox not found or not deleted".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
     // Inbox operations
     pub async fn create_inbox(&self, inbox: &Inbox) -> ApiResult<()> {
         sqlx::query(
@@ -684,7 +789,10 @@ impl Database {
 
     pub async fn list_inboxes(&self) -> ApiResult<Vec<Inbox>> {
         let rows = sqlx::query(
-            "SELECT id, name, channel_type, created_at, updated_at FROM inboxes ORDER BY name",
+            "SELECT id, name, channel_type, created_at, updated_at, deleted_at, deleted_by
+             FROM inboxes
+             WHERE deleted_at IS NULL
+             ORDER BY name",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -697,6 +805,8 @@ impl Database {
                 channel_type: row.try_get("channel_type")?,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+                deleted_at: row.try_get("deleted_at").ok(),
+                deleted_by: row.try_get("deleted_by").ok(),
             });
         }
         Ok(inboxes)
@@ -761,6 +871,8 @@ impl Database {
                 user_type: UserType::Contact,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+                deleted_at: None,
+                deleted_by: None,
             };
 
             // Handle NULL for first_name
@@ -1750,6 +1862,8 @@ impl Database {
                 user_type,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+                deleted_at: None,
+                deleted_by: None,
             });
         }
 
@@ -2101,6 +2215,8 @@ impl Database {
                 },
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+                deleted_at: None,
+                deleted_by: None,
             });
         }
 
@@ -2391,6 +2507,8 @@ impl Database {
                 },
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+                deleted_at: None,
+                deleted_by: None,
             });
         }
 
@@ -5332,6 +5450,8 @@ impl Database {
                 },
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
+                deleted_at: None,
+                deleted_by: None,
             });
         }
 
@@ -6691,13 +6811,16 @@ impl Database {
     /// Get all enabled inbox email configurations
     pub async fn get_enabled_email_configs(&self) -> ApiResult<Vec<InboxEmailConfig>> {
         let rows = sqlx::query(
-            "SELECT id, inbox_id, imap_host, imap_port, imap_username, imap_password, imap_use_tls, imap_folder,
-                    smtp_host, smtp_port, smtp_username, smtp_password, smtp_use_tls,
-                    email_address, display_name, poll_interval_seconds, enabled,
-                    CAST(last_poll_at AS TEXT) as last_poll_at,
-                    CAST(created_at AS TEXT) as created_at,
-                    CAST(updated_at AS TEXT) as updated_at
-             FROM inbox_email_configs WHERE enabled = 1 ORDER BY created_at"
+            "SELECT c.id, c.inbox_id, c.imap_host, c.imap_port, c.imap_username, c.imap_password, c.imap_use_tls, c.imap_folder,
+                    c.smtp_host, c.smtp_port, c.smtp_username, c.smtp_password, c.smtp_use_tls,
+                    c.email_address, c.display_name, c.poll_interval_seconds, c.enabled,
+                    CAST(c.last_poll_at AS TEXT) as last_poll_at,
+                    CAST(c.created_at AS TEXT) as created_at,
+                    CAST(c.updated_at AS TEXT) as updated_at
+             FROM inbox_email_configs c
+             INNER JOIN inboxes i ON c.inbox_id = i.id
+             WHERE c.enabled = 1 AND i.deleted_at IS NULL
+             ORDER BY c.created_at"
         )
         .fetch_all(&self.pool)
         .await

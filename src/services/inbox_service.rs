@@ -28,6 +28,8 @@ pub async fn get_default_inbox_id(db: &Database) -> ApiResult<String> {
             channel_type: "email".to_string(),
             created_at: now.clone(),
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         db.create_inbox(&default_inbox).await?;
