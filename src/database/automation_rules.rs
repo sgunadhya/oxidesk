@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use crate::api::middleware::error::{ApiError, ApiResult};
 use crate::database::Database;
 use crate::models::{
@@ -6,11 +7,10 @@ use crate::models::{
 };
 use sqlx::Row;
 
-impl Database {
-    // Automation Rules CRUD operations
-
+#[async_trait]
+impl AutomationRulesRepository for Database {
     /// Create automation rule
-    pub async fn create_automation_rule(&self, rule: &AutomationRule) -> ApiResult<()> {
+    async fn create_automation_rule(&self, rule: &AutomationRule) -> ApiResult<()> {
         let event_subscription_json =
             serde_json::to_string(&rule.event_subscription).map_err(|e| {
                 ApiError::Internal(format!("Failed to serialize event_subscription: {}", e))
@@ -24,37 +24,36 @@ impl Database {
             "INSERT INTO automation_rules (id, name, description, enabled, rule_type, event_subscription, condition, action, priority, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
-        .bind(&rule.id)
-        .bind(&rule.name)
-        .bind(&rule.description)
-        .bind(rule.enabled)
-        .bind(rule.rule_type.to_string())
-        .bind(&event_subscription_json)
-        .bind(&condition_json)
-        .bind(&action_json)
-        .bind(rule.priority)
-        .bind(&rule.created_at)
-        .bind(&rule.updated_at)
-        .execute(&self.pool)
-        .await?;
+            .bind(&rule.id)
+            .bind(&rule.name)
+            .bind(&rule.description)
+            .bind(rule.enabled)
+            .bind(rule.rule_type.to_string())
+            .bind(&event_subscription_json)
+            .bind(&condition_json)
+            .bind(&action_json)
+            .bind(rule.priority)
+            .bind(&rule.created_at)
+            .bind(&rule.updated_at)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
-
     /// Get automation rule by ID
-    pub async fn get_automation_rule_by_id(&self, id: &str) -> ApiResult<Option<AutomationRule>> {
+    async fn get_automation_rule_by_id(&self, id: &str) -> ApiResult<Option<AutomationRule>> {
         let row = sqlx::query(
             "SELECT id, name, description, CAST(enabled AS INTEGER) as enabled, rule_type, event_subscription, condition, action, priority, created_at, updated_at
              FROM automation_rules
              WHERE id = ?",
         )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| {
-            eprintln!("Database error fetching automation rule: {:?}", e);
-            ApiError::Internal(format!("Database error: {}", e))
-        })?;
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Database error fetching automation rule: {:?}", e);
+                ApiError::Internal(format!("Database error: {}", e))
+            })?;
 
         if let Some(row) = row {
             let rule_type_str: String = row.try_get("rule_type")?;
@@ -103,9 +102,8 @@ impl Database {
             Ok(None)
         }
     }
-
     /// Get automation rule by name
-    pub async fn get_automation_rule_by_name(
+    async fn get_automation_rule_by_name(
         &self,
         name: &str,
     ) -> ApiResult<Option<AutomationRule>> {
@@ -114,9 +112,9 @@ impl Database {
              FROM automation_rules
              WHERE name = ?",
         )
-        .bind(name)
-        .fetch_optional(&self.pool)
-        .await?;
+            .bind(name)
+            .fetch_optional(&self.pool)
+            .await?;
 
         if let Some(row) = row {
             let rule_type_str: String = row.try_get("rule_type")?;
@@ -165,9 +163,8 @@ impl Database {
             Ok(None)
         }
     }
-
     /// Get all automation rules (with optional enabled filter)
-    pub async fn get_automation_rules(&self, enabled_only: bool) -> ApiResult<Vec<AutomationRule>> {
+    async fn get_automation_rules(&self, enabled_only: bool) -> ApiResult<Vec<AutomationRule>> {
         let query = if enabled_only {
             "SELECT id, name, description, CAST(enabled AS INTEGER) as enabled, rule_type, event_subscription, condition, action, priority, created_at, updated_at
              FROM automation_rules
@@ -229,9 +226,8 @@ impl Database {
 
         Ok(rules)
     }
-
     /// Get enabled rules that subscribe to a specific event
-    pub async fn get_enabled_rules_for_event(
+    async fn get_enabled_rules_for_event(
         &self,
         event_type: &str,
     ) -> ApiResult<Vec<AutomationRule>> {
@@ -246,9 +242,8 @@ impl Database {
 
         Ok(matching_rules)
     }
-
     /// Update automation rule
-    pub async fn update_automation_rule(&self, rule: &AutomationRule) -> ApiResult<()> {
+    async fn update_automation_rule(&self, rule: &AutomationRule) -> ApiResult<()> {
         let event_subscription_json =
             serde_json::to_string(&rule.event_subscription).map_err(|e| {
                 ApiError::Internal(format!("Failed to serialize event_subscription: {}", e))
@@ -263,24 +258,23 @@ impl Database {
              SET name = ?, description = ?, enabled = ?, rule_type = ?, event_subscription = ?, condition = ?, action = ?, priority = ?, updated_at = ?
              WHERE id = ?",
         )
-        .bind(&rule.name)
-        .bind(&rule.description)
-        .bind(rule.enabled)
-        .bind(rule.rule_type.to_string())
-        .bind(&event_subscription_json)
-        .bind(&condition_json)
-        .bind(&action_json)
-        .bind(rule.priority)
-        .bind(&rule.updated_at)
-        .bind(&rule.id)
-        .execute(&self.pool)
-        .await?;
+            .bind(&rule.name)
+            .bind(&rule.description)
+            .bind(rule.enabled)
+            .bind(rule.rule_type.to_string())
+            .bind(&event_subscription_json)
+            .bind(&condition_json)
+            .bind(&action_json)
+            .bind(rule.priority)
+            .bind(&rule.updated_at)
+            .bind(&rule.id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
-
     /// Delete automation rule
-    pub async fn delete_automation_rule(&self, id: &str) -> ApiResult<()> {
+    async fn delete_automation_rule(&self, id: &str) -> ApiResult<()> {
         sqlx::query("DELETE FROM automation_rules WHERE id = ?")
             .bind(id)
             .execute(&self.pool)
@@ -288,9 +282,8 @@ impl Database {
 
         Ok(())
     }
-
     /// Enable automation rule
-    pub async fn enable_automation_rule(&self, id: &str) -> ApiResult<()> {
+    async fn enable_automation_rule(&self, id: &str) -> ApiResult<()> {
         let updated_at = chrono::Utc::now().to_rfc3339();
         sqlx::query("UPDATE automation_rules SET enabled = TRUE, updated_at = ? WHERE id = ?")
             .bind(&updated_at)
@@ -300,9 +293,8 @@ impl Database {
 
         Ok(())
     }
-
     /// Disable automation rule
-    pub async fn disable_automation_rule(&self, id: &str) -> ApiResult<()> {
+    async fn disable_automation_rule(&self, id: &str) -> ApiResult<()> {
         let updated_at = chrono::Utc::now().to_rfc3339();
         sqlx::query("UPDATE automation_rules SET enabled = FALSE, updated_at = ? WHERE id = ?")
             .bind(&updated_at)
@@ -312,11 +304,8 @@ impl Database {
 
         Ok(())
     }
-
-    // Rule Evaluation Logs CRUD operations
-
     /// Create rule evaluation log
-    pub async fn create_rule_evaluation_log(&self, log: &RuleEvaluationLog) -> ApiResult<()> {
+    async fn create_rule_evaluation_log(&self, log: &RuleEvaluationLog) -> ApiResult<()> {
         let condition_result_str = log.condition_result.as_ref().map(|r| r.to_string());
         let action_result_str = log.action_result.as_ref().map(|r| r.to_string());
 
@@ -324,27 +313,26 @@ impl Database {
             "INSERT INTO rule_evaluation_logs (id, rule_id, rule_name, event_type, conversation_id, matched, condition_result, action_executed, action_result, error_message, evaluation_time_ms, evaluated_at, cascade_depth)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
-        .bind(&log.id)
-        .bind(&log.rule_id)
-        .bind(&log.rule_name)
-        .bind(&log.event_type)
-        .bind(&log.conversation_id)
-        .bind(log.matched)
-        .bind(&condition_result_str)
-        .bind(log.action_executed)
-        .bind(&action_result_str)
-        .bind(&log.error_message)
-        .bind(log.evaluation_time_ms)
-        .bind(&log.evaluated_at)
-        .bind(log.cascade_depth as i32)
-        .execute(&self.pool)
-        .await?;
+            .bind(&log.id)
+            .bind(&log.rule_id)
+            .bind(&log.rule_name)
+            .bind(&log.event_type)
+            .bind(&log.conversation_id)
+            .bind(log.matched)
+            .bind(&condition_result_str)
+            .bind(log.action_executed)
+            .bind(&action_result_str)
+            .bind(&log.error_message)
+            .bind(log.evaluation_time_ms)
+            .bind(&log.evaluated_at)
+            .bind(log.cascade_depth as i32)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
-
     /// Get rule evaluation logs with optional filters
-    pub async fn get_rule_evaluation_logs(
+    async fn get_rule_evaluation_logs(
         &self,
         rule_id: Option<&str>,
         conversation_id: Option<&str>,
@@ -437,27 +425,24 @@ impl Database {
 
         Ok(logs)
     }
-
     /// Get evaluation logs for a specific rule
-    pub async fn get_evaluation_logs_by_rule(
+    async fn get_evaluation_logs_by_rule(
         &self,
         rule_id: &str,
     ) -> ApiResult<Vec<RuleEvaluationLog>> {
         self.get_rule_evaluation_logs(Some(rule_id), None, None, None, None)
             .await
     }
-
     /// Get evaluation logs for a specific conversation
-    pub async fn get_evaluation_logs_by_conversation(
+    async fn get_evaluation_logs_by_conversation(
         &self,
         conversation_id: &str,
     ) -> ApiResult<Vec<RuleEvaluationLog>> {
         self.get_rule_evaluation_logs(None, Some(conversation_id), None, None, None)
             .await
     }
-
     /// Get evaluation logs for a specific rule
-    pub async fn get_rule_evaluation_logs_by_rule(
+    async fn get_rule_evaluation_logs_by_rule(
         &self,
         rule_id: &str,
         limit: i32,
@@ -466,4 +451,60 @@ impl Database {
         self.get_rule_evaluation_logs(Some(rule_id), None, None, Some(limit), Some(offset))
             .await
     }
+}
+
+#[async_trait]
+pub trait AutomationRulesRepository : Send + Sync {
+    /// Create automation rule
+    async fn create_automation_rule(&self, rule: &AutomationRule) -> ApiResult<()>;
+    /// Get automation rule by ID
+    async fn get_automation_rule_by_id(&self, id: &str) -> ApiResult<Option<AutomationRule>>;
+    /// Get automation rule by name
+    async fn get_automation_rule_by_name(
+        &self,
+        name: &str,
+    ) -> ApiResult<Option<AutomationRule>>;
+    /// Get all automation rules (with optional enabled filter)
+    async fn get_automation_rules(&self, enabled_only: bool) -> ApiResult<Vec<AutomationRule>>;
+    /// Get enabled rules that subscribe to a specific event
+    async fn get_enabled_rules_for_event(
+        &self,
+        event_type: &str,
+    ) -> ApiResult<Vec<AutomationRule>>;
+    /// Update automation rule
+    async fn update_automation_rule(&self, rule: &AutomationRule) -> ApiResult<()>;
+    /// Delete automation rule
+    async fn delete_automation_rule(&self, id: &str) -> ApiResult<()>;
+    /// Enable automation rule
+    async fn enable_automation_rule(&self, id: &str) -> ApiResult<()>;
+    /// Disable automation rule
+    async fn disable_automation_rule(&self, id: &str) -> ApiResult<()>;
+    /// Create rule evaluation log
+    async fn create_rule_evaluation_log(&self, log: &RuleEvaluationLog) -> ApiResult<()>;
+    /// Get rule evaluation logs with optional filters
+    async fn get_rule_evaluation_logs(
+        &self,
+        rule_id: Option<&str>,
+        conversation_id: Option<&str>,
+        event_type: Option<&str>,
+        limit: Option<i32>,
+        offset: Option<i32>,
+    ) -> ApiResult<Vec<RuleEvaluationLog>>;
+    /// Get evaluation logs for a specific rule
+    async fn get_evaluation_logs_by_rule(
+        &self,
+        rule_id: &str,
+    ) -> ApiResult<Vec<RuleEvaluationLog>>;
+    /// Get evaluation logs for a specific conversation
+    async fn get_evaluation_logs_by_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> ApiResult<Vec<RuleEvaluationLog>>;
+    /// Get evaluation logs for a specific rule
+    async fn get_rule_evaluation_logs_by_rule(
+        &self,
+        rule_id: &str,
+        limit: i32,
+        offset: i32,
+    ) -> ApiResult<Vec<RuleEvaluationLog>>;
 }

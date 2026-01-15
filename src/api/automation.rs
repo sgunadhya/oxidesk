@@ -182,7 +182,11 @@ pub async fn create_automation_rule(
     rule.priority = priority;
     rule.description = request.description;
 
-    state.db.create_automation_rule(&rule).await?;
+    state
+        .automation_service
+        .create_automation_rule(&rule)
+        .await
+        .map_err(ApiError::Internal)?;
 
     tracing::info!(
         "Automation rule '{}' ({}) created by user {}",
@@ -211,9 +215,17 @@ pub async fn list_automation_rules(
     }
 
     let rules = if let Some(enabled) = filters.enabled {
-        state.db.get_automation_rules(enabled).await?
+        state
+            .automation_service
+            .get_automation_rules(enabled)
+            .await
+            .map_err(ApiError::Internal)?
     } else {
-        state.db.get_automation_rules(false).await? // Get all rules
+        state
+            .automation_service
+            .get_automation_rules(false)
+            .await
+            .map_err(ApiError::Internal)? // Get all rules
     };
 
     let responses: Vec<AutomationRuleResponse> = rules.into_iter().map(Into::into).collect();
@@ -239,9 +251,10 @@ pub async fn get_automation_rule(
     }
 
     let rule = state
-        .db
+        .automation_service
         .get_automation_rule_by_id(&rule_id)
-        .await?
+        .await
+        .map_err(ApiError::Internal)?
         .ok_or_else(|| ApiError::NotFound("Automation rule not found".to_string()))?;
 
     Ok(Json(AutomationRuleResponse::from(rule)))
@@ -263,9 +276,10 @@ pub async fn update_automation_rule(
 
     // Get existing rule
     let mut rule = state
-        .db
+        .automation_service
         .get_automation_rule_by_id(&rule_id)
-        .await?
+        .await
+        .map_err(ApiError::Internal)?
         .ok_or_else(|| ApiError::NotFound("Automation rule not found".to_string()))?;
 
     // Update fields
@@ -311,7 +325,11 @@ pub async fn update_automation_rule(
     // Update timestamp
     rule.updated_at = chrono::Utc::now().to_rfc3339();
 
-    state.db.update_automation_rule(&rule).await?;
+    state
+        .automation_service
+        .update_automation_rule(&rule)
+        .await
+        .map_err(ApiError::Internal)?;
 
     tracing::info!(
         "Automation rule '{}' ({}) updated by user {}",
@@ -338,12 +356,17 @@ pub async fn delete_automation_rule(
 
     // Verify rule exists
     let rule = state
-        .db
+        .automation_service
         .get_automation_rule_by_id(&rule_id)
-        .await?
+        .await
+        .map_err(ApiError::Internal)?
         .ok_or_else(|| ApiError::NotFound("Automation rule not found".to_string()))?;
 
-    state.db.delete_automation_rule(&rule_id).await?;
+    state
+        .automation_service
+        .delete_automation_rule(&rule_id)
+        .await
+        .map_err(ApiError::Internal)?;
 
     tracing::info!(
         "Automation rule '{}' ({}) deleted by user {}",
@@ -370,12 +393,17 @@ pub async fn enable_automation_rule(
 
     // Verify rule exists
     let rule = state
-        .db
+        .automation_service
         .get_automation_rule_by_id(&rule_id)
-        .await?
+        .await
+        .map_err(ApiError::Internal)?
         .ok_or_else(|| ApiError::NotFound("Automation rule not found".to_string()))?;
 
-    state.db.enable_automation_rule(&rule_id).await?;
+    state
+        .automation_service
+        .enable_automation_rule(&rule_id)
+        .await
+        .map_err(ApiError::Internal)?;
 
     tracing::info!(
         "Automation rule '{}' ({}) enabled by user {}",
@@ -385,7 +413,12 @@ pub async fn enable_automation_rule(
     );
 
     // Fetch updated rule
-    let updated_rule = state.db.get_automation_rule_by_id(&rule_id).await?.unwrap();
+    let updated_rule = state
+        .automation_service
+        .get_automation_rule_by_id(&rule_id)
+        .await
+        .map_err(ApiError::Internal)?
+        .unwrap();
 
     Ok(Json(AutomationRuleResponse::from(updated_rule)))
 }
@@ -405,12 +438,17 @@ pub async fn disable_automation_rule(
 
     // Verify rule exists
     let rule = state
-        .db
+        .automation_service
         .get_automation_rule_by_id(&rule_id)
-        .await?
+        .await
+        .map_err(ApiError::Internal)?
         .ok_or_else(|| ApiError::NotFound("Automation rule not found".to_string()))?;
 
-    state.db.disable_automation_rule(&rule_id).await?;
+    state
+        .automation_service
+        .disable_automation_rule(&rule_id)
+        .await
+        .map_err(ApiError::Internal)?;
 
     tracing::info!(
         "Automation rule '{}' ({}) disabled by user {}",
@@ -420,7 +458,12 @@ pub async fn disable_automation_rule(
     );
 
     // Fetch updated rule
-    let updated_rule = state.db.get_automation_rule_by_id(&rule_id).await?.unwrap();
+    let updated_rule = state
+        .automation_service
+        .get_automation_rule_by_id(&rule_id)
+        .await
+        .map_err(ApiError::Internal)?
+        .unwrap();
 
     Ok(Json(AutomationRuleResponse::from(updated_rule)))
 }
@@ -439,7 +482,7 @@ pub async fn list_evaluation_logs(
     }
 
     let logs = state
-        .db
+        .automation_service
         .get_rule_evaluation_logs(
             filters.rule_id.as_deref(),
             filters.conversation_id.as_deref(),
@@ -447,7 +490,8 @@ pub async fn list_evaluation_logs(
             filters.limit,
             filters.offset,
         )
-        .await?;
+        .await
+        .map_err(ApiError::Internal)?;
 
     let responses: Vec<EvaluationLogResponse> = logs.into_iter().map(Into::into).collect();
     let total = responses.len();

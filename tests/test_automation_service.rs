@@ -1,3 +1,4 @@
+use oxidesk::automation_rules::AutomationRulesRepository;
 mod helpers;
 
 use helpers::*;
@@ -71,15 +72,17 @@ async fn test_rule_matching_by_event_type() {
 async fn test_priority_based_rule_ordering() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
+    let repo: &dyn AutomationRulesRepository = db;
 
-    // Create rules with different priorities
-    let rule1 = AutomationRule {
+    let event_type = "conversation.created";
+
+    let create_rule = |name: &str, priority: i32, value: &str| AutomationRule {
         id: uuid::Uuid::new_v4().to_string(),
-        name: "Low Priority Rule".to_string(),
+        name: name.to_string(),
         description: None,
         enabled: true,
         rule_type: RuleType::ConversationUpdate,
-        event_subscription: vec!["conversation.created".to_string()],
+        event_subscription: vec![event_type.to_string()],
         condition: RuleCondition::Simple {
             attribute: "status".to_string(),
             comparison: ComparisonOperator::Equals,
@@ -87,38 +90,21 @@ async fn test_priority_based_rule_ordering() {
         },
         action: RuleAction {
             action_type: ActionType::SetPriority,
-            parameters: HashMap::from([("priority".to_string(), json!("Low"))]),
+            parameters: HashMap::from([("priority".to_string(), json!(value))]),
         },
-        priority: 500, // Lower priority (higher number)
+        priority,
         created_at: chrono::Utc::now().to_rfc3339(),
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
 
-    let rule2 = AutomationRule {
-        id: uuid::Uuid::new_v4().to_string(),
-        name: "High Priority Rule".to_string(),
-        description: None,
-        enabled: true,
-        rule_type: RuleType::ConversationUpdate,
-        event_subscription: vec!["conversation.created".to_string()],
-        condition: RuleCondition::Simple {
-            attribute: "status".to_string(),
-            comparison: ComparisonOperator::Equals,
-            value: json!("open"),
-        },
-        action: RuleAction {
-            action_type: ActionType::SetPriority,
-            parameters: HashMap::from([("priority".to_string(), json!("High"))]),
-        },
-        priority: 100, // Higher priority (lower number)
-        created_at: chrono::Utc::now().to_rfc3339(),
-        updated_at: chrono::Utc::now().to_rfc3339(),
-    };
+    // Higher numeric value (500) = Lower priority (executes first)
+    let low_priority_rule = create_rule("Low Priority Rule", 500, "Low");
+    // Lower numeric value (100) = Higher priority (executes last, wins)
+    let high_priority_rule = create_rule("High Priority Rule", 100, "High");
 
-    db.create_automation_rule(&rule1).await.unwrap();
-    db.create_automation_rule(&rule2).await.unwrap();
+    repo.create_automation_rule(&low_priority_rule).await.unwrap();
+    repo.create_automation_rule(&high_priority_rule).await.unwrap();
 
-    // Create conversation
     let contact = create_test_contact(db, "test@example.com").await;
     let conversation = create_test_conversation(
         db,
@@ -126,25 +112,18 @@ async fn test_priority_based_rule_ordering() {
         contact.id.clone(),
         ConversationStatus::Open,
     )
-    .await;
+        .await;
 
-    // Create automation service
-    let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+    let service = AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
 
-    // Handle event - high priority rule should execute last and win
     let result = service
-        .handle_conversation_event("conversation.created", &conversation, "test-user")
+        .handle_conversation_event(event_type, &conversation, "test-user")
         .await;
 
     assert!(result.is_ok(), "Event handling should succeed");
 
-    // Verify high priority rule's action was applied (executed last)
-    let updated = db
-        .get_conversation_by_id(&conversation.id)
-        .await
-        .unwrap()
-        .unwrap();
+    // Verify high priority rule won (was applied last)
+    let updated = db.get_conversation_by_id(&conversation.id).await.unwrap().unwrap();
     assert_eq!(updated.priority, Some(Priority::High));
 
     teardown_test_db(test_db).await;

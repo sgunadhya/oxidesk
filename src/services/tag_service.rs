@@ -5,6 +5,7 @@ use crate::{
 };
 
 /// Service for tag management operations (admin)
+#[derive(Clone)]
 pub struct TagService {
     db: Database,
 }

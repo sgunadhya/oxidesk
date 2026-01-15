@@ -82,8 +82,7 @@ pub async fn update_webhook(
         ));
     }
 
-    let service = WebhookService::new(state.db.clone());
-    let webhook = service.update_webhook(&id, request).await?;
+    let webhook = state.webhook_service.update_webhook(&id, request).await?;
 
     Ok(Json(webhook))
 }
@@ -101,8 +100,7 @@ pub async fn delete_webhook(
         ));
     }
 
-    let service = WebhookService::new(state.db.clone());
-    service.delete_webhook(&id).await?;
+    state.webhook_service.delete_webhook(&id).await?;
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
@@ -120,8 +118,7 @@ pub async fn toggle_webhook_status(
         ));
     }
 
-    let service = WebhookService::new(state.db.clone());
-    let webhook = service.toggle_webhook_status(&id).await?;
+    let webhook = state.webhook_service.toggle_webhook_status(&id).await?;
 
     Ok(Json(webhook))
 }
@@ -140,8 +137,7 @@ pub async fn test_webhook(
     }
 
     // Get webhook
-    let service = WebhookService::new(state.db.clone());
-    let webhook = service.get_webhook(&id).await?;
+    let webhook = state.webhook_service.get_webhook(&id).await?;
 
     // Create test payload
     let test_payload = serde_json::json!({

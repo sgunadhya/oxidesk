@@ -6,6 +6,7 @@ use crate::{
 };
 
 /// Service for conversation tagging operations (agents)
+#[derive(Clone)]
 pub struct ConversationTagService {
     db: Database,
     event_bus: EventBus,

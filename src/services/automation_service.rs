@@ -1,3 +1,4 @@
+use crate::database::automation_rules::AutomationRulesRepository;
 use crate::database::Database;
 use crate::models::{
     ActionResult, AutomationRule, ConditionResult, Conversation, RuleEvaluationLog,
@@ -24,6 +25,7 @@ impl Default for AutomationConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct AutomationService {
     db: Arc<Database>,
     condition_evaluator: ConditionEvaluator,
@@ -221,5 +223,76 @@ impl AutomationService {
         );
 
         Ok(())
+    }
+
+    // Proxy methods for AutomationRulesRepository
+
+    pub async fn create_automation_rule(&self, rule: &AutomationRule) -> Result<(), String> {
+        self.db
+            .create_automation_rule(rule)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn get_automation_rule_by_id(
+        &self,
+        id: &str,
+    ) -> Result<Option<AutomationRule>, String> {
+        self.db
+            .get_automation_rule_by_id(id)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn get_automation_rules(
+        &self,
+        enabled_only: bool,
+    ) -> Result<Vec<AutomationRule>, String> {
+        self.db
+            .get_automation_rules(enabled_only)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn update_automation_rule(&self, rule: &AutomationRule) -> Result<(), String> {
+        self.db
+            .update_automation_rule(rule)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn delete_automation_rule(&self, id: &str) -> Result<(), String> {
+        self.db
+            .delete_automation_rule(id)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn enable_automation_rule(&self, id: &str) -> Result<(), String> {
+        self.db
+            .enable_automation_rule(id)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn disable_automation_rule(&self, id: &str) -> Result<(), String> {
+        self.db
+            .disable_automation_rule(id)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn get_rule_evaluation_logs(
+        &self,
+        rule_id: Option<&str>,
+        conversation_id: Option<&str>,
+        event_type: Option<&str>,
+        limit: Option<i32>,
+        offset: Option<i32>,
+    ) -> Result<Vec<RuleEvaluationLog>, String> {
+        self.db
+            .get_rule_evaluation_logs(rule_id, conversation_id, event_type, limit, offset)
+            .await
+            .map_err(|e| e.to_string())
     }
 }

@@ -96,7 +96,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sla_service = oxidesk::SlaService::new(db.clone(), event_bus_arc);
     tracing::info!("SLA service initialized");
 
-    // Initialize connection manager
+    // Initialize automation service
+    let automation_service = oxidesk::AutomationService::new(
+        std::sync::Arc::new(db.clone()),
+        AutomationConfig::default(),
+    );
+    // Initialize webhook service
+    let webhook_service = oxidesk::WebhookService::new(
+        db.clone(),
+    );
+    let conversation_tag_service = ConversationTagService::new(db.clone(), event_bus.clone());
+    let tag_service = TagService::new(db.clone());
+    tracing::info!("Automation service initialized");
     let connection_manager: Arc<dyn ConnectionManager> = Arc::new(InMemoryConnectionManager::new());
     tracing::info!("Connection manager initialized");
 
@@ -116,8 +127,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         notification_service: notification_service.clone(),
         availability_service: availability_service.clone(),
         sla_service: sla_service.clone(),
+        automation_service: automation_service.clone(),
+        conversation_tag_service: conversation_tag_service,
         connection_manager,
         rate_limiter,
+        webhook_service: webhook_service.clone(),
+        tag_service: tag_service,
     };
 
     // Start session cleanup background task

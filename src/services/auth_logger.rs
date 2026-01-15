@@ -1,3 +1,4 @@
+use crate::database::auth_event::AuthEventRepository;
 use crate::{
     database::Database,
     models::{AuthEvent, AuthEventType, AuthMethod},

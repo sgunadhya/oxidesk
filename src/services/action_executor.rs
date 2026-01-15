@@ -38,6 +38,7 @@ impl From<ApiError> for ActionError {
     }
 }
 
+#[derive(Clone)]
 pub struct ActionExecutor {
     db: Arc<Database>,
     timeout: Duration,

@@ -2,8 +2,8 @@ use sqlx::{any::AnyPoolOptions, AnyPool};
 
 pub mod agents;
 pub mod api_key;
-mod auth_event;
-mod automation_rules;
+pub mod auth_event;
+pub mod automation_rules;
 mod contacts;
 mod conversations;
 mod email;
