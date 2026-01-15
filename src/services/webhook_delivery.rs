@@ -26,6 +26,7 @@ impl WebhookDeliveryService {
     /// Makes an HTTP POST request to the webhook URL with:
     /// - JSON payload in request body
     /// - X-Webhook-Signature header with HMAC-SHA256 signature
+    /// - X-Webhook-Event header with event type
     /// - Content-Type: application/json
     ///
     /// Returns (success, http_status_code, error_message)
@@ -34,14 +35,16 @@ impl WebhookDeliveryService {
         url: &str,
         payload: &str,
         signature: &str,
+        event_type: &str,
     ) -> (bool, Option<u16>, Option<String>) {
-        info!("Attempting webhook delivery to {}", url);
+        info!("Attempting webhook delivery to {} for event {}", url, event_type);
 
         match self
             .http_client
             .post(url)
             .header("Content-Type", "application/json")
             .header("X-Webhook-Signature", signature)
+            .header("X-Webhook-Event", event_type)
             .body(payload.to_string())
             .send()
             .await
@@ -102,7 +105,7 @@ impl WebhookDeliveryService {
 
         // Attempt delivery
         let (success, http_status, error_msg) = self
-            .attempt_delivery(&webhook.url, &delivery.payload, &delivery.signature)
+            .attempt_delivery(&webhook.url, &delivery.payload, &delivery.signature, &delivery.event_type)
             .await;
 
         // Update delivery record based on result

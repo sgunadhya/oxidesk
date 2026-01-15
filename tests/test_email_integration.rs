@@ -26,7 +26,7 @@ async fn setup_email_test_db() -> (helpers::test_db::TestDatabase, String, Strin
     // Create test inbox with required channel_type and unique name
     let inbox_id = Uuid::new_v4().to_string();
     let inbox_name = format!("Test Inbox {}", Uuid::new_v4());
-    let result = sqlx::query(
+    let _result = sqlx::query(
         "INSERT INTO inboxes (id, name, channel_type, created_at, updated_at) VALUES (?, ?, 'email', datetime('now'), datetime('now'))",
     )
     .bind(&inbox_id)

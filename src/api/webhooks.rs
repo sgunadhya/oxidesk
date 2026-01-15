@@ -163,7 +163,7 @@ pub async fn test_webhook(
     let delivery_service = crate::services::WebhookDeliveryService::new(state.db.clone());
     let start = std::time::Instant::now();
     let (success, http_status, error) = delivery_service
-        .attempt_delivery(&webhook.url, &payload_str, &signature)
+        .attempt_delivery(&webhook.url, &payload_str, &signature, "webhook.test")
         .await;
     let response_time_ms = start.elapsed().as_millis() as i64;
 
