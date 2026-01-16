@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 use oxidesk::api::middleware::AuthenticatedUser;
 use oxidesk::database::Database;
+use oxidesk::domain::ports::agent_repository::AgentRepository;
+use oxidesk::domain::ports::user_repository::UserRepository;
 use oxidesk::models::{Agent, Role, User, UserType};
 use sqlx::Row;
 use uuid::Uuid;

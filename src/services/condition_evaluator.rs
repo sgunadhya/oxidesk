@@ -23,6 +23,7 @@ impl std::fmt::Display for ConditionError {
 
 impl std::error::Error for ConditionError {}
 
+#[derive(Clone)]
 pub struct ConditionEvaluator {
     timeout: Duration,
 }

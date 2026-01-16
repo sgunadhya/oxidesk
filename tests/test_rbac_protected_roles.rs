@@ -4,9 +4,11 @@ mod helpers;
 use helpers::rbac_helpers::{create_auth_user_with_roles, create_test_role, ensure_admin_role};
 use helpers::*;
 use oxidesk::api::middleware::ApiError;
+use oxidesk::domain::ports::role_repository::RoleRepository;
 use oxidesk::models::{CreateRoleRequest, UpdateRoleRequest};
-use oxidesk::services::role_service;
+use oxidesk::services::RoleService;
 use sqlx::Row;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_admin_role_is_protected() {
@@ -41,7 +43,10 @@ async fn test_cannot_update_admin_role() {
         permissions: Some(vec!["conversations:read_assigned".to_string()]),
     };
 
-    let result = role_service::update_role(db, &admin, &admin_role.id, update_request).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let result = role_service
+        .update_role(&admin, &admin_role.id, update_request)
+        .await;
 
     // Should fail with Forbidden error
     assert!(result.is_err(), "Should not be able to update Admin role");
@@ -67,7 +72,8 @@ async fn test_cannot_delete_admin_role() {
             .await;
 
     // Attempt to delete Admin role
-    let result = role_service::delete(db, &admin, &admin_role.id).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let result = role_service.delete(&admin, &admin_role.id).await;
 
     // Should fail with Forbidden error
     assert!(result.is_err(), "Should not be able to delete Admin role");
@@ -139,7 +145,10 @@ async fn test_non_protected_role_can_be_updated() {
         permissions: Some(vec!["permission:updated".to_string()]),
     };
 
-    let result = role_service::update_role(db, &admin, &test_role.id, update_request).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let result = role_service
+        .update_role(&admin, &test_role.id, update_request)
+        .await;
 
     assert!(
         result.is_ok(),
@@ -170,7 +179,8 @@ async fn test_non_protected_role_can_be_deleted() {
         create_auth_user_with_roles(db, "admin@example.com", "Admin", vec![admin_role]).await;
 
     // Delete test role (should succeed)
-    let result = role_service::delete(db, &admin, &test_role.id).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let result = role_service.delete(&admin, &test_role.id).await;
 
     assert!(
         result.is_ok(),
@@ -210,7 +220,8 @@ async fn test_cannot_delete_role_with_assigned_users() {
         create_auth_user_with_roles(db, "admin@example.com", "Admin", vec![admin_role]).await;
 
     // Attempt to delete role (should fail because user is assigned)
-    let result = role_service::delete(db, &admin, &test_role.id).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let result = role_service.delete(&admin, &test_role.id).await;
 
     assert!(
         result.is_err(),
@@ -256,8 +267,10 @@ async fn test_admin_role_permissions_remain_intact() {
         permissions: Some(vec!["limited:permission".to_string()]),
     };
 
-    let _result =
-        role_service::update_role(db, &admin, &admin_role_before.id, update_request).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let _result = role_service
+        .update_role(&admin, &admin_role_before.id, update_request)
+        .await;
 
     // Verify Admin role permissions are unchanged by re-fetching
     let admin_role_after = ensure_admin_role(db).await;
@@ -287,7 +300,8 @@ async fn test_create_new_role_with_same_name_as_admin_fails() {
         permissions: vec!["test:permission".to_string()],
     };
 
-    let result = role_service::create_role(db, &admin, create_request).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let result = role_service.create_role(&admin, create_request).await;
 
     // Should fail with Conflict error (duplicate name)
     assert!(

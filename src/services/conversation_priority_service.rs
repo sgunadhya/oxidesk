@@ -3,15 +3,17 @@ use crate::api::middleware::{ApiError, ApiResult};
 use crate::database::Database;
 use crate::events::{EventBus, SystemEvent};
 use crate::models::Conversation;
+use std::sync::Arc;
 
 /// Service for managing conversation priorities
-pub struct ConversationPriorityService<'a> {
-    db: &'a Database,
+pub struct ConversationPriorityService {
+    db: Database,
+    event_bus: Option<Arc<dyn EventBus>>,
 }
 
-impl<'a> ConversationPriorityService<'a> {
-    pub fn new(db: &'a Database) -> Self {
-        Self { db }
+impl ConversationPriorityService {
+    pub fn new(db: Database, event_bus: Option<Arc<dyn EventBus>>) -> Self {
+        Self { db, event_bus }
     }
 
     /// Update conversation priority
@@ -46,7 +48,7 @@ impl<'a> ConversationPriorityService<'a> {
         conversation_id: &str,
         new_priority: Option<crate::models::Priority>,
         updated_by: &str,
-        event_bus: Option<&EventBus>,
+        // event_bus: Option<&EventBus>, // Removed
     ) -> ApiResult<Conversation> {
         // Get current conversation to check existing priority
         let current = self
@@ -85,8 +87,9 @@ impl<'a> ConversationPriorityService<'a> {
             })?;
 
         // Trigger automation rules only if priority actually changed
+        // Trigger automation rules only if priority actually changed
         if priority_changed {
-            if let Some(bus) = event_bus {
+            if let Some(bus) = &self.event_bus {
                 let event = SystemEvent::ConversationPriorityChanged {
                     conversation_id: conversation_id.to_string(),
                     previous_priority: previous_priority.map(|p| p.to_string()),
@@ -96,7 +99,9 @@ impl<'a> ConversationPriorityService<'a> {
                 };
 
                 // Don't block on automation failure (graceful degradation)
-                bus.publish(event);
+                if let Err(e) = bus.publish(event) {
+                    tracing::warn!("Failed to publish priority change event: {}", e);
+                }
             }
 
             tracing::info!(

@@ -1,59 +1,63 @@
 use crate::{
     database::Database,
     events::{EventBus, SystemEvent},
-    models::{Webhook, WebhookDelivery},
+    models::Webhook,
+    services::job_queue::TaskQueue,
     services::webhook_signature::sign_payload,
 };
 use serde_json::json;
-use tokio::sync::broadcast;
+use std::sync::Arc;
+use tokio_stream::StreamExt;
 use tracing::{error, info, warn};
 
 /// Worker that subscribes to EventBus and queues webhook deliveries
+#[derive(Clone)]
 pub struct WebhookWorker {
     db: Database,
-    event_bus: EventBus,
+    event_bus: Arc<dyn EventBus>,
+    task_queue: Arc<dyn TaskQueue>,
 }
 
 impl WebhookWorker {
     /// Create a new webhook worker
-    pub fn new(db: Database, event_bus: EventBus) -> Self {
-        Self { db, event_bus }
+    pub fn new(db: Database, event_bus: Arc<dyn EventBus>, task_queue: Arc<dyn TaskQueue>) -> Self {
+        Self {
+            db,
+            event_bus,
+            task_queue,
+        }
     }
 
     /// Start the webhook worker in the background
     ///
     /// This method spawns a long-lived tokio task that subscribes to the EventBus
     /// and processes events as they arrive. For each event, it:
-    /// 1. Determines the event type string (e.g., "conversation.created")
-    /// 2. Finds all active webhooks subscribed to this event type
+    /// 1. Finds all active webhooks subscribed to that event type
+    /// 2. Checks if each webhook matches the event
     /// 3. Constructs a JSON payload with event data
     /// 4. Signs the payload with HMAC-SHA256 using the webhook's secret
-    /// 5. Creates a delivery record in the database
+    /// 5. Enqueues a delivery job in the TaskQueue
     ///
     /// The worker runs until the server shuts down.
-    pub fn start(self) {
+    pub fn start(&self) {
+        let consumer = self.clone();
         tokio::spawn(async move {
-            info!("Starting webhook worker");
+            info!("Webhook worker started listening for events");
+            let mut stream = consumer.event_bus.subscribe();
 
-            let mut rx = self.event_bus.subscribe();
-
-            loop {
-                match rx.recv().await {
+            while let Some(result) = stream.next().await {
+                match result {
                     Ok(event) => {
-                        if let Err(e) = self.handle_event(event).await {
-                            error!("Failed to handle webhook event: {}", e);
+                        if let Err(e) = consumer.handle_event(event).await {
+                            error!("Error handling event in webhook worker: {}", e);
                         }
                     }
-                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                        warn!("Webhook worker lagged, skipped {} events", skipped);
-                        // Continue processing - this just means we fell behind
-                    }
-                    Err(broadcast::error::RecvError::Closed) => {
-                        error!("EventBus closed, stopping webhook worker");
-                        break;
+                    Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(n)) => {
+                        warn!("Webhook worker lagged behind by {} events", n);
                     }
                 }
             }
+            error!("EventBus closed, stopping webhook worker");
         });
     }
 
@@ -321,23 +325,25 @@ impl WebhookWorker {
         // Sign the payload with webhook secret
         let signature = sign_payload(&payload_str, &webhook.secret);
 
-        // Create delivery record
-        let delivery = WebhookDelivery::new(
-            webhook.id.clone(),
-            event_type.to_string(),
-            payload_str,
-            signature,
-        );
-
-        // Save to database
-        self.db
-            .create_webhook_delivery(&delivery)
+        // Enqueue job instead of creating DB record
+        self.task_queue
+            .enqueue(
+                "deliver_webhook",
+                json!({
+                    "webhook_id": webhook.id,
+                    "url": webhook.url,
+                    "event_type": event_type,
+                    "body": payload_str,
+                    "signature": signature
+                }),
+                3,
+            )
             .await
-            .map_err(|e| format!("Failed to create delivery: {}", e))?;
+            .map_err(|e| format!("Failed to enqueue delivery job: {}", e))?;
 
         info!(
-            "Queued webhook delivery {} for webhook {} (event: {})",
-            delivery.id, webhook.id, event_type
+            "Queued webhook delivery job for webhook {} (event: {})",
+            webhook.id, event_type
         );
 
         Ok(())
@@ -348,12 +354,16 @@ impl WebhookWorker {
 mod tests {
     use super::*;
     use crate::models::conversation::ConversationStatus;
+    use crate::services::SqliteTaskQueue;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_construct_payload_conversation_created() {
         let db = Database::connect("sqlite::memory:").await.unwrap();
-        let event_bus = EventBus::default();
-        let worker = WebhookWorker::new(db, event_bus);
+        db.run_migrations().await.unwrap(); // Ensure tables are created for SqliteTaskQueue
+        let event_bus = Arc::new(crate::events::LocalEventBus::default());
+        let task_queue = Arc::new(SqliteTaskQueue::new(db.clone()));
+        let worker = WebhookWorker::new(db, event_bus, task_queue);
 
         let event = SystemEvent::ConversationCreated {
             conversation_id: "conv-123".to_string(),
@@ -376,8 +386,10 @@ mod tests {
     #[tokio::test]
     async fn test_construct_payload_message_sent() {
         let db = Database::connect("sqlite::memory:").await.unwrap();
-        let event_bus = EventBus::default();
-        let worker = WebhookWorker::new(db, event_bus);
+        db.run_migrations().await.unwrap();
+        let event_bus = Arc::new(crate::events::LocalEventBus::default());
+        let task_queue = Arc::new(SqliteTaskQueue::new(db.clone()));
+        let worker = WebhookWorker::new(db, event_bus, task_queue);
 
         let event = SystemEvent::MessageSent {
             message_id: "msg-123".to_string(),

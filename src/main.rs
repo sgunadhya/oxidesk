@@ -1,5 +1,7 @@
 // Modules are imported from the library crate
 
+use oxidesk::domain::ports::agent_repository::AgentRepository;
+use oxidesk::domain::ports::user_repository::UserRepository;
 use oxidesk::{
     api::{
         self,
@@ -13,6 +15,7 @@ use oxidesk::{
         *,
     },
     web,
+    EventBus,
 };
 // Re-import initialize_admin for main.rs usage if it was public in lib?
 // initialize_admin was defined in main.rs (line 305). Wait.
@@ -25,6 +28,7 @@ use axum::{
     Router,
 };
 use std::sync::Arc;
+use tokio_stream::StreamExt;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -59,6 +63,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Connected to database successfully");
 
+    let attachment_storage_path =
+        std::env::var("ATTACHMENT_STORAGE_PATH").unwrap_or_else(|_| "./attachments".to_string());
+    std::fs::create_dir_all(&attachment_storage_path)?;
+
     // Run migrations
     db.run_migrations().await.map_err(|e| {
         tracing::error!("Failed to run migrations: {}", e);
@@ -74,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     // Initialize event bus for automation rules
-    let event_bus = oxidesk::EventBus::new(100);
+    let event_bus = std::sync::Arc::new(oxidesk::LocalEventBus::new(100));
     tracing::info!("Event bus initialized with capacity 100");
 
     // Initialize delivery service with mock provider
@@ -91,11 +99,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Availability service initialized");
 
     // Initialize SLA service
-    let event_bus_arc = std::sync::Arc::new(tokio::sync::RwLock::new(event_bus.clone()));
-    let sla_service = oxidesk::SlaService::new(db.clone(), event_bus_arc);
+    let sla_service = oxidesk::SlaService::new(db.clone(), event_bus.clone());
     tracing::info!("SLA service initialized");
 
-    // Initialize connection manager
+    // Initialize automation service
+    let automation_service = std::sync::Arc::new(oxidesk::AutomationService::new(
+        std::sync::Arc::new(db.clone()),
+        AutomationConfig::default(),
+    ));
+    // Initialize webhook service
+    let webhook_service = oxidesk::WebhookService::new(db.clone());
+    let conversation_tag_service = ConversationTagService::new(db.clone(), event_bus.clone());
+    use oxidesk::domain::ports::agent_repository::AgentRepository;
+    use oxidesk::domain::ports::inbox_repository::InboxRepository;
+    use oxidesk::domain::ports::role_repository::RoleRepository;
+    use oxidesk::domain::ports::user_repository::UserRepository;
+
+    let inbox_service = InboxService::new(Arc::new(db.clone()) as Arc<dyn InboxRepository>);
+    let tag_service = TagService::new(db.clone());
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    tracing::info!("Automation service initialized");
     let connection_manager: Arc<dyn ConnectionManager> = Arc::new(InMemoryConnectionManager::new());
     tracing::info!("Connection manager initialized");
 
@@ -103,8 +126,138 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rate_limiter = oxidesk::services::AuthRateLimiter::new();
     tracing::info!("Rate limiter initialized (5 attempts per 15 minutes)");
 
-    // Clone rate limiter for background task before moving into state
-    let cleanup_rate_limiter = rate_limiter.clone();
+    // Initialize TaskQueue
+    let task_queue = std::sync::Arc::new(oxidesk::services::SqliteTaskQueue::new(db.clone()));
+
+    // Enqueue initial maintenance jobs
+    let q_init = task_queue.clone();
+    tokio::spawn(async move {
+        if let Err(e) = q_init
+            .enqueue("cleanup_sessions", serde_json::Value::Null, 3)
+            .await
+        {
+            tracing::error!("Failed to enqueue initial cleanup_sessions: {}", e);
+        }
+        if let Err(e) = q_init
+            .enqueue("cleanup_rate_limiter", serde_json::Value::Null, 3)
+            .await
+        {
+            tracing::error!("Failed to enqueue initial cleanup_rate_limiter: {}", e);
+        }
+        if let Err(e) = q_init
+            .enqueue("cleanup_oidc_states", serde_json::Value::Null, 3)
+            .await
+        {
+            tracing::error!("Failed to enqueue initial cleanup_oidc_states: {}", e);
+        }
+        if let Err(e) = q_init
+            .enqueue("check_availability", serde_json::Value::Null, 3)
+            .await
+        {
+            tracing::error!("Failed to enqueue initial check_availability: {}", e);
+        }
+        if let Err(e) = q_init
+            .enqueue("check_sla_breaches", serde_json::Value::Null, 3)
+            .await
+        {
+            tracing::error!("Failed to enqueue initial check_sla_breaches: {}", e);
+        }
+    });
+
+    // Initialize Session Service
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    tracing::info!("Session service initialized");
+
+    // Start JobProcessor
+    let job_processor = oxidesk::services::JobProcessor::new(
+        task_queue.clone(),
+        db.clone(),
+        rate_limiter.clone(),
+        availability_service.clone(),
+        sla_service.clone(),
+        session_service.clone(),
+    );
+    tokio::spawn(async move {
+        job_processor.start().await;
+    });
+
+    // Initialize Agent Service
+    let agent_service = oxidesk::services::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service.clone(),
+    );
+    tracing::info!("Agent service initialized");
+
+    // Initialize User Service
+    let user_service = oxidesk::services::UserService::new(std::sync::Arc::new(db.clone()));
+    tracing::info!("User service initialized");
+
+    // Initialize Contact Service
+    let contact_service = oxidesk::services::ContactService::new(
+        std::sync::Arc::new(db.clone()),
+        std::sync::Arc::new(db.clone()),
+    );
+    tracing::info!("Contact service initialized");
+
+    // Initialize Repositories
+    let email_repo: std::sync::Arc<dyn oxidesk::domain::ports::email_repository::EmailRepository> =
+        std::sync::Arc::new(db.clone());
+    let attachment_repo: std::sync::Arc<
+        dyn oxidesk::domain::ports::attachment_repository::AttachmentRepository,
+    > = std::sync::Arc::new(db.clone());
+    let conversation_repo: std::sync::Arc<
+        dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+    > = std::sync::Arc::new(db.clone());
+    let message_repo: std::sync::Arc<
+        dyn oxidesk::domain::ports::message_repository::MessageRepository,
+    > = std::sync::Arc::new(db.clone());
+    let user_repo: std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository> =
+        std::sync::Arc::new(db.clone());
+    let contact_repo: std::sync::Arc<
+        dyn oxidesk::domain::ports::contact_repository::ContactRepository,
+    > = std::sync::Arc::new(db.clone());
+    let team_repo: std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository> =
+        std::sync::Arc::new(db.clone());
+
+    // Initialize OIDC service
+    let oidc_repository = oxidesk::domain::ports::oidc_repository::OidcRepository::new(db.clone());
+    let oidc_service = oxidesk::services::OidcService::new(oidc_repository);
+    tracing::info!("OIDC service initialized");
+
+    // Initialize Services (wrapping repositories)
+    let email_service = oxidesk::services::EmailService::new(email_repo.clone());
+    let attachment_service = oxidesk::services::AttachmentService::new(
+        attachment_repo.clone(),
+        std::path::PathBuf::from(&attachment_storage_path),
+    );
+
+    let conversation_service = oxidesk::services::ConversationService::new(
+        conversation_repo.clone(),
+        user_repo.clone(),
+        contact_repo.clone(),
+        team_repo.clone(),
+    );
+
+    let message_service = oxidesk::services::MessageService::with_all_services(
+        message_repo.clone(),
+        conversation_repo.clone(),
+        delivery_service.clone(),
+        event_bus.clone(),
+        connection_manager.clone(),
+    );
+
+    // Initialize MacroService
+    let macro_repo = oxidesk::domain::ports::macro_repository::MacroRepository::new(db.clone());
+    let macro_service = oxidesk::services::MacroService::new(macro_repo);
+
+    // Initialize AuthService
+    let auth_service = oxidesk::services::AuthService::new(
+        Arc::new(db.clone()) as Arc<dyn UserRepository>,
+        Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+        Arc::new(db.clone()) as Arc<dyn RoleRepository>,
+        session_service.clone(),
+    );
 
     // Create application state
     let state = AppState {
@@ -115,57 +268,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         notification_service: notification_service.clone(),
         availability_service: availability_service.clone(),
         sla_service: sla_service.clone(),
+        automation_service: automation_service.clone(),
+        conversation_tag_service: conversation_tag_service.clone(),
         connection_manager,
         rate_limiter,
+        webhook_service: webhook_service.clone(),
+        tag_service: tag_service.clone(),
+        agent_service: agent_service.clone(),
+        user_service: user_service.clone(),
+        contact_service: contact_service.clone(),
+        session_service: session_service.clone(),
+        email_service,
+        attachment_service,
+        conversation_service,
+        message_service,
+        oidc_service,
+        macro_service,
+        role_service,
+        inbox_service,
+        auth_service,
     };
-
-    // Start session cleanup background task
-    let cleanup_db = db.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600)); // Run every hour
-        loop {
-            interval.tick().await;
-            match cleanup_db.cleanup_expired_sessions().await {
-                Ok(count) => {
-                    if count > 0 {
-                        tracing::info!("Cleaned up {} expired sessions", count);
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to cleanup expired sessions: {}", e);
-                }
-            }
-        }
-    });
-
-    // Start rate limiter cleanup background task
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(900)); // Run every 15 minutes
-        loop {
-            interval.tick().await;
-            cleanup_rate_limiter.cleanup().await;
-            tracing::debug!("Rate limiter cleanup completed");
-        }
-    });
-
-    // Start OIDC state cleanup background task
-    let oidc_cleanup_db = db.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(600)); // Run every 10 minutes
-        loop {
-            interval.tick().await;
-            match oidc_cleanup_db.cleanup_expired_oidc_states().await {
-                Ok(count) => {
-                    if count > 0 {
-                        tracing::debug!("Cleaned up {} expired OIDC states", count);
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to cleanup expired OIDC states: {}", e);
-                }
-            }
-        }
-    });
 
     // Start automation listener background task
     let automation_event_bus = event_bus.clone();
@@ -182,8 +304,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut receiver = automation_event_bus.subscribe();
         tracing::info!("Automation listener started");
 
-        loop {
-            match receiver.recv().await {
+        while let Some(msg) = receiver.next().await {
+            match msg {
                 Ok(event) => {
                     tracing::debug!("Automation listener received event: {:?}", event);
 
@@ -666,8 +788,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(e) => {
                     tracing::error!("Automation listener error: {}", e);
-                    // Sleep briefly before retrying
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                    // Sleep briefly before retrying - Not needed for stream
                 }
             }
         }
@@ -676,83 +797,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start webhook worker background task
     let webhook_db = db.clone();
     let webhook_event_bus = event_bus.clone();
-    let webhook_worker = oxidesk::WebhookWorker::new(webhook_db, webhook_event_bus);
+    // Pass task_queue to WebhookWorker
+    let webhook_worker =
+        oxidesk::WebhookWorker::new(webhook_db, webhook_event_bus, task_queue.clone());
     webhook_worker.start();
     tracing::info!("Webhook worker started");
-
-    // Start webhook delivery processor background task
-    let delivery_db = db.clone();
-    let delivery_service = oxidesk::WebhookDeliveryService::new(delivery_db);
-    delivery_service.start_processor();
-    tracing::info!("Webhook delivery processor started");
-
-    // Start availability inactivity checker background task
-    let availability_service_inactivity = availability_service.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
-        tracing::info!("Availability inactivity checker started (every 30 seconds)");
-
-        loop {
-            interval.tick().await;
-
-            match availability_service_inactivity
-                .check_inactivity_timeouts()
-                .await
-            {
-                Ok(affected) => {
-                    if !affected.is_empty() {
-                        tracing::info!(
-                            "Inactivity check: {} agents transitioned to away",
-                            affected.len()
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to check inactivity timeouts: {}", e);
-                }
-            }
-        }
-    });
-
-    // Start availability max idle checker background task
-    let availability_service_idle = availability_service.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
-        tracing::info!("Availability max idle checker started (every 30 seconds)");
-
-        loop {
-            interval.tick().await;
-
-            match availability_service_idle.check_max_idle_thresholds().await {
-                Ok(affected) => {
-                    if !affected.is_empty() {
-                        tracing::info!(
-                            "Max idle check: {} agents reassigned and went offline",
-                            affected.len()
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to check max idle thresholds: {}", e);
-                }
-            }
-        }
-    });
-
-    // Start SLA breach detection background task
-    let breach_sla_service = sla_service.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
-        tracing::info!("SLA breach detection started (every 60 seconds)");
-
-        loop {
-            interval.tick().await;
-
-            if let Err(e) = breach_sla_service.check_breaches().await {
-                tracing::error!("Failed to check SLA breaches: {}", e);
-            }
-        }
-    });
 
     // Build protected routes (require authentication)
     let protected = Router::new()
@@ -1157,11 +1206,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Spawn email polling worker (Feature 021)
-    let attachment_storage_path =
-        std::env::var("ATTACHMENT_STORAGE_PATH").unwrap_or_else(|_| "./attachments".to_string());
-    std::fs::create_dir_all(&attachment_storage_path)?;
-    let _email_polling_handle =
-        oxidesk::spawn_email_polling_worker(db.clone(), attachment_storage_path);
+
+    // Create contact service factory
+    let db_for_factory = db.clone();
+    let contact_service_factory = move || {
+        oxidesk::services::ContactService::new(
+            std::sync::Arc::new(db_for_factory.clone()),
+            std::sync::Arc::new(db_for_factory.clone()),
+        )
+    };
+
+    let _email_polling_handle = oxidesk::spawn_email_polling_worker(
+        email_repo,
+        conversation_repo,
+        message_repo,
+        attachment_repo,
+        contact_service_factory,
+        attachment_storage_path,
+    );
     tracing::info!("Email polling worker started");
 
     // Start server
@@ -1212,13 +1274,13 @@ async fn web_auth_middleware(
     };
 
     // Validate session
-    let session = match state.db.get_session_by_token(&token).await {
+    let session = match state.session_service.get_session_by_token(&token).await {
         Ok(Some(s)) => s,
         _ => return Err(axum::response::Redirect::to("/login")),
     };
 
     if session.is_expired() {
-        let _ = state.db.delete_session(&token).await;
+        let _ = state.session_service.delete_session(&token).await;
         return Err(axum::response::Redirect::to("/login"));
     }
 

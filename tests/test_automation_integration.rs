@@ -10,6 +10,7 @@ use oxidesk::{
 };
 use serde_json::json;
 use std::collections::HashMap;
+use oxidesk::automation_rules::AutomationRulesRepository;
 
 /// User Story 1: Event-Triggered Rule Execution
 /// When a conversation is tagged with "Bug", automatically set priority to "High"

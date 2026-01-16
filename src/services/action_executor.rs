@@ -1,5 +1,7 @@
 use crate::api::middleware::ApiError;
 use crate::database::Database;
+use crate::domain::ports::agent_repository::AgentRepository;
+use crate::domain::ports::user_repository::UserRepository;
 use crate::models::{ActionType, ConversationStatus, RuleAction};
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,6 +39,7 @@ impl From<ApiError> for ActionError {
     }
 }
 
+#[derive(Clone)]
 pub struct ActionExecutor {
     db: Arc<Database>,
     timeout: Duration,
@@ -180,7 +183,11 @@ impl ActionExecutor {
 
         // Assign conversation to user
         self.db
-            .assign_conversation_to_user(conversation_id, user_id, assigned_by)
+            .assign_conversation_to_user(
+                conversation_id,
+                Some(user_id.to_string()),
+                Some(assigned_by.to_string()),
+            )
             .await?;
 
         tracing::info!(
@@ -214,7 +221,11 @@ impl ActionExecutor {
 
         // Assign conversation to team
         self.db
-            .assign_conversation_to_team(conversation_id, team_id, assigned_by)
+            .assign_conversation_to_team(
+                conversation_id,
+                Some(team_id.to_string()),
+                Some(assigned_by.to_string()),
+            )
             .await?;
 
         tracing::info!(

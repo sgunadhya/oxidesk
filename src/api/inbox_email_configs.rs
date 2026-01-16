@@ -71,7 +71,11 @@ pub async fn create_inbox_email_config(
     Json(request): Json<CreateInboxEmailConfigRequest>,
 ) -> ApiResult<(StatusCode, Json<InboxEmailConfigResponse>)> {
     // Check if config already exists
-    if let Some(_) = state.db.get_inbox_email_config(&inbox_id).await? {
+    if let Some(_) = state
+        .email_service
+        .get_inbox_email_config(&inbox_id)
+        .await?
+    {
         return Err(ApiError::BadRequest(
             "Email configuration already exists for this inbox".to_string(),
         ));
@@ -93,7 +97,10 @@ pub async fn create_inbox_email_config(
         request.poll_interval_seconds,
     );
 
-    let created = state.db.create_inbox_email_config(&config).await?;
+    let created = state
+        .email_service
+        .create_inbox_email_config(&config)
+        .await?;
 
     Ok((
         StatusCode::CREATED,
@@ -108,7 +115,7 @@ pub async fn get_inbox_email_config(
     Path(inbox_id): Path<String>,
 ) -> ApiResult<Json<InboxEmailConfigResponse>> {
     let config = state
-        .db
+        .email_service
         .get_inbox_email_config(&inbox_id)
         .await?
         .ok_or_else(|| {
@@ -130,7 +137,7 @@ pub async fn update_inbox_email_config(
 ) -> ApiResult<Json<InboxEmailConfigResponse>> {
     // Get existing config
     let existing = state
-        .db
+        .email_service
         .get_inbox_email_config(&inbox_id)
         .await?
         .ok_or_else(|| {
@@ -142,7 +149,7 @@ pub async fn update_inbox_email_config(
 
     // Update configuration
     let updated = state
-        .db
+        .email_service
         .update_inbox_email_config(&existing.id, &request)
         .await?;
 
@@ -157,7 +164,7 @@ pub async fn delete_inbox_email_config(
 ) -> ApiResult<StatusCode> {
     // Get existing config
     let existing = state
-        .db
+        .email_service
         .get_inbox_email_config(&inbox_id)
         .await?
         .ok_or_else(|| {
@@ -168,7 +175,10 @@ pub async fn delete_inbox_email_config(
         })?;
 
     // Delete configuration
-    state.db.delete_inbox_email_config(&existing.id).await?;
+    state
+        .email_service
+        .delete_inbox_email_config(&existing.id)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

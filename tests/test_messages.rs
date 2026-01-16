@@ -2,6 +2,10 @@ mod helpers;
 
 use helpers::test_db::setup_test_db;
 use oxidesk::database::Database;
+use oxidesk::domain::ports::conversation_repository::ConversationRepository;
+use oxidesk::domain::ports::email_repository::EmailRepository;
+use oxidesk::domain::ports::message_repository::MessageRepository;
+use oxidesk::domain::ports::user_repository::UserRepository;
 use oxidesk::models::{
     Conversation, ConversationStatus, IncomingMessageRequest, Message, MessageStatus, MessageType,
     SendMessageRequest, User, UserType,
@@ -22,6 +26,8 @@ async fn create_test_user(db: &Database, email: &str, user_type: UserType) -> Us
         updated_at: time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap(),
+        deleted_at: None,
+        deleted_by: None,
     };
 
     db.create_user(&user).await.unwrap();
@@ -44,6 +50,8 @@ async fn create_test_user(db: &Database, email: &str, user_type: UserType) -> Us
             user_type: user.user_type,
             created_at: user.created_at,
             updated_at: user.updated_at,
+            deleted_at: user.deleted_at,
+            deleted_by: user.deleted_by,
         };
     }
 
@@ -413,7 +421,10 @@ async fn test_delivery_service_integration() {
     let delivery_service = DeliveryService::new(db.clone(), provider);
 
     // Create message service WITH delivery
-    let _message_service = MessageService::with_delivery(db.clone(), delivery_service);
+    // Create message service WITH delivery
+    let repo = std::sync::Arc::new(db.clone());
+    let _message_service =
+        MessageService::with_delivery(repo.clone(), repo.clone(), delivery_service);
 
     // This test verifies the wiring exists and compiles correctly
     // In production, messages will be queued when send_message is called
@@ -442,6 +453,8 @@ async fn test_immutability_violation() {
         updated_at: time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap(),
+        deleted_at: None,
+        deleted_by: None,
     };
     db.create_user(&user).await.unwrap();
 
@@ -534,7 +547,9 @@ async fn test_e2e_incoming_message_flow() {
     let conversation_id = "test_conv_456";
 
     // Create message service
-    let _message_service = MessageService::new(db.clone());
+    // Create message service
+    let repo = std::sync::Arc::new(db.clone());
+    let _message_service = MessageService::new(repo.clone(), repo.clone());
 
     // Simulate incoming message via webhook
     let request = IncomingMessageRequest {
@@ -568,7 +583,10 @@ async fn test_e2e_outgoing_message_flow() {
     let delivery_service = DeliveryService::new(db.clone(), provider);
 
     // Create message service with delivery
-    let _message_service = MessageService::with_delivery(db.clone(), delivery_service);
+    // Create message service with delivery
+    let repo = std::sync::Arc::new(db.clone());
+    let _message_service =
+        MessageService::with_delivery(repo.clone(), repo.clone(), delivery_service);
 
     // Agent sends message
     let agent_id = "agent_123";

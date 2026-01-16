@@ -1,26 +1,41 @@
-/// Email Delivery Provider (Feature 021)
-///
-/// Implements MessageDeliveryProvider trait for sending agent replies via SMTP.
-/// Formats emails with reference numbers and sends using lettre.
-use crate::database::Database;
+use crate::domain::ports::agent_repository::AgentRepository;
+use crate::domain::ports::contact_repository::ContactRepository;
+use crate::domain::ports::conversation_repository::ConversationRepository;
+use crate::domain::ports::email_repository::EmailRepository;
 use crate::models::Message;
 use crate::services::{EmailParserService, MessageDeliveryProvider};
 use lettre::{
     message::header::ContentType, transport::smtp::authentication::Credentials,
     Message as LettreMessage, SmtpTransport, Transport,
 };
+use std::sync::Arc;
+/// Email Delivery Provider (Feature 021)
+///
+/// Implements MessageDeliveryProvider trait for sending agent replies via SMTP.
+/// Formats emails with reference numbers and sends using lettre.
 
 /// Email delivery provider for sending agent replies via SMTP
 pub struct EmailDeliveryProvider {
-    db: Database,
+    conversation_repo: Arc<dyn ConversationRepository>,
+    contact_repo: Arc<dyn ContactRepository>,
+    email_repo: Arc<dyn EmailRepository>,
+    agent_repo: Arc<dyn AgentRepository>,
     parser: EmailParserService,
 }
 
 impl EmailDeliveryProvider {
     /// Create a new email delivery provider
-    pub fn new(db: Database) -> Self {
+    pub fn new(
+        conversation_repo: Arc<dyn ConversationRepository>,
+        contact_repo: Arc<dyn ContactRepository>,
+        email_repo: Arc<dyn EmailRepository>,
+        agent_repo: Arc<dyn AgentRepository>,
+    ) -> Self {
         Self {
-            db,
+            conversation_repo,
+            contact_repo,
+            email_repo,
+            agent_repo,
             parser: EmailParserService::new(),
         }
     }
@@ -78,7 +93,7 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
     async fn deliver(&self, message: &Message) -> Result<(), String> {
         // Load conversation to get reference number and subject
         let conversation = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(&message.conversation_id)
             .await
             .map_err(|e| format!("Failed to load conversation: {}", e))?
@@ -86,8 +101,8 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
 
         // Get contact's email address from contact channels
         let contact_channels = self
-            .db
-            .get_contact_channels(&conversation.contact_id)
+            .contact_repo
+            .find_contact_channels(&conversation.contact_id)
             .await
             .map_err(|e| format!("Failed to load contact channels: {}", e))?;
 
@@ -103,7 +118,7 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
 
         // Get inbox email configuration
         let email_config = self
-            .db
+            .email_repo
             .get_inbox_email_config(&conversation.inbox_id)
             .await
             .map_err(|e| format!("Failed to load inbox email config: {}", e))?
@@ -116,8 +131,8 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
 
         // Get agent name if message is from agent
         let agent_name = self
-            .db
-            .get_agent_by_id(&message.author_id)
+            .agent_repo
+            .get_agent_by_user_id(&message.author_id)
             .await
             .ok()
             .flatten()
@@ -202,11 +217,18 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::Database;
 
     #[tokio::test]
     async fn test_format_subject_with_reference() {
         let db = Database::new_mock();
-        let provider = EmailDeliveryProvider::new(db);
+        let conversation_repo = Arc::new(db.clone()) as Arc<dyn ConversationRepository>;
+        let contact_repo = Arc::new(db.clone()) as Arc<dyn ContactRepository>;
+        let email_repo = Arc::new(db.clone()) as Arc<dyn EmailRepository>;
+        let agent_repo = Arc::new(db.clone()) as Arc<dyn AgentRepository>;
+
+        let provider =
+            EmailDeliveryProvider::new(conversation_repo, contact_repo, email_repo, agent_repo);
 
         let subject = provider.format_subject_with_reference(Some("Support Request"), 123);
         assert!(subject.contains("[#123]"));
@@ -216,7 +238,13 @@ mod tests {
     #[tokio::test]
     async fn test_render_email_body() {
         let db = Database::new_mock();
-        let provider = EmailDeliveryProvider::new(db);
+        let conversation_repo = Arc::new(db.clone()) as Arc<dyn ConversationRepository>;
+        let contact_repo = Arc::new(db.clone()) as Arc<dyn ContactRepository>;
+        let email_repo = Arc::new(db.clone()) as Arc<dyn EmailRepository>;
+        let agent_repo = Arc::new(db.clone()) as Arc<dyn AgentRepository>;
+
+        let provider =
+            EmailDeliveryProvider::new(conversation_repo, contact_repo, email_repo, agent_repo);
 
         let (body, _is_html) =
             provider.render_email_body("Thanks for your inquiry!", Some("John Doe"));
@@ -228,7 +256,13 @@ mod tests {
     #[tokio::test]
     async fn test_render_email_body_no_agent() {
         let db = Database::new_mock();
-        let provider = EmailDeliveryProvider::new(db);
+        let conversation_repo = Arc::new(db.clone()) as Arc<dyn ConversationRepository>;
+        let contact_repo = Arc::new(db.clone()) as Arc<dyn ContactRepository>;
+        let email_repo = Arc::new(db.clone()) as Arc<dyn EmailRepository>;
+        let agent_repo = Arc::new(db.clone()) as Arc<dyn AgentRepository>;
+
+        let provider =
+            EmailDeliveryProvider::new(conversation_repo, contact_repo, email_repo, agent_repo);
 
         let (body, _is_html) = provider.render_email_body("Thanks for your inquiry!", None);
         assert!(body.contains("Thanks for your inquiry!"));

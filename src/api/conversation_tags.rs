@@ -6,7 +6,6 @@ use axum::{
 use crate::{
     api::middleware::{ApiResult, AppState, AuthenticatedUser},
     models::*,
-    services::ConversationTagService,
 };
 
 /// GET /api/conversations/:id/tags - Get conversation tags
@@ -15,10 +14,11 @@ pub async fn get_conversation_tags(
     axum::Extension(_user): axum::Extension<AuthenticatedUser>,
     Path(conversation_id): Path<String>,
 ) -> ApiResult<Json<ConversationTagsResponse>> {
-    let tag_service = ConversationTagService::new(state.db.clone(), state.event_bus.clone());
-
     // Get tags
-    let tags = tag_service.get_conversation_tags(&conversation_id).await?;
+    let tags = state
+        .conversation_tag_service
+        .get_conversation_tags(&conversation_id)
+        .await?;
 
     let tag_responses: Vec<TagResponse> = tags.into_iter().map(TagResponse::from).collect();
 
@@ -35,13 +35,15 @@ pub async fn add_tags_to_conversation(
     Path(conversation_id): Path<String>,
     Json(req): Json<AddTagsRequest>,
 ) -> ApiResult<Json<ConversationTagsResponse>> {
-    let tag_service = ConversationTagService::new(state.db.clone(), state.event_bus.clone());
-
     // Get user permissions
-    let permissions = tag_service.get_user_permissions(&user.user.id).await?;
+    let permissions = state
+        .conversation_tag_service
+        .get_user_permissions(&user.user.id)
+        .await?;
 
     // Add tags
-    let tags = tag_service
+    let tags = state
+        .conversation_tag_service
         .add_tags(&conversation_id, req, &user.user.id, &permissions)
         .await?;
 
@@ -59,13 +61,15 @@ pub async fn remove_tag_from_conversation(
     axum::Extension(user): axum::Extension<AuthenticatedUser>,
     Path((conversation_id, tag_id)): Path<(String, String)>,
 ) -> ApiResult<Json<ConversationTagsResponse>> {
-    let tag_service = ConversationTagService::new(state.db.clone(), state.event_bus.clone());
-
     // Get user permissions
-    let permissions = tag_service.get_user_permissions(&user.user.id).await?;
+    let permissions = state
+        .conversation_tag_service
+        .get_user_permissions(&user.user.id)
+        .await?;
 
     // Remove tag
-    let tags = tag_service
+    let tags = state
+        .conversation_tag_service
         .remove_tag(&conversation_id, &tag_id, &user.user.id, &permissions)
         .await?;
 
@@ -84,13 +88,15 @@ pub async fn replace_conversation_tags(
     Path(conversation_id): Path<String>,
     Json(req): Json<ReplaceTagsRequest>,
 ) -> ApiResult<Json<ConversationTagsResponse>> {
-    let tag_service = ConversationTagService::new(state.db.clone(), state.event_bus.clone());
-
     // Get user permissions
-    let permissions = tag_service.get_user_permissions(&user.user.id).await?;
+    let permissions = state
+        .conversation_tag_service
+        .get_user_permissions(&user.user.id)
+        .await?;
 
     // Replace tags
-    let tags = tag_service
+    let tags = state
+        .conversation_tag_service
         .replace_tags(&conversation_id, req, &user.user.id, &permissions)
         .await?;
 

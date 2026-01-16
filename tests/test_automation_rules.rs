@@ -6,6 +6,7 @@ use oxidesk::models::{
 };
 use serde_json::json;
 use std::collections::HashMap;
+use oxidesk::automation_rules::AutomationRulesRepository;
 
 #[tokio::test]
 async fn test_create_automation_rule() {

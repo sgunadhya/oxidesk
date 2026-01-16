@@ -4,15 +4,17 @@ use crate::{
     events::{EventBus, SystemEvent},
     models::*,
 };
+use std::sync::Arc;
 
 /// Service for conversation tagging operations (agents)
+#[derive(Clone)]
 pub struct ConversationTagService {
     db: Database,
-    event_bus: EventBus,
+    event_bus: Arc<dyn EventBus>,
 }
 
 impl ConversationTagService {
-    pub fn new(db: Database, event_bus: EventBus) -> Self {
+    pub fn new(db: Database, event_bus: Arc<dyn EventBus>) -> Self {
         Self { db, event_bus }
     }
 

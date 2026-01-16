@@ -67,9 +67,13 @@ async fn test_conversation_assignment_flow() {
     .await;
 
     // Step 1: Assign conversation to agent
-    db.assign_conversation_to_user(&conversation.id, &agent.user_id, &agent.user_id)
-        .await
-        .expect("Failed to assign conversation");
+    db.assign_conversation_to_user(
+        &conversation.id,
+        Some(agent.user_id.clone()),
+        Some(agent.user_id.clone()),
+    )
+    .await
+    .expect("Failed to assign conversation");
 
     // Verify assignment
     let updated_conv = db
@@ -136,9 +140,13 @@ async fn test_team_assignment_and_inbox() {
         .expect("Failed to add team member");
 
     // Assign conversation to team
-    db.assign_conversation_to_team(&conversation.id, &team.id, &agent.user_id)
-        .await
-        .expect("Failed to assign to team");
+    db.assign_conversation_to_team(
+        &conversation.id,
+        Some(team.id.clone()),
+        Some(agent.user_id.clone()),
+    )
+    .await
+    .expect("Failed to assign to team");
 
     // Verify assignment
     let updated_conv = db
@@ -184,12 +192,20 @@ async fn test_auto_unassignment_on_away() {
     .await;
 
     // Assign both conversations to agent
-    db.assign_conversation_to_user(&open_conv.id, &agent.user_id, &agent.user_id)
-        .await
-        .expect("Failed to assign open conversation");
-    db.assign_conversation_to_user(&resolved_conv.id, &agent.user_id, &agent.user_id)
-        .await
-        .expect("Failed to assign resolved conversation");
+    db.assign_conversation_to_user(
+        &open_conv.id,
+        Some(agent.user_id.clone()),
+        Some(agent.user_id.clone()),
+    )
+    .await
+    .expect("Failed to assign open conversation");
+    db.assign_conversation_to_user(
+        &resolved_conv.id,
+        Some(agent.user_id.clone()),
+        Some(agent.user_id.clone()),
+    )
+    .await
+    .expect("Failed to assign resolved conversation");
 
     // Change agent availability to away_and_reassigning
     db.update_agent_availability(&agent.user_id, AgentAvailability::AwayAndReassigning)
@@ -241,9 +257,13 @@ async fn test_assignment_history_audit_trail() {
     .await;
 
     // Assignment 1: Agent 1 self-assigns
-    db.assign_conversation_to_user(&conversation.id, &agent1.user_id, &agent1.user_id)
-        .await
-        .expect("Failed to assign conversation");
+    db.assign_conversation_to_user(
+        &conversation.id,
+        Some(agent1.user_id.clone()),
+        Some(agent1.user_id.clone()),
+    )
+    .await
+    .expect("Failed to assign conversation");
 
     let history1 = oxidesk::models::AssignmentHistory::new(
         conversation.id.clone(),
@@ -256,9 +276,13 @@ async fn test_assignment_history_audit_trail() {
         .expect("Failed to record history");
 
     // Assignment 2: Agent 1 assigns to Agent 2
-    db.assign_conversation_to_user(&conversation.id, &agent2.user_id, &agent1.user_id)
-        .await
-        .expect("Failed to assign conversation");
+    db.assign_conversation_to_user(
+        &conversation.id,
+        Some(agent2.user_id.clone()),
+        Some(agent1.user_id.clone()),
+    )
+    .await
+    .expect("Failed to assign conversation");
 
     let history2 = oxidesk::models::AssignmentHistory::new(
         conversation.id.clone(),
@@ -304,7 +328,7 @@ async fn test_conversation_participants() {
     .await;
 
     // Add agent as participant
-    db.add_conversation_participant(&conversation.id, &agent.user_id, Some(&agent.user_id))
+    db.add_conversation_participant(&conversation.id, &agent.user_id, "assignee")
         .await
         .expect("Failed to add participant");
 
@@ -315,11 +339,11 @@ async fn test_conversation_participants() {
         .expect("Failed to get participants");
 
     assert_eq!(participants.len(), 1);
-    assert_eq!(participants[0].id, agent.user_id);
+    assert_eq!(participants[0], agent.user_id);
 
     // Try to add duplicate participant (should fail)
     let result = db
-        .add_conversation_participant(&conversation.id, &agent.user_id, Some(&agent.user_id))
+        .add_conversation_participant(&conversation.id, &agent.user_id, "assignee")
         .await;
     assert!(result.is_err()); // Should fail due to unique constraint
 }

@@ -1,0 +1,13 @@
+pub mod agent_repository;
+pub mod attachment_repository;
+pub mod contact_repository;
+pub mod conversation_repository;
+pub mod email_repository;
+pub mod inbox_repository;
+pub mod macro_repository;
+pub mod message_repository;
+pub mod oidc_repository;
+pub mod role_repository;
+pub mod session_repository;
+pub mod team_repository;
+pub mod user_repository;

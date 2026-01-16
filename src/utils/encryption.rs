@@ -3,7 +3,7 @@
 /// Provides AES-256-GCM encryption for sensitive fields like IMAP/SMTP passwords.
 /// Uses a master encryption key from environment variable.
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
 };
 use base64::Engine;

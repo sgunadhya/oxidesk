@@ -3,12 +3,13 @@ use crate::models::{
     ConversationListResponse, ConversationStatus, CreateConversation, PaginationMetadata,
     UpdatePriorityRequest, UpdateStatusRequest,
 };
-use crate::services::conversation_service;
+
 use axum::{
     extract::{Path, Query, State},
     response::IntoResponse,
     Json,
 };
+
 use serde::Deserialize;
 
 /// Create a new conversation
@@ -29,13 +30,10 @@ pub async fn create_conversation(
         ));
     }
 
-    let conversation = conversation_service::create_conversation(
-        &state.db,
-        &auth_user,
-        request,
-        Some(&state.sla_service),
-    )
-    .await?;
+    let conversation = state
+        .conversation_service
+        .create_conversation(&auth_user, request, Some(&state.sla_service))
+        .await?;
     Ok(Json(conversation))
 }
 
@@ -69,7 +67,7 @@ pub async fn update_conversation_status(
     // If user has update_assigned (not update_all), verify assignment
     if !has_update_all && has_update_assigned {
         // Get the conversation first to check assignment
-        let conversation = conversation_service::get_conversation(&state.db, &id).await?;
+        let conversation = state.conversation_service.get_conversation(&id).await?;
 
         let is_assigned = conversation.assigned_user_id.as_ref() == Some(&auth_user.user.id) || {
             if let Some(team_id) = &conversation.assigned_team_id {
@@ -89,14 +87,15 @@ pub async fn update_conversation_status(
         }
     }
 
-    let conversation = conversation_service::update_conversation_status(
-        &state.db,
-        &id,
-        request,
-        Some(auth_user.user.id.clone()),
-        Some(&state.event_bus),
-    )
-    .await?;
+    let conversation = state
+        .conversation_service
+        .update_conversation_status(
+            &id,
+            request,
+            Some(auth_user.user.id.clone()),
+            Some(state.event_bus.as_ref()),
+        )
+        .await?;
     Ok(Json(conversation))
 }
 
@@ -126,7 +125,7 @@ pub async fn get_conversation(
     }
 
     // Get conversation
-    let conversation = conversation_service::get_conversation(&state.db, &id).await?;
+    let conversation = state.conversation_service.get_conversation(&id).await?;
 
     // If user has read_assigned (not read_all), verify assignment
     if !has_read_all && has_read_assigned {
@@ -158,7 +157,18 @@ pub async fn get_conversation_by_reference(
     Path(reference_number): Path<i64>,
 ) -> ApiResult<impl IntoResponse> {
     let conversation =
-        conversation_service::get_conversation_by_reference(&state.db, reference_number).await?;
+        // Note: get_conversation_by_reference was a static helper, need to check if it's on service or we need to add it?
+        // It was line 183 in conversation_service.rs. I did NOT add it to the struct ConversationService in Step 3808 rewrite!
+        // I need to add it to ConversationService struct first or access via repository if exposed?
+        // Wait, I missed adding `get_conversation_by_reference` to ConversationService.
+        // It's used here. I should check if I added it.
+        // Step 3812 logs show I added create, update, assign, list, get_by_id. missed get_by_reference.
+        // I should fix ConversationService first to include it, or call repo directly?
+        // Repo `ConversationRepository` has `get_conversation_by_reference`.
+        // I can add it to service or let handler call repo if exposed?
+        // But repo is inside service.
+        // I should add it to ConversationService.
+        state.conversation_service.get_conversation_by_reference(reference_number).await?;
     Ok(Json(conversation))
 }
 
@@ -208,8 +218,27 @@ pub async fn list_conversations(
 
     // If user has read_all, show all conversations
     if has_read_all {
-        let response = conversation_service::list_conversations(
-            &state.db,
+        let response = state
+            .conversation_service
+            .list_conversations(
+                &auth_user,
+                params.page,
+                params.per_page,
+                params.status,
+                params.inbox_id,
+                params.contact_id,
+            )
+            .await?;
+        return Ok(Json(response));
+    }
+
+    // If user has read_assigned, filter by assignment
+    // For now, we'll use the existing list but filter the results
+    // A more efficient approach would be to add a database query filter
+    let all_response = state
+        .conversation_service
+        .list_conversations(
+            &auth_user,
             params.page,
             params.per_page,
             params.status,
@@ -217,21 +246,6 @@ pub async fn list_conversations(
             params.contact_id,
         )
         .await?;
-        return Ok(Json(response));
-    }
-
-    // If user has read_assigned, filter by assignment
-    // For now, we'll use the existing list but filter the results
-    // A more efficient approach would be to add a database query filter
-    let all_response = conversation_service::list_conversations(
-        &state.db,
-        params.page,
-        params.per_page,
-        params.status,
-        params.inbox_id,
-        params.contact_id,
-    )
-    .await?;
 
     // Get user's teams
     let user_teams = state.db.get_user_teams(&auth_user.user.id).await?;
@@ -289,15 +303,13 @@ pub async fn update_conversation_priority(
 
     // Use the priority service to update the conversation
     let priority_service =
-        crate::services::conversation_priority_service::ConversationPriorityService::new(&state.db);
+        crate::services::conversation_priority_service::ConversationPriorityService::new(
+            state.db.clone(),
+            Some(state.event_bus.clone()),
+        );
 
     let updated = priority_service
-        .update_conversation_priority(
-            &id,
-            request.priority,
-            &auth_user.user.id,
-            Some(&state.event_bus),
-        )
+        .update_conversation_priority(&id, request.priority, &auth_user.user.id)
         .await?;
 
     Ok(Json(updated))

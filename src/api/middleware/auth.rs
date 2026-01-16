@@ -1,3 +1,4 @@
+use crate::domain::ports::agent_repository::AgentRepository;
 use crate::{
     api::middleware::error::ApiError, database::Database, models::*,
     services::connection_manager::ConnectionManager,
@@ -13,13 +14,30 @@ use std::sync::Arc;
 pub struct AppState {
     pub db: Database,
     pub session_duration_hours: i64,
-    pub event_bus: crate::events::EventBus,
+    pub event_bus: Arc<dyn crate::events::EventBus>,
     pub delivery_service: crate::services::DeliveryService,
     pub notification_service: crate::services::NotificationService,
     pub availability_service: crate::services::AvailabilityService,
     pub sla_service: crate::services::SlaService,
+    pub automation_service: Arc<crate::services::AutomationService>,
+    pub conversation_tag_service: crate::services::ConversationTagService,
     pub connection_manager: Arc<dyn ConnectionManager>,
     pub rate_limiter: crate::services::AuthRateLimiter,
+    pub webhook_service: crate::services::WebhookService,
+    pub tag_service: crate::services::TagService,
+    pub agent_service: crate::services::AgentService,
+    pub user_service: crate::services::UserService,
+    pub contact_service: crate::services::ContactService,
+    pub session_service: crate::services::SessionService,
+    pub oidc_service: crate::services::OidcService,
+    pub email_service: crate::services::EmailService,
+    pub attachment_service: crate::services::AttachmentService,
+    pub conversation_service: crate::services::ConversationService,
+    pub message_service: crate::services::MessageService,
+    pub macro_service: crate::services::MacroService,
+    pub role_service: crate::services::RoleService,
+    pub inbox_service: crate::services::InboxService,
+    pub auth_service: crate::services::AuthService,
 }
 
 /// Extract and validate session token from Authorization header
@@ -34,7 +52,7 @@ pub async fn require_auth(
         // Agent authenticated via API key
         // Get user and roles to build AuthenticatedUser
         let user = state
-            .db
+            .user_service
             .get_user_by_id(&agent.user_id)
             .await?
             .ok_or(ApiError::Unauthorized)?;
@@ -84,23 +102,26 @@ pub async fn require_auth(
 
     // Validate session
     let session = state
-        .db
+        .session_service
         .get_session_by_token(token)
         .await?
         .ok_or(ApiError::Unauthorized)?;
 
     if session.is_expired() {
         // Delete expired session
-        state.db.delete_session(token).await.ok();
+        state.session_service.delete_session(token).await.ok();
         return Err(ApiError::Unauthorized);
     }
 
     // Update last accessed timestamp for sliding window expiration
-    let _ = state.db.update_session_last_accessed(token).await;
+    let _ = state
+        .session_service
+        .update_session_last_accessed(token)
+        .await;
 
     // Get user
     let user = state
-        .db
+        .user_service
         .get_user_by_id(&session.user_id)
         .await?
         .ok_or(ApiError::Unauthorized)?;

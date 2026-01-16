@@ -1,18 +1,20 @@
+use crate::domain::ports::agent_repository::AgentRepository;
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
     events::{EventBus, SystemEvent},
     models::{ActivityEventType, AgentActivityLog, AgentAvailability},
 };
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AvailabilityService {
     db: Database,
-    event_bus: EventBus,
+    event_bus: Arc<dyn EventBus>,
 }
 
 impl AvailabilityService {
-    pub fn new(db: Database, event_bus: EventBus) -> Self {
+    pub fn new(db: Database, event_bus: Arc<dyn EventBus>) -> Self {
         Self { db, event_bus }
     }
 

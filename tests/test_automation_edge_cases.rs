@@ -10,6 +10,7 @@ use oxidesk::{
 };
 use serde_json::json;
 use std::collections::HashMap;
+use oxidesk::automation_rules::AutomationRulesRepository;
 
 /// Edge Case 1: Multiple rules matching same event (verify priority order)
 /// Higher priority (lower number) should execute last and "win"

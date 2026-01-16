@@ -1,224 +1,160 @@
 use crate::api::middleware::{ApiError, ApiResult, AuthenticatedUser};
-use crate::database::Database;
-use crate::models::*;
 
-/// List all roles
-pub async fn list_roles(db: &Database) -> ApiResult<Vec<RoleResponse>> {
-    let roles = db.list_roles().await?;
+use crate::domain::errors::DomainError;
+use crate::domain::services::role_service::RoleDomainService;
+use crate::models::{CreateRoleRequest, PermissionResponse, RoleResponse, UpdateRoleRequest};
 
-    let responses: Vec<RoleResponse> = roles
-        .iter()
-        .map(|r| RoleResponse {
-            id: r.id.clone(),
-            name: r.name.clone(),
-            description: r.description.clone(),
-            permissions: r.permissions.clone(),
-            is_protected: r.is_protected,
-            created_at: r.created_at.clone(),
-            updated_at: r.updated_at.clone(),
-        })
-        .collect();
-
-    Ok(responses)
+// Helper to map DomainError to ApiError
+impl From<DomainError> for ApiError {
+    fn from(error: DomainError) -> Self {
+        match error {
+            DomainError::NotFound(msg) => ApiError::NotFound(msg),
+            DomainError::ValidationError(msg) => ApiError::BadRequest(msg),
+            DomainError::Conflict(msg) => ApiError::Conflict(msg),
+            DomainError::Forbidden(msg) => ApiError::Forbidden(msg),
+            DomainError::Internal(msg) => ApiError::Internal(msg),
+        }
+    }
 }
 
-/// Get a role by ID
-pub async fn get_role(db: &Database, id: &str) -> ApiResult<RoleResponse> {
-    let role = db
-        .get_role_by_id(id)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("Role not found".to_string()))?;
+use crate::domain::ports::role_repository::RoleRepository;
+use std::sync::Arc;
 
-    Ok(RoleResponse {
-        id: role.id.clone(),
-        name: role.name.clone(),
-        description: role.description.clone(),
-        permissions: role.permissions.clone(),
-        is_protected: role.is_protected,
-        created_at: role.created_at.clone(),
-        updated_at: role.updated_at.clone(),
-    })
+#[derive(Clone)]
+pub struct RoleService {
+    domain_service: RoleDomainService,
 }
 
-/// Create a new role
-pub async fn create_role(
-    db: &Database,
-    auth_user: &AuthenticatedUser,
-    request: CreateRoleRequest,
-) -> ApiResult<RoleResponse> {
-    // Check permission (admin only)
-    if !auth_user.is_admin() {
-        return Err(ApiError::Forbidden(
-            "Requires 'roles:manage' permission".to_string(),
-        ));
-    }
-
-    // Validate name
-    if request.name.trim().is_empty() {
-        return Err(ApiError::BadRequest(
-            "Role name cannot be empty".to_string(),
-        ));
-    }
-
-    // Check if role name already exists
-    if let Some(_) = db.get_role_by_name(&request.name).await? {
-        return Err(ApiError::Conflict("Role name already exists".to_string()));
-    }
-
-    // Feature 023: Validate cardinality invariants
-    // FR-012, FR-014: Role must have at least one permission
-    if request.permissions.is_empty() {
-        return Err(ApiError::BadRequest(
-            "Role must have at least one permission".to_string(),
-        ));
-    }
-
-    // Validate permissions format (must match "resource:action" pattern)
-    for permission in &request.permissions {
-        if !permission.contains(':') {
-            return Err(ApiError::BadRequest(format!(
-                "Invalid permission format: '{}'. Must match pattern 'resource:action'",
-                permission
-            )));
+impl RoleService {
+    pub fn new(repository: Arc<dyn RoleRepository>) -> Self {
+        Self {
+            domain_service: RoleDomainService::new(repository),
         }
     }
 
-    // Create role with permissions
-    let role = Role::new(
-        request.name.clone(),
-        request.description.clone(),
-        request.permissions.clone(),
-    );
-    db.create_role(&role).await?;
+    /// List all roles
+    pub async fn list_roles(&self) -> ApiResult<Vec<RoleResponse>> {
+        let roles = self.domain_service.list_roles().await?;
 
-    Ok(RoleResponse {
-        id: role.id.clone(),
-        name: role.name.clone(),
-        description: role.description.clone(),
-        permissions: role.permissions.clone(),
-        is_protected: role.is_protected,
-        created_at: role.created_at.clone(),
-        updated_at: role.updated_at.clone(),
-    })
-}
+        let responses: Vec<RoleResponse> = roles
+            .into_iter()
+            .map(|r| RoleResponse {
+                id: r.id,
+                name: r.name,
+                description: r.description,
+                permissions: r.permissions,
+                is_protected: r.is_protected,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+            })
+            .collect();
 
-/// Update a role (T060-T061: Add is_protected check)
-pub async fn update_role(
-    db: &Database,
-    auth_user: &AuthenticatedUser,
-    id: &str,
-    request: UpdateRoleRequest,
-) -> ApiResult<RoleResponse> {
-    // Check permission (admin only)
-    if !auth_user.is_admin() {
-        return Err(ApiError::Forbidden(
-            "Requires 'roles:manage' permission".to_string(),
-        ));
+        Ok(responses)
     }
 
-    // Get existing role
-    let role = db
-        .get_role_by_id(id)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("Role not found".to_string()))?;
+    /// Get a role by ID
+    pub async fn get_role(&self, id: &str) -> ApiResult<RoleResponse> {
+        let role = self.domain_service.get_role(id).await?;
 
-    // T060-T061: Prevent updating protected roles (Admin role)
-    if role.is_protected {
-        return Err(ApiError::Forbidden("Cannot modify Admin role".to_string()));
+        Ok(RoleResponse {
+            id: role.id,
+            name: role.name,
+            description: role.description,
+            permissions: role.permissions,
+            is_protected: role.is_protected,
+            created_at: role.created_at,
+            updated_at: role.updated_at,
+        })
     }
 
-    // Feature 023: Validate cardinality invariants
-    // FR-013, FR-014: Role must have at least one permission
-    if let Some(ref perms) = request.permissions {
-        if perms.is_empty() {
-            return Err(ApiError::BadRequest(
-                "Role must have at least one permission".to_string(),
+    /// Create a new role
+    pub async fn create_role(
+        &self,
+        auth_user: &AuthenticatedUser,
+        request: CreateRoleRequest,
+    ) -> ApiResult<RoleResponse> {
+        // Authorization Check (Application Layer concern)
+        if !auth_user.is_admin() {
+            return Err(ApiError::Forbidden(
+                "Requires 'roles:manage' permission".to_string(),
             ));
         }
 
-        // Validate permissions format
-        for permission in perms {
-            if !permission.contains(':') {
-                return Err(ApiError::BadRequest(format!(
-                    "Invalid permission format: '{}'. Must match pattern 'resource:action'",
-                    permission
-                )));
-            }
-        }
-    }
+        let role = self
+            .domain_service
+            .create_role(request.name, request.description, request.permissions)
+            .await?;
 
-    // Update role
-    db.update_role(
-        id,
-        request.name.as_deref(),
-        request.description.as_deref(),
-        request.permissions.as_ref(),
-    )
-    .await?;
-
-    // Get updated role
-    let updated_role = db.get_role_by_id(id).await?.unwrap();
-
-    Ok(RoleResponse {
-        id: updated_role.id.clone(),
-        name: updated_role.name.clone(),
-        description: updated_role.description.clone(),
-        permissions: updated_role.permissions.clone(),
-        is_protected: updated_role.is_protected,
-        created_at: updated_role.created_at.clone(),
-        updated_at: updated_role.updated_at.clone(),
-    })
-}
-
-/// Delete a role (T062-T063: Add is_protected check)
-pub async fn delete(db: &Database, auth_user: &AuthenticatedUser, id: &str) -> ApiResult<()> {
-    // Check permission (admin only)
-    if !auth_user.is_admin() {
-        return Err(ApiError::Forbidden(
-            "Requires 'roles:manage' permission".to_string(),
-        ));
-    }
-
-    // Get role
-    let role = db
-        .get_role_by_id(id)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("Role not found".to_string()))?;
-
-    // T062-T063: Prevent deleting protected roles (Admin role)
-    if role.is_protected {
-        return Err(ApiError::Forbidden("Cannot modify Admin role".to_string()));
-    }
-
-    // Check if role is assigned to any users
-    let user_count = db.count_users_with_role(id).await?;
-    if user_count > 0 {
-        return Err(ApiError::Conflict(format!(
-            "Cannot delete role: {} agents currently assigned",
-            user_count
-        )));
-    }
-
-    // Delete role
-    db.delete_role(id).await?;
-
-    Ok(())
-}
-
-/// List all permissions
-pub async fn list_permissions(db: &Database) -> ApiResult<Vec<PermissionResponse>> {
-    let permissions = db.list_permissions().await?;
-
-    let responses: Vec<PermissionResponse> = permissions
-        .iter()
-        .map(|p| PermissionResponse {
-            id: p.id.clone(),
-            name: p.name.clone(),
-            description: p.description.clone(),
-            created_at: p.created_at.clone(),
-            updated_at: p.updated_at.clone(),
+        Ok(RoleResponse {
+            id: role.id,
+            name: role.name,
+            description: role.description,
+            permissions: role.permissions,
+            is_protected: role.is_protected,
+            created_at: role.created_at,
+            updated_at: role.updated_at,
         })
-        .collect();
+    }
 
-    Ok(responses)
+    /// Update a role
+    pub async fn update_role(
+        &self,
+        auth_user: &AuthenticatedUser,
+        id: &str,
+        request: UpdateRoleRequest,
+    ) -> ApiResult<RoleResponse> {
+        // Authorization Check
+        if !auth_user.is_admin() {
+            return Err(ApiError::Forbidden(
+                "Requires 'roles:manage' permission".to_string(),
+            ));
+        }
+
+        let role = self
+            .domain_service
+            .update_role(id, request.name, request.description, request.permissions)
+            .await?;
+
+        Ok(RoleResponse {
+            id: role.id,
+            name: role.name,
+            description: role.description,
+            permissions: role.permissions,
+            is_protected: role.is_protected,
+            created_at: role.created_at,
+            updated_at: role.updated_at,
+        })
+    }
+
+    /// Delete a role
+    pub async fn delete(&self, auth_user: &AuthenticatedUser, id: &str) -> ApiResult<()> {
+        // Authorization Check
+        if !auth_user.is_admin() {
+            return Err(ApiError::Forbidden(
+                "Requires 'roles:manage' permission".to_string(),
+            ));
+        }
+
+        self.domain_service.delete_role(id).await?;
+
+        Ok(())
+    }
+
+    /// List all permissions
+    pub async fn list_permissions(&self) -> ApiResult<Vec<PermissionResponse>> {
+        let permissions = self.domain_service.list_permissions().await?;
+
+        let responses: Vec<PermissionResponse> = permissions
+            .iter()
+            .map(|p| PermissionResponse {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                description: p.description.clone(),
+                created_at: p.created_at.clone(),
+                updated_at: p.updated_at.clone(),
+            })
+            .collect();
+
+        Ok(responses)
+    }
 }

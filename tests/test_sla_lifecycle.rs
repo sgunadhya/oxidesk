@@ -46,7 +46,7 @@ async fn test_apply_sla_on_team_assignment() {
     // Apply SLA (this would normally be called by assignment service)
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -88,7 +88,7 @@ async fn test_first_response_deadline_calculation() {
     // Apply SLA
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -144,7 +144,7 @@ async fn test_resolution_deadline_calculation() {
     // Apply SLA
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -199,7 +199,7 @@ async fn test_sla_events_created_as_pending() {
     // Apply SLA
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -310,7 +310,7 @@ async fn test_first_response_met_on_agent_message() {
     // Apply SLA
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -374,7 +374,7 @@ async fn test_first_response_met_timestamp_recorded() {
     // Apply SLA
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -443,7 +443,7 @@ async fn test_applied_sla_remains_pending_after_first_response() {
     // Apply SLA
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -502,7 +502,7 @@ async fn test_first_response_breach_detected() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -561,7 +561,7 @@ async fn test_first_response_breached_at_timestamp() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -630,7 +630,7 @@ async fn test_resolution_breach_detected() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -679,7 +679,7 @@ async fn test_resolution_breach_updates_applied_sla_status() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -728,7 +728,7 @@ async fn test_multiple_breaches_on_same_sla() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -782,7 +782,7 @@ async fn test_agent_reply_after_breach_stays_breached() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     sla_service
@@ -858,7 +858,7 @@ async fn test_resolution_met_on_conversation_resolved() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Apply SLA
@@ -921,7 +921,7 @@ async fn test_resolution_met_timestamp_recorded() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Apply SLA
@@ -995,7 +995,7 @@ async fn test_applied_sla_status_met_when_all_events_met() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Apply SLA
@@ -1082,7 +1082,7 @@ async fn test_next_response_event_created_on_contact_reply() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Apply SLA
@@ -1148,7 +1148,7 @@ async fn test_next_response_deadline_calculation() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Apply SLA
@@ -1222,7 +1222,7 @@ async fn test_only_one_pending_next_response_event() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Apply SLA
@@ -1322,7 +1322,7 @@ async fn test_next_response_met_on_agent_reply() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Apply SLA
@@ -1410,7 +1410,7 @@ async fn test_full_sla_lifecycle() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Step 1: Apply SLA to conversation
@@ -1509,7 +1509,7 @@ async fn test_sla_breach_workflow() {
 
     let sla_service = oxidesk::SlaService::new(
         db.clone(),
-        std::sync::Arc::new(tokio::sync::RwLock::new(oxidesk::EventBus::new(100))),
+        std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
     // Step 1: Apply SLA with timestamp in the past (5 minutes ago)

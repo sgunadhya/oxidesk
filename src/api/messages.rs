@@ -10,7 +10,6 @@ use serde::Deserialize;
 use crate::{
     api::middleware::{ApiResult, AppState, AuthenticatedUser},
     models::{IncomingMessageRequest, MessageListResponse, PaginationMetadata, SendMessageRequest},
-    services::MessageService,
 };
 
 /// Webhook endpoint for receiving incoming messages from external sources
@@ -24,13 +23,23 @@ pub async fn receive_incoming_message(
     // Feature 016: Automatic contact creation from from_header
     if request.contact_id.is_none() {
         if let Some(ref from_header) = request.from_header {
+            // Parse email and display name
+            let (first_name, last_name, email) =
+                crate::services::user_service::parse_email_display_name(from_header);
+
+            // Combine first_name and last_name
+            let full_name = match (first_name, last_name) {
+                (Some(first), Some(last)) => Some(format!("{} {}", first, last)),
+                (Some(first), None) => Some(first),
+                (None, Some(last)) => Some(last),
+                (None, None) => None,
+            };
+
             // Create or get existing contact
-            let contact_id = crate::services::user_service::create_contact_from_message(
-                &state.db,
-                &request.inbox_id,
-                from_header,
-            )
-            .await?;
+            let contact_id = state
+                .contact_service
+                .create_contact_from_message(&email, full_name.as_deref(), &request.inbox_id)
+                .await?;
 
             request.contact_id = Some(contact_id);
         } else {
@@ -40,9 +49,10 @@ pub async fn receive_incoming_message(
         }
     }
 
-    let message_service = MessageService::new(state.db.clone());
-
-    let message = message_service.create_incoming_message(request).await?;
+    let message = state
+        .message_service
+        .create_incoming_message(request)
+        .await?;
 
     Ok((StatusCode::CREATED, Json(message)))
 }
@@ -54,14 +64,8 @@ pub async fn send_message(
     Path(conversation_id): Path<String>,
     Json(request): Json<SendMessageRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    let message_service = MessageService::with_all_services(
-        state.db.clone(),
-        state.delivery_service.clone(),
-        state.event_bus.clone(),
-        state.connection_manager.clone(),
-    );
-
-    let message = message_service
+    let message = state
+        .message_service
         .send_message(conversation_id, auth_user.user.id, request)
         .await?;
 
@@ -74,9 +78,7 @@ pub async fn get_message(
     axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
     Path(message_id): Path<String>,
 ) -> ApiResult<impl IntoResponse> {
-    let message_service = MessageService::new(state.db.clone());
-
-    let message = message_service.get_message(&message_id).await?;
+    let message = state.message_service.get_message(&message_id).await?;
 
     Ok(Json(message))
 }
@@ -104,9 +106,8 @@ pub async fn list_messages(
     Path(conversation_id): Path<String>,
     Query(query): Query<MessageListQuery>,
 ) -> ApiResult<impl IntoResponse> {
-    let message_service = MessageService::new(state.db.clone());
-
-    let (messages, total) = message_service
+    let (messages, total) = state
+        .message_service
         .list_messages(&conversation_id, query.page, query.per_page)
         .await?;
 

@@ -82,8 +82,7 @@ pub async fn update_webhook(
         ));
     }
 
-    let service = WebhookService::new(state.db.clone());
-    let webhook = service.update_webhook(&id, request).await?;
+    let webhook = state.webhook_service.update_webhook(&id, request).await?;
 
     Ok(Json(webhook))
 }
@@ -101,8 +100,7 @@ pub async fn delete_webhook(
         ));
     }
 
-    let service = WebhookService::new(state.db.clone());
-    service.delete_webhook(&id).await?;
+    state.webhook_service.delete_webhook(&id).await?;
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
@@ -120,8 +118,7 @@ pub async fn toggle_webhook_status(
         ));
     }
 
-    let service = WebhookService::new(state.db.clone());
-    let webhook = service.toggle_webhook_status(&id).await?;
+    let webhook = state.webhook_service.toggle_webhook_status(&id).await?;
 
     Ok(Json(webhook))
 }
@@ -139,9 +136,12 @@ pub async fn test_webhook(
         ));
     }
 
-    // Get webhook
-    let service = WebhookService::new(state.db.clone());
-    let webhook = service.get_webhook(&id).await?;
+    // Get webhook (full model with secret)
+    let webhook = state
+        .db
+        .get_webhook_by_id(&id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound(format!("Webhook not found: {}", id)))?;
 
     // Create test payload
     let test_payload = serde_json::json!({
@@ -157,19 +157,45 @@ pub async fn test_webhook(
         .map_err(|e| ApiError::Internal(format!("Failed to serialize payload: {}", e)))?;
 
     // Sign the payload
-    let signature = crate::services::webhook_signature::sign_payload(&payload_str, &webhook.id);
+    let signature = crate::services::webhook_signature::sign_payload(&payload_str, &webhook.secret);
 
-    // Attempt delivery
-    let delivery_service = crate::services::WebhookDeliveryService::new(state.db.clone());
+    // Attempt delivery using reqwest directly
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| ApiError::Internal(format!("Failed to build HTTP client: {}", e)))?;
+
     let start = std::time::Instant::now();
-    let (success, http_status, error) = delivery_service
-        .attempt_delivery(&webhook.url, &payload_str, &signature, "webhook.test")
+    let response_result = client
+        .post(&webhook.url)
+        .header("Content-Type", "application/json")
+        .header("X-Webhook-Signature", signature)
+        .header("X-Webhook-Event", "webhook.test")
+        .body(payload_str)
+        .send()
         .await;
+
     let response_time_ms = start.elapsed().as_millis() as i64;
+
+    let (success, http_status, error) = match response_result {
+        Ok(resp) => {
+            let status = resp.status();
+            if status.is_success() {
+                (true, Some(status.as_u16() as i32), None)
+            } else {
+                (
+                    false,
+                    Some(status.as_u16() as i32),
+                    Some(format!("HTTP {}", status)),
+                )
+            }
+        }
+        Err(e) => (false, None, Some(e.to_string())),
+    };
 
     let response = crate::models::TestWebhookResponse {
         success,
-        status_code: http_status.map(|s| s as i32),
+        status_code: http_status,
         response_time_ms: Some(response_time_ms),
         error,
     };

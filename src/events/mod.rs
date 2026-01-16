@@ -92,42 +92,71 @@ pub enum SystemEvent {
     },
 }
 
-/// Event bus for publishing and subscribing to system events
+use crate::ApiResult;
+use async_trait::async_trait;
+use futures::Stream;
+use std::pin::Pin;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+use tokio_stream::wrappers::BroadcastStream;
+
+/// Event bus trait for publishing and subscribing to system events
+#[async_trait]
+pub trait EventBus: Send + Sync {
+    /// Publish an event to all subscribers
+    fn publish(&self, event: SystemEvent) -> ApiResult<()>;
+
+    /// Subscribe to events
+    fn subscribe(
+        &self,
+    ) -> Pin<Box<dyn Stream<Item = Result<SystemEvent, BroadcastStreamRecvError>> + Send>>;
+}
+
+/// Local in-memory implementation of EventBus
 #[derive(Clone)]
-pub struct EventBus {
+pub struct LocalEventBus {
     tx: broadcast::Sender<SystemEvent>,
 }
 
-impl EventBus {
+impl LocalEventBus {
     /// Create a new event bus with specified capacity
     pub fn new(capacity: usize) -> Self {
         let (tx, _) = broadcast::channel(capacity);
         Self { tx }
     }
+}
 
-    /// Publish an event to all subscribers (non-blocking, fire-and-forget)
-    pub fn publish(&self, event: SystemEvent) {
+#[async_trait]
+impl EventBus for LocalEventBus {
+    fn publish(&self, event: SystemEvent) -> ApiResult<()> {
         // Fire-and-forget - if no subscribers or channel full, just log and continue
+        // We consider this a "success" from the API perspective for now,
+        // as we don't want to block operation if just nobody is listening.
         if let Err(e) = self.tx.send(event) {
-            tracing::warn!(
-                "Failed to publish event (no subscribers or channel full): {}",
-                e
-            );
+            tracing::debug!("No active subscribers for event (or channel full): {}", e);
         }
+        Ok(())
     }
 
-    /// Subscribe to events (returns a receiver)
-    pub fn subscribe(&self) -> broadcast::Receiver<SystemEvent> {
-        self.tx.subscribe()
+    fn subscribe(
+        &self,
+    ) -> Pin<Box<dyn Stream<Item = Result<SystemEvent, BroadcastStreamRecvError>> + Send>> {
+        let rx = self.tx.subscribe();
+        Box::pin(BroadcastStream::new(rx))
     }
 
+    // Helper for legacy code that expects a direct receiver (temporary)
+    // or maybe we force migration. Let's force migration to Stream to satisfy the plan.
+    // However, keeping subscriber_count is useful for tests.
+}
+
+impl LocalEventBus {
     /// Get the number of active subscribers
     pub fn subscriber_count(&self) -> usize {
         self.tx.receiver_count()
     }
 }
 
-impl Default for EventBus {
+impl Default for LocalEventBus {
     fn default() -> Self {
         Self::new(1000) // Default capacity of 1000 events
     }
@@ -139,13 +168,14 @@ mod tests {
 
     #[test]
     fn test_event_bus_creation() {
-        let bus = EventBus::new(100);
+        let bus = LocalEventBus::new(100);
         assert_eq!(bus.subscriber_count(), 0);
     }
 
     #[tokio::test]
     async fn test_event_publish_subscribe() {
-        let bus = EventBus::new(100);
+        use tokio_stream::StreamExt;
+        let bus = LocalEventBus::new(100);
         let mut rx = bus.subscribe();
 
         let event = SystemEvent::ConversationStatusChanged {
@@ -159,7 +189,7 @@ mod tests {
         bus.publish(event);
 
         // Receive the event
-        let received = rx.recv().await.unwrap();
+        let received = rx.next().await.unwrap().unwrap();
         match received {
             SystemEvent::ConversationStatusChanged {
                 conversation_id, ..

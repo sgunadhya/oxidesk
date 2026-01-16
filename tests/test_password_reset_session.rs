@@ -1,3 +1,6 @@
+use oxidesk::domain::ports::agent_repository::AgentRepository;
+use oxidesk::domain::ports::session_repository::SessionRepository;
+use oxidesk::domain::ports::user_repository::UserRepository;
 mod helpers;
 
 use helpers::*;

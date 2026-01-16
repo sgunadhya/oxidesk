@@ -14,8 +14,10 @@ pub async fn create_agent(
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
     Json(request): Json<CreateAgentRequest>,
 ) -> ApiResult<(StatusCode, Json<CreateAgentResponse>)> {
-    let response =
-        crate::services::agent_service::create_agent(&state.db, &auth_user, request).await?;
+    let response = state
+        .agent_service
+        .create_agent(&auth_user, request)
+        .await?;
     Ok((StatusCode::CREATED, Json(response)))
 }
 
@@ -24,7 +26,7 @@ pub async fn get_agent(
     axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<AgentResponse>> {
-    let response = crate::services::agent_service::get_agent(&state.db, &id).await?;
+    let response = state.agent_service.get_agent(&id).await?;
     Ok(Json(response))
 }
 
@@ -33,7 +35,7 @@ pub async fn delete_agent(
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
     Path(id): Path<String>,
 ) -> ApiResult<StatusCode> {
-    crate::services::agent_service::delete(&state.db, &auth_user, &id).await?;
+    state.agent_service.delete(&auth_user, &id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -58,9 +60,10 @@ pub async fn list_agents(
     axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
     Query(params): Query<PaginationParams>,
 ) -> ApiResult<Json<AgentListResponse>> {
-    let response =
-        crate::services::agent_service::list_agents(&state.db, params.page, params.per_page)
-            .await?;
+    let response = state
+        .agent_service
+        .list_agents(params.page, params.per_page)
+        .await?;
     Ok(Json(response))
 }
 
@@ -70,8 +73,10 @@ pub async fn update_agent(
     Path(id): Path<String>,
     Json(request): Json<UpdateAgentRequest>,
 ) -> ApiResult<Json<AgentResponse>> {
-    let response =
-        crate::services::agent_service::update_agent(&state.db, &auth_user, &id, request).await?;
+    let response = state
+        .agent_service
+        .update_agent(&auth_user, &id, request)
+        .await?;
     Ok(Json(response))
 }
 
@@ -81,7 +86,9 @@ pub async fn change_agent_password(
     Path(id): Path<String>,
     Json(request): Json<ChangePasswordRequest>,
 ) -> ApiResult<StatusCode> {
-    crate::services::agent_service::change_agent_password(&state.db, &auth_user, &id, request)
+    state
+        .agent_service
+        .change_agent_password(&auth_user, &id, request)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

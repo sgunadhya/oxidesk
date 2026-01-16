@@ -2,7 +2,10 @@
 ///
 /// Handles receiving and processing incoming emails via IMAP.
 /// Creates conversations, messages, contacts, and attachments from emails.
-use crate::database::Database;
+use crate::domain::ports::attachment_repository::AttachmentRepository;
+use crate::domain::ports::conversation_repository::ConversationRepository;
+use crate::domain::ports::email_repository::EmailRepository;
+use crate::domain::ports::message_repository::MessageRepository;
 use crate::error::{ApiError, ApiResult};
 use crate::models::{
     ConversationStatus, CreateConversation, EmailProcessingLog, InboxEmailConfig, Message,
@@ -11,21 +14,34 @@ use crate::services::{AttachmentService, EmailParserService, ParsedEmail};
 use async_imap::Session;
 use async_native_tls::{TlsConnector, TlsStream};
 use futures::StreamExt;
+use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 /// Email receiver service
 pub struct EmailReceiverService {
-    db: Database,
+    email_repo: Arc<dyn EmailRepository>,
+    conversation_repo: Arc<dyn ConversationRepository>,
+    message_repo: Arc<dyn MessageRepository>,
+    contact_service: crate::services::ContactService,
     parser: EmailParserService,
     attachment_service: AttachmentService,
 }
 
 impl EmailReceiverService {
     /// Create a new email receiver service
-    pub fn new(db: Database, attachment_service: AttachmentService) -> Self {
+    pub fn new(
+        email_repo: Arc<dyn EmailRepository>,
+        conversation_repo: Arc<dyn ConversationRepository>,
+        message_repo: Arc<dyn MessageRepository>,
+        contact_service: crate::services::ContactService,
+        attachment_service: AttachmentService,
+    ) -> Self {
         Self {
-            db,
+            email_repo,
+            conversation_repo,
+            message_repo,
+            contact_service,
             parser: EmailParserService::new(),
             attachment_service,
         }
@@ -144,7 +160,10 @@ impl EmailReceiverService {
             contact_id: contact_id.clone(),
             subject: parsed_email.subject.clone(),
         };
-        let conversation = self.db.create_conversation(&create_conv).await?;
+        let conversation = self
+            .conversation_repo
+            .create_conversation(&create_conv)
+            .await?;
 
         // Create incoming message
         let content = parsed_email
@@ -154,7 +173,7 @@ impl EmailReceiverService {
             .unwrap_or_default();
         let message = Message::new_incoming(conversation.id.clone(), content, contact_id.clone());
         let message_id = message.id.clone();
-        self.db.create_message(&message).await?;
+        self.message_repo.create_message(&message).await?;
 
         // Store attachments
         for attachment in &parsed_email.attachments {
@@ -179,13 +198,17 @@ impl EmailReceiverService {
         name: Option<&str>,
     ) -> ApiResult<String> {
         // Try to find existing contact by email
-        if let Some(contact) = self.db.get_contact_by_email(email_address).await? {
+        if let Some(contact) = self
+            .contact_service
+            .get_contact_by_email(email_address)
+            .await?
+        {
             return Ok(contact.id);
         }
 
-        // Create new contact using the database method
+        // Create new contact using the service method
         let contact_id = self
-            .db
+            .contact_service
             .create_contact_from_message(email_address, name, inbox_id)
             .await?;
 
@@ -196,7 +219,7 @@ impl EmailReceiverService {
     pub async fn process_inbox(&self, inbox_id: &str) -> ApiResult<u32> {
         // Get inbox email configuration
         let config = self
-            .db
+            .email_repo
             .get_inbox_email_config(inbox_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Inbox email configuration not found".to_string()))?;
@@ -227,7 +250,7 @@ impl EmailReceiverService {
 
             // Check for duplicates
             if self
-                .db
+                .email_repo
                 .check_email_processed(inbox_id, &parsed_email.message_id)
                 .await?
             {
@@ -268,14 +291,14 @@ impl EmailReceiverService {
             };
 
             // Log processing result
-            self.db.log_email_processing(&log).await?;
+            self.email_repo.log_email_processing(&log).await?;
         }
 
         // Logout from IMAP
         let _ = session.logout().await;
 
         // Update last poll time
-        self.db.update_last_poll_time(inbox_id).await?;
+        self.email_repo.update_last_poll_time(inbox_id).await?;
 
         Ok(processed_count)
     }
@@ -295,7 +318,7 @@ impl EmailReceiverService {
         {
             // Try to find existing conversation
             if let Some(conversation) = self
-                .db
+                .conversation_repo
                 .get_conversation_by_reference_number(ref_number as i64)
                 .await?
             {
@@ -323,7 +346,7 @@ impl EmailReceiverService {
                 let message =
                     Message::new_incoming(conversation.id.clone(), content, contact_id.clone());
                 let message_id = message.id.clone();
-                self.db.create_message(&message).await?;
+                self.message_repo.create_message(&message).await?;
 
                 // Store attachments
                 for attachment in &parsed_email.attachments {
@@ -339,7 +362,7 @@ impl EmailReceiverService {
 
                 // Reopen conversation if it was closed
                 if conversation.status != ConversationStatus::Open {
-                    self.db
+                    self.conversation_repo
                         .update_conversation_status(&conversation.id, ConversationStatus::Open)
                         .await?;
                 }
@@ -362,7 +385,11 @@ impl EmailReceiverService {
 /// Spawn background email polling worker
 /// Polls all enabled email inboxes every 60 seconds
 pub fn spawn_email_polling_worker(
-    db: Database,
+    email_repo: Arc<dyn EmailRepository>,
+    conversation_repo: Arc<dyn ConversationRepository>,
+    message_repo: Arc<dyn MessageRepository>,
+    attachment_repo: Arc<dyn AttachmentRepository>,
+    contact_service_factory: impl Fn() -> crate::services::ContactService + Send + 'static,
     attachment_storage_path: String,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -372,7 +399,7 @@ pub fn spawn_email_polling_worker(
 
         loop {
             // Get all enabled email configurations
-            match db.get_enabled_email_configs().await {
+            match email_repo.get_enabled_email_configs().await {
                 Ok(configs) => {
                     tracing::info!(
                         "Found {} enabled email configurations to process",
@@ -382,9 +409,16 @@ pub fn spawn_email_polling_worker(
                     // Process each inbox concurrently
                     let mut handles = Vec::new();
                     for config in configs {
+                        let contact_service = contact_service_factory();
                         let receiver = EmailReceiverService::new(
-                            db.clone(),
-                            AttachmentService::new(db.clone(), attachment_storage_path.clone()),
+                            email_repo.clone(),
+                            conversation_repo.clone(),
+                            message_repo.clone(),
+                            contact_service,
+                            AttachmentService::new(
+                                attachment_repo.clone(),
+                                attachment_storage_path.clone(),
+                            ),
                         );
                         let inbox_id = config.inbox_id.clone();
 

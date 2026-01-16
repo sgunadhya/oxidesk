@@ -4,6 +4,7 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
+use std::sync::Arc;
 
 use crate::{
     api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
@@ -24,7 +25,7 @@ pub async fn assign_conversation(
         state.notification_service.clone(),
         state.connection_manager.clone(),
     );
-    assignment_service.set_sla_service(state.sla_service.clone());
+    assignment_service.set_sla_service(Arc::new(state.sla_service.clone()));
 
     // Get user's permissions via service
     let permissions = assignment_service

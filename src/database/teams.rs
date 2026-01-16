@@ -1,0 +1,268 @@
+use crate::api::middleware::error::{ApiError, ApiResult};
+use crate::database::Database;
+use crate::domain::ports::user_repository::UserRepository;
+use crate::models::{Team, TeamMemberRole, TeamMembership, User};
+use sqlx::Row;
+
+impl Database {
+    // ========== Team Operations (T021-T023) ==========
+
+    pub async fn create_team(&self, team: &Team) -> ApiResult<()> {
+        sqlx::query(
+            "INSERT INTO teams (id, name, description, sla_policy_id, business_hours, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&team.id)
+        .bind(&team.name)
+        .bind(&team.description)
+        .bind(&team.sla_policy_id)
+        .bind(&team.business_hours)
+        .bind(&team.created_at)
+        .bind(&team.updated_at)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                ApiError::BadRequest(format!("Team with name '{}' already exists", team.name))
+            } else {
+                ApiError::Internal(e.to_string())
+            }
+        })?;
+
+        tracing::info!("Team created: id={}, name={}", team.id, team.name);
+        Ok(())
+    }
+
+    pub async fn get_team_by_id(&self, id: &str) -> ApiResult<Option<Team>> {
+        let row = sqlx::query(
+            "SELECT id, name, description, sla_policy_id, business_hours, created_at, updated_at
+             FROM teams WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            Ok(Some(Team {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                description: row.try_get("description").ok(),
+                sla_policy_id: row.try_get("sla_policy_id").ok(),
+                business_hours: row.try_get("business_hours").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn list_teams(&self) -> ApiResult<Vec<Team>> {
+        let rows = sqlx::query(
+            "SELECT id, name, description, sla_policy_id, business_hours, created_at, updated_at
+             FROM teams ORDER BY name ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut teams = Vec::new();
+        for row in rows {
+            teams.push(Team {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                description: row.try_get("description").ok(),
+                sla_policy_id: row.try_get("sla_policy_id").ok(),
+                business_hours: row.try_get("business_hours").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            });
+        }
+
+        Ok(teams)
+    }
+
+    // ========== Team Membership Operations (T024-T028) ==========
+
+    pub async fn add_team_member(
+        &self,
+        team_id: &str,
+        user_id: &str,
+        role: TeamMemberRole,
+    ) -> ApiResult<()> {
+        let membership = TeamMembership::new(team_id.to_string(), user_id.to_string(), role);
+
+        sqlx::query(
+            "INSERT INTO team_memberships (id, team_id, user_id, role, joined_at)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(&membership.id)
+        .bind(&membership.team_id)
+        .bind(&membership.user_id)
+        .bind(membership.role.to_string())
+        .bind(&membership.joined_at)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                ApiError::BadRequest("User is already a member of this team".to_string())
+            } else if e.to_string().contains("FOREIGN KEY") {
+                ApiError::NotFound("Team or user not found".to_string())
+            } else {
+                ApiError::Internal(e.to_string())
+            }
+        })?;
+
+        tracing::info!(
+            "Team member added: team={}, user={}, role={}",
+            team_id,
+            user_id,
+            role
+        );
+        Ok(())
+    }
+
+    pub async fn remove_team_member(&self, team_id: &str, user_id: &str) -> ApiResult<()> {
+        sqlx::query("DELETE FROM team_memberships WHERE team_id = ? AND user_id = ?")
+            .bind(team_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+
+        tracing::info!("Team member removed: team={}, user={}", team_id, user_id);
+        Ok(())
+    }
+
+    pub async fn get_team_members(&self, team_id: &str) -> ApiResult<Vec<User>> {
+        // Get member IDs first
+        let rows = sqlx::query("SELECT user_id FROM team_memberships WHERE team_id = ?")
+            .bind(team_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let user_ids: Vec<String> = rows
+            .iter()
+            .map(|row| row.try_get("user_id"))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if user_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Get users via repository
+        let mut users = self.get_users_by_ids(&user_ids).await?;
+
+        // Sort by email ASC to match original behavior
+        users.sort_by(|a, b| a.email.cmp(&b.email));
+
+        Ok(users)
+    }
+
+    pub async fn is_team_member(&self, team_id: &str, user_id: &str) -> ApiResult<bool> {
+        let row = sqlx::query(
+            "SELECT COUNT(*) as count FROM team_memberships WHERE team_id = ? AND user_id = ?",
+        )
+        .bind(team_id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let count: i64 = row.try_get("count")?;
+        Ok(count > 0)
+    }
+
+    pub async fn get_user_teams(&self, user_id: &str) -> ApiResult<Vec<Team>> {
+        let rows = sqlx::query(
+            "SELECT t.id, t.name, t.description, t.sla_policy_id, t.business_hours, t.created_at, t.updated_at
+             FROM teams t
+             INNER JOIN team_memberships tm ON t.id = tm.team_id
+             WHERE tm.user_id = ?
+             ORDER BY t.name ASC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut teams = Vec::new();
+        for row in rows {
+            teams.push(Team {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                description: row.try_get("description").ok(),
+                sla_policy_id: row.try_get("sla_policy_id").ok(),
+                business_hours: row.try_get("business_hours").ok(),
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            });
+        }
+
+        Ok(teams)
+    }
+
+    /// Update team's SLA policy
+    pub async fn update_team_sla_policy(
+        &self,
+        team_id: &str,
+        sla_policy_id: Option<&str>,
+    ) -> ApiResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query("UPDATE teams SET sla_policy_id = ?, updated_at = ? WHERE id = ?")
+            .bind(sla_policy_id)
+            .bind(now)
+            .bind(team_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+}
+
+use crate::domain::ports::team_repository::TeamRepository;
+
+#[async_trait::async_trait]
+impl TeamRepository for Database {
+    async fn create_team(&self, team: &Team) -> ApiResult<()> {
+        Database::create_team(self, team).await
+    }
+
+    async fn get_team_by_id(&self, id: &str) -> ApiResult<Option<Team>> {
+        Database::get_team_by_id(self, id).await
+    }
+
+    async fn list_teams(&self) -> ApiResult<Vec<Team>> {
+        Database::list_teams(self).await
+    }
+
+    async fn add_team_member(
+        &self,
+        team_id: &str,
+        user_id: &str,
+        role: TeamMemberRole,
+    ) -> ApiResult<()> {
+        Database::add_team_member(self, team_id, user_id, role).await
+    }
+
+    async fn remove_team_member(&self, team_id: &str, user_id: &str) -> ApiResult<()> {
+        Database::remove_team_member(self, team_id, user_id).await
+    }
+
+    async fn get_team_members(&self, team_id: &str) -> ApiResult<Vec<User>> {
+        Database::get_team_members(self, team_id).await
+    }
+
+    async fn is_team_member(&self, team_id: &str, user_id: &str) -> ApiResult<bool> {
+        Database::is_team_member(self, team_id, user_id).await
+    }
+
+    async fn get_user_teams(&self, user_id: &str) -> ApiResult<Vec<Team>> {
+        Database::get_user_teams(self, user_id).await
+    }
+
+    async fn update_team_sla_policy(
+        &self,
+        team_id: &str,
+        sla_policy_id: Option<&str>,
+    ) -> ApiResult<()> {
+        Database::update_team_sla_policy(self, team_id, sla_policy_id).await
+    }
+}

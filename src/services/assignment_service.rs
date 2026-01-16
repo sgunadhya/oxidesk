@@ -1,3 +1,4 @@
+use crate::domain::ports::agent_repository::AgentRepository;
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
@@ -13,32 +14,34 @@ use crate::{
 };
 use std::sync::Arc;
 
+/// Service for handling conversation assignment logic
+#[derive(Clone)]
 pub struct AssignmentService {
     db: Database,
-    event_bus: EventBus,
-    _notification_service: NotificationService,
+    event_bus: Arc<dyn EventBus>,
+    notification_service: NotificationService,
     connection_manager: Arc<dyn ConnectionManager>,
-    sla_service: Option<SlaService>,
+    sla_service: Option<Arc<SlaService>>,
 }
 
 impl AssignmentService {
     pub fn new(
         db: Database,
-        event_bus: EventBus,
+        event_bus: Arc<dyn EventBus>,
         notification_service: NotificationService,
         connection_manager: Arc<dyn ConnectionManager>,
     ) -> Self {
         Self {
             db,
             event_bus,
-            _notification_service: notification_service,
+            notification_service,
             connection_manager,
             sla_service: None,
         }
     }
 
     /// Set the SLA service (called after initialization to avoid circular dependencies)
-    pub fn set_sla_service(&mut self, sla_service: SlaService) {
+    pub fn set_sla_service(&mut self, sla_service: Arc<SlaService>) {
         self.sla_service = Some(sla_service);
     }
 
@@ -87,7 +90,11 @@ impl AssignmentService {
         for attempt in 0..=MAX_RETRIES {
             match self
                 .db
-                .assign_conversation_to_user(conversation_id, agent_id, agent_id)
+                .assign_conversation_to_user(
+                    conversation_id,
+                    Some(agent_id.to_string()),
+                    Some(agent_id.to_string()),
+                )
                 .await
             {
                 Ok(_) => break, // Success - exit retry loop
@@ -110,7 +117,7 @@ impl AssignmentService {
         // 4. Add as participant (ignore if already exists)
         let _ = self
             .db
-            .add_conversation_participant(conversation_id, agent_id, Some(agent_id))
+            .add_conversation_participant(conversation_id, agent_id, "assignee")
             .await;
 
         // 5. Record in history
@@ -215,7 +222,11 @@ impl AssignmentService {
         for attempt in 0..=MAX_RETRIES {
             match self
                 .db
-                .assign_conversation_to_user(conversation_id, target_agent_id, assigning_agent_id)
+                .assign_conversation_to_user(
+                    conversation_id,
+                    Some(target_agent_id.to_string()),
+                    Some(assigning_agent_id.to_string()),
+                )
                 .await
             {
                 Ok(_) => break, // Success - exit retry loop
@@ -238,11 +249,7 @@ impl AssignmentService {
         // 5. Add target agent as participant (ignore if already exists)
         let _ = self
             .db
-            .add_conversation_participant(
-                conversation_id,
-                target_agent_id,
-                Some(assigning_agent_id),
-            )
+            .add_conversation_participant(conversation_id, target_agent_id, "assignee")
             .await;
 
         // 6. Record in history
@@ -332,7 +339,11 @@ impl AssignmentService {
 
         // 4. Assign to database
         self.db
-            .assign_conversation_to_team(conversation_id, team_id, assigning_agent_id)
+            .assign_conversation_to_team(
+                conversation_id,
+                Some(team_id.to_string()),
+                Some(assigning_agent_id.to_string()),
+            )
             .await?;
 
         // 5. Apply team SLA (stub)

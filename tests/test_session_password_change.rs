@@ -1,3 +1,6 @@
+use oxidesk::domain::ports::agent_repository::AgentRepository;
+use oxidesk::domain::ports::session_repository::SessionRepository;
+use oxidesk::domain::ports::user_repository::UserRepository;
 mod helpers;
 
 use helpers::*;
@@ -92,7 +95,15 @@ async fn test_password_change_destroys_all_user_sessions() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let result = agent_service::change_agent_password(db, &auth_user, &user.id, request).await;
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let agent_service = agent_service::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service,
+    );
+    let result = agent_service
+        .change_agent_password(&auth_user, &user.id, request)
+        .await;
     assert!(result.is_ok(), "Password change should succeed");
 
     // Verify all sessions were destroyed
@@ -188,7 +199,14 @@ async fn test_password_change_requires_reauthentication() {
         new_password: "NewPass123!".to_string(),
     };
 
-    agent_service::change_agent_password(db, &auth_user, &user.id, request)
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let agent_service = agent_service::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service,
+    );
+    agent_service
+        .change_agent_password(&auth_user, &user.id, request)
         .await
         .unwrap();
 
@@ -284,7 +302,14 @@ async fn test_password_change_does_not_affect_other_users() {
         new_password: "NewPass123!".to_string(),
     };
 
-    agent_service::change_agent_password(db, &auth_user, &user1.id, request)
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let agent_service = agent_service::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service,
+    );
+    agent_service
+        .change_agent_password(&auth_user, &user1.id, request)
         .await
         .unwrap();
 
@@ -374,7 +399,15 @@ async fn test_password_change_with_no_active_sessions() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let result = agent_service::change_agent_password(db, &auth_user, &user.id, request).await;
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let agent_service = agent_service::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service,
+    );
+    let result = agent_service
+        .change_agent_password(&auth_user, &user.id, request)
+        .await;
     assert!(
         result.is_ok(),
         "Password change should succeed even with no active sessions"
@@ -446,8 +479,15 @@ async fn test_password_change_permission_required() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let result =
-        agent_service::change_agent_password(db, &auth_user, &target_user.id, request).await;
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let agent_service = agent_service::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service,
+    );
+    let result = agent_service
+        .change_agent_password(&auth_user, &target_user.id, request)
+        .await;
 
     // Should fail with Forbidden error
     assert!(result.is_err(), "Should fail without admin permission");

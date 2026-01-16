@@ -9,6 +9,7 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
+    domain::ports::user_repository::UserRepository,
     models::*,
     services::{
         auth::{hash_password, validate_password_complexity},

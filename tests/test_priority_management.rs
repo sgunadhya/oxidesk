@@ -7,6 +7,7 @@ use oxidesk::{
     models::{ConversationStatus, Priority},
     services::conversation_priority_service::ConversationPriorityService,
 };
+use tokio_stream::StreamExt;
 
 #[tokio::test]
 async fn test_update_priority_from_none_to_low() {
@@ -29,9 +30,9 @@ async fn test_update_priority_from_none_to_low() {
     );
 
     // Update priority to Low
-    let priority_service = ConversationPriorityService::new(db);
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let updated = priority_service
-        .update_conversation_priority(&conversation.id, Some(Priority::Low), "user-123", None)
+        .update_conversation_priority(&conversation.id, Some(Priority::Low), "user-123")
         .await
         .expect("Failed to update priority");
 
@@ -59,9 +60,9 @@ async fn test_update_priority_from_low_to_high() {
         .expect("Failed to set initial priority");
 
     // Update priority to High
-    let priority_service = ConversationPriorityService::new(db);
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let updated = priority_service
-        .update_conversation_priority(&conversation.id, Some(Priority::High), "user-123", None)
+        .update_conversation_priority(&conversation.id, Some(Priority::High), "user-123")
         .await
         .expect("Failed to update priority");
 
@@ -89,9 +90,9 @@ async fn test_remove_priority() {
         .expect("Failed to set initial priority");
 
     // Remove priority
-    let priority_service = ConversationPriorityService::new(db);
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let updated = priority_service
-        .update_conversation_priority(&conversation.id, None, "user-123", None)
+        .update_conversation_priority(&conversation.id, None, "user-123")
         .await
         .expect("Failed to remove priority");
 
@@ -134,9 +135,9 @@ async fn test_same_priority_idempotence() {
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     // Update to the same priority
-    let priority_service = ConversationPriorityService::new(db);
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let updated = priority_service
-        .update_conversation_priority(&conversation.id, Some(Priority::Medium), "user-123", None)
+        .update_conversation_priority(&conversation.id, Some(Priority::Medium), "user-123")
         .await
         .expect("Failed to update priority");
 
@@ -149,7 +150,7 @@ async fn test_same_priority_idempotence() {
 async fn test_priority_update_triggers_automation_event() {
     let test_db = setup_test_db().await;
     let db = &test_db.db;
-    let event_bus = EventBus::new(100);
+    let event_bus = std::sync::Arc::new(oxidesk::LocalEventBus::new(100));
     let mut rx = event_bus.subscribe();
 
     let contact = create_test_contact(db, "test@example.com").await;
@@ -162,22 +163,18 @@ async fn test_priority_update_triggers_automation_event() {
     .await;
 
     // Update priority with event bus
-    let priority_service = ConversationPriorityService::new(db);
+    let priority_service = ConversationPriorityService::new(db.clone(), Some(event_bus.clone()));
     let _updated = priority_service
-        .update_conversation_priority(
-            &conversation.id,
-            Some(Priority::High),
-            "user-123",
-            Some(&event_bus),
-        )
+        .update_conversation_priority(&conversation.id, Some(Priority::High), "user-123")
         .await
         .expect("Failed to update priority");
 
     // Receive the event
-    let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+    let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.next())
         .await
         .expect("Timeout waiting for event")
-        .expect("Failed to receive event");
+        .expect("Failed to receive event")
+        .expect("Broadcast error");
 
     match event {
         oxidesk::events::SystemEvent::ConversationPriorityChanged {
@@ -200,7 +197,7 @@ async fn test_priority_update_triggers_automation_event() {
 async fn test_same_priority_no_automation_trigger() {
     let test_db = setup_test_db().await;
     let db = &test_db.db;
-    let event_bus = EventBus::new(100);
+    let event_bus = std::sync::Arc::new(oxidesk::LocalEventBus::new(100));
     let mut rx = event_bus.subscribe();
 
     let contact = create_test_contact(db, "test@example.com").await;
@@ -218,19 +215,14 @@ async fn test_same_priority_no_automation_trigger() {
         .expect("Failed to set initial priority");
 
     // Update to same priority (idempotent)
-    let priority_service = ConversationPriorityService::new(db);
+    let priority_service = ConversationPriorityService::new(db.clone(), Some(event_bus.clone()));
     let _updated = priority_service
-        .update_conversation_priority(
-            &conversation.id,
-            Some(Priority::Medium),
-            "user-123",
-            Some(&event_bus),
-        )
+        .update_conversation_priority(&conversation.id, Some(Priority::Medium), "user-123")
         .await
         .expect("Failed to update priority");
 
     // Should NOT receive an event (idempotent - no change)
-    let result = tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await;
+    let result = tokio::time::timeout(std::time::Duration::from_millis(100), rx.next()).await;
     assert!(
         result.is_err(),
         "Should not trigger event for same-priority update"
@@ -241,7 +233,7 @@ async fn test_same_priority_no_automation_trigger() {
 async fn test_priority_removal_triggers_automation_event() {
     let test_db = setup_test_db().await;
     let db = &test_db.db;
-    let event_bus = EventBus::new(100);
+    let event_bus = std::sync::Arc::new(oxidesk::LocalEventBus::new(100));
     let mut rx = event_bus.subscribe();
 
     let contact = create_test_contact(db, "test@example.com").await;
@@ -259,17 +251,18 @@ async fn test_priority_removal_triggers_automation_event() {
         .expect("Failed to set initial priority");
 
     // Remove priority
-    let priority_service = ConversationPriorityService::new(db);
+    let priority_service = ConversationPriorityService::new(db.clone(), Some(event_bus.clone()));
     let _updated = priority_service
-        .update_conversation_priority(&conversation.id, None, "user-123", Some(&event_bus))
+        .update_conversation_priority(&conversation.id, None, "user-123")
         .await
         .expect("Failed to remove priority");
 
     // Receive the event
-    let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+    let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.next())
         .await
         .expect("Timeout waiting for event")
-        .expect("Failed to receive event");
+        .expect("Failed to receive event")
+        .expect("Broadcast error");
 
     match event {
         oxidesk::events::SystemEvent::ConversationPriorityChanged {
@@ -303,9 +296,9 @@ async fn test_priority_update_on_resolved_conversation() {
     .await;
 
     // Should be able to update priority even on resolved conversation
-    let priority_service = ConversationPriorityService::new(db);
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let updated = priority_service
-        .update_conversation_priority(&conversation.id, Some(Priority::High), "user-123", None)
+        .update_conversation_priority(&conversation.id, Some(Priority::High), "user-123")
         .await
         .expect("Failed to update priority on resolved conversation");
 
@@ -318,9 +311,9 @@ async fn test_priority_update_nonexistent_conversation() {
     let test_db = setup_test_db().await;
     let db = &test_db.db;
 
-    let priority_service = ConversationPriorityService::new(db);
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let result = priority_service
-        .update_conversation_priority("nonexistent-id", Some(Priority::High), "user-123", None)
+        .update_conversation_priority("nonexistent-id", Some(Priority::High), "user-123")
         .await;
 
     assert!(result.is_err(), "Should fail for nonexistent conversation");
@@ -344,7 +337,7 @@ async fn test_all_valid_priority_values() {
     let contact = create_test_contact(db, "test@example.com").await;
 
     let valid_priorities = vec![Priority::Low, Priority::Medium, Priority::High];
-    let priority_service = ConversationPriorityService::new(db);
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
 
     for priority in valid_priorities {
         let conversation = create_test_conversation(
@@ -356,7 +349,7 @@ async fn test_all_valid_priority_values() {
         .await;
 
         let updated = priority_service
-            .update_conversation_priority(&conversation.id, Some(priority), "user-123", None)
+            .update_conversation_priority(&conversation.id, Some(priority), "user-123")
             .await
             .expect(&format!("Failed to set priority to {}", priority));
 

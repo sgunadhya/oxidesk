@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use crate::{
     api::middleware::{error::ApiError, ApiResult, AppState, AuthenticatedUser},
     models::*,
-    services::MacroService,
 };
 
 // ===== Request DTOs =====
@@ -121,9 +120,10 @@ pub async fn apply_macro(
     Json(req): Json<ApplyMacroRequest>,
 ) -> ApiResult<impl IntoResponse> {
     // Apply macro
-    let result =
-        MacroService::apply_macro(&state.db, &macro_id, &req.conversation_id, &user.user.id)
-            .await?;
+    let result = state
+        .macro_service
+        .apply_macro(&macro_id, &req.conversation_id, &user.user.id)
+        .await?;
 
     // Convert to response
     let response = ApplyMacroResponse {
@@ -165,15 +165,17 @@ pub async fn create_macro(
         .collect();
 
     // Create macro
-    let macro_obj = MacroService::create_macro(
-        &state.db,
-        req.name,
-        req.message_content,
-        actions,
-        &user.user.id,
-        req.access_control,
-    )
-    .await?;
+    // Create macro
+    let macro_obj = state
+        .macro_service
+        .create_macro(
+            req.name,
+            req.message_content,
+            actions,
+            &user.user.id,
+            req.access_control,
+        )
+        .await?;
 
     // Convert to response
     let response = macro_to_response(macro_obj);
@@ -188,7 +190,10 @@ pub async fn list_macros(
     Extension(user): Extension<AuthenticatedUser>,
 ) -> ApiResult<impl IntoResponse> {
     // Get accessible macros
-    let macros = MacroService::list_accessible_macros(&state.db, &user.user.id).await?;
+    let macros = state
+        .macro_service
+        .list_accessible_macros(&user.user.id)
+        .await?;
 
     // Convert to response
     let total = macros.len();
@@ -210,10 +215,14 @@ pub async fn get_macro(
     Path(macro_id): Path<String>,
 ) -> ApiResult<impl IntoResponse> {
     // Get macro
-    let macro_obj = MacroService::get_macro(&state.db, &macro_id).await?;
+    let macro_obj = state.macro_service.get_macro(&macro_id).await?;
 
     // Check access
-    if !MacroService::check_macro_access(&state.db, &macro_obj, &user.user.id).await? {
+    if !state
+        .macro_service
+        .check_macro_access(&macro_obj, &user.user.id)
+        .await?
+    {
         return Err(ApiError::Forbidden(
             "You do not have access to this macro".to_string(),
         ));
@@ -248,14 +257,11 @@ pub async fn update_macro(
     });
 
     // Update macro
-    let macro_obj = MacroService::update_macro(
-        &state.db,
-        &macro_id,
-        req.message_content,
-        actions,
-        req.access_control,
-    )
-    .await?;
+    // Update macro
+    let macro_obj = state
+        .macro_service
+        .update_macro(&macro_id, req.message_content, actions, req.access_control)
+        .await?;
 
     // Convert to response
     let response = macro_to_response(macro_obj);
@@ -278,7 +284,7 @@ pub async fn delete_macro(
     }
 
     // Delete macro
-    MacroService::delete_macro(&state.db, &macro_id).await?;
+    state.macro_service.delete_macro(&macro_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -299,14 +305,10 @@ pub async fn grant_macro_access(
     }
 
     // Grant access
-    MacroService::grant_access(
-        &state.db,
-        &macro_id,
-        &req.entity_type,
-        &req.entity_id,
-        &user.user.id,
-    )
-    .await?;
+    state
+        .macro_service
+        .grant_access(&macro_id, &req.entity_type, &req.entity_id, &user.user.id)
+        .await?;
 
     Ok(StatusCode::CREATED)
 }
@@ -326,7 +328,7 @@ pub async fn list_macro_access(
     }
 
     // Get access grants
-    let accesses = state.db.get_macro_access(&macro_id).await?;
+    let accesses = state.macro_service.get_macro_access(&macro_id).await?;
 
     // Convert to response
     let response: Vec<MacroAccessResponse> = accesses
@@ -359,7 +361,10 @@ pub async fn revoke_macro_access(
     }
 
     // Revoke access
-    MacroService::revoke_access(&state.db, &macro_id, &entity_type, &entity_id).await?;
+    state
+        .macro_service
+        .revoke_access(&macro_id, &entity_type, &entity_id)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

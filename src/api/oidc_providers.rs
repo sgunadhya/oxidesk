@@ -18,7 +18,7 @@ pub async fn list_oidc_providers(
         return Err(ApiError::Forbidden("Admin permission required".to_string()));
     }
 
-    let providers = state.db.list_oidc_providers(false).await?;
+    let providers = state.oidc_service.list_providers(false).await?;
     let responses: Vec<OidcProviderResponse> = providers
         .into_iter()
         .map(OidcProviderResponse::from)
@@ -40,8 +40,8 @@ pub async fn get_oidc_provider(
 
     // Get by name (treating id parameter as name for simplicity)
     let provider = state
-        .db
-        .get_oidc_provider_by_name(&id)
+        .oidc_service
+        .get_provider_by_name(&id)
         .await?
         .ok_or_else(|| ApiError::NotFound("OIDC provider not found".to_string()))?;
 
@@ -64,10 +64,9 @@ pub async fn create_oidc_provider(
 
     // Check if provider with this name already exists
     if state
-        .db
-        .get_oidc_provider_by_name(&request.name)
+        .oidc_service
+        .provider_exists(&request.name)
         .await?
-        .is_some()
     {
         return Err(ApiError::Conflict(format!(
             "OIDC provider with name '{}' already exists",
@@ -77,7 +76,7 @@ pub async fn create_oidc_provider(
 
     // Create provider
     let provider = OidcProvider::from_request(request);
-    state.db.create_oidc_provider(&provider).await?;
+    state.oidc_service.create_provider(&provider).await?;
 
     Ok(Json(OidcProviderResponse::from(provider)))
 }
@@ -96,8 +95,8 @@ pub async fn update_oidc_provider(
 
     // Get existing provider
     let mut provider = state
-        .db
-        .get_oidc_provider_by_name(&id)
+        .oidc_service
+        .get_provider_by_name(&id)
         .await?
         .ok_or_else(|| ApiError::NotFound("OIDC provider not found".to_string()))?;
 
@@ -107,7 +106,7 @@ pub async fn update_oidc_provider(
         .map_err(|e| ApiError::BadRequest(e))?;
 
     // Save updates
-    state.db.update_oidc_provider(&provider).await?;
+    state.oidc_service.update_provider(&provider).await?;
 
     Ok(Json(OidcProviderResponse::from(provider)))
 }
@@ -125,13 +124,13 @@ pub async fn delete_oidc_provider(
 
     // Get provider to verify it exists
     let provider = state
-        .db
-        .get_oidc_provider_by_name(&id)
+        .oidc_service
+        .get_provider_by_name(&id)
         .await?
         .ok_or_else(|| ApiError::NotFound("OIDC provider not found".to_string()))?;
 
     // Delete provider
-    state.db.delete_oidc_provider(&provider.id).await?;
+    state.oidc_service.delete_provider(&provider.id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -149,18 +148,18 @@ pub async fn toggle_oidc_provider(
 
     // Get provider
     let provider = state
-        .db
-        .get_oidc_provider_by_name(&id)
+        .oidc_service
+        .get_provider_by_name(&id)
         .await?
         .ok_or_else(|| ApiError::NotFound("OIDC provider not found".to_string()))?;
 
     // Toggle enabled status
-    let _new_status = state.db.toggle_oidc_provider(&provider.id).await?;
+    let _new_status = state.oidc_service.toggle_provider(&provider.id).await?;
 
     // Get updated provider
     let updated_provider = state
-        .db
-        .get_oidc_provider_by_name(&id)
+        .oidc_service
+        .get_provider_by_name(&id)
         .await?
         .ok_or_else(|| ApiError::NotFound("OIDC provider not found".to_string()))?;
 
@@ -171,7 +170,7 @@ pub async fn toggle_oidc_provider(
 pub async fn list_enabled_oidc_providers(
     State(state): State<AppState>,
 ) -> ApiResult<Json<Vec<OidcProviderPublicInfo>>> {
-    let providers = state.db.list_oidc_providers(true).await?;
+    let providers = state.oidc_service.list_providers(true).await?;
 
     let public_info: Vec<OidcProviderPublicInfo> = providers
         .into_iter()

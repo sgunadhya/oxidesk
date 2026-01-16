@@ -8,10 +8,10 @@
 // - Role Permission Requirement: Roles must have at least one permission
 
 use oxidesk::{
-    database::Database,
-    models::*,
-    services::*,
+    database::Database, domain::ports::role_repository::RoleRepository,
+    domain::ports::user_repository::UserRepository, models::*, services::*,
 };
+use std::sync::Arc;
 
 mod helpers;
 use helpers::*;
@@ -37,7 +37,11 @@ async fn create_test_inbox(db: &Database, inbox_id: &str) {
     }
 }
 
-async fn create_test_contact_with_inbox(db: &Database, inbox_id: &str, email: &str) -> (User, Contact) {
+async fn create_test_contact_with_inbox(
+    db: &Database,
+    inbox_id: &str,
+    email: &str,
+) -> (User, Contact) {
     let user = User {
         id: uuid::Uuid::new_v4().to_string(),
         email: email.to_string(),
@@ -48,6 +52,8 @@ async fn create_test_contact_with_inbox(db: &Database, inbox_id: &str, email: &s
         updated_at: time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap(),
+        deleted_at: None,
+        deleted_by: None,
     };
 
     db.create_user(&user).await.unwrap();
@@ -93,9 +99,7 @@ async fn create_test_contact_with_inbox(db: &Database, inbox_id: &str, email: &s
 async fn test_agent_must_have_at_least_one_role_on_update() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     // Create admin user
@@ -111,7 +115,11 @@ async fn test_agent_must_have_at_least_one_role_on_update() {
         role_id: None, // Will use default role
     };
 
-    let create_response = agent_service::create_agent(&db, &admin, create_request)
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let agent_service =
+        AgentService::new(db.clone(), std::sync::Arc::new(db.clone()), session_service);
+    let create_response = agent_service
+        .create_agent(&admin, create_request)
         .await
         .expect("Failed to create agent");
 
@@ -121,13 +129,20 @@ async fn test_agent_must_have_at_least_one_role_on_update() {
         role_ids: Some(vec![]), // Empty array - violates cardinality
     };
 
-    let result = agent_service::update_agent(&db, &admin, &create_response.user_id, update_request).await;
+    let result = agent_service
+        .update_agent(&admin, &create_response.user_id, update_request)
+        .await;
 
     // FR-003: Verify rejection with specific error message
     assert!(result.is_err(), "Should reject agent update with no roles");
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Agent must be assigned at least one role"),
-        "Expected cardinality error, got: {}", error);
+    assert!(
+        error
+            .to_string()
+            .contains("Agent must be assigned at least one role"),
+        "Expected cardinality error, got: {}",
+        error
+    );
 }
 
 // ============================================================================
@@ -138,9 +153,7 @@ async fn test_agent_must_have_at_least_one_role_on_update() {
 async fn test_conversation_must_have_exactly_one_contact() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     // Create admin user
@@ -148,7 +161,8 @@ async fn test_conversation_must_have_exactly_one_contact() {
     // admin is already AuthenticatedUser
 
     // Create inbox
-    let inbox_id = &uuid::Uuid::new_v4().to_string(); create_test_inbox(db, inbox_id).await;
+    let inbox_id = &uuid::Uuid::new_v4().to_string();
+    create_test_inbox(db, inbox_id).await;
 
     // FR-004: Attempt to create conversation with empty contact_id
     let request = CreateConversation {
@@ -157,22 +171,33 @@ async fn test_conversation_must_have_exactly_one_contact() {
         subject: Some("Test".to_string()),
     };
 
-    let result = conversation_service::create_conversation(&db, &admin, request, None).await;
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service =
+        ConversationService::new(repo.clone(), repo.clone(), repo.clone(), repo.clone());
+    let result = conversation_service
+        .create_conversation(&admin, request, None)
+        .await;
 
     // FR-006: Verify rejection with specific error message
-    assert!(result.is_err(), "Should reject conversation with empty contact_id");
+    assert!(
+        result.is_err(),
+        "Should reject conversation with empty contact_id"
+    );
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Conversation must have exactly one contact"),
-        "Expected error to contain 'Conversation must have exactly one contact', got: {}", error);
+    assert!(
+        error
+            .to_string()
+            .contains("Conversation must have exactly one contact"),
+        "Expected error to contain 'Conversation must have exactly one contact', got: {}",
+        error
+    );
 }
 
 #[tokio::test]
 async fn test_conversation_with_valid_contact_succeeds() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     // Create admin user
@@ -191,9 +216,18 @@ async fn test_conversation_with_valid_contact_succeeds() {
         subject: Some("Test".to_string()),
     };
 
-    let result = conversation_service::create_conversation(&db, &admin, request, None).await;
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service =
+        ConversationService::new(repo.clone(), repo.clone(), repo.clone(), repo.clone());
+    let result = conversation_service
+        .create_conversation(&admin, request, None)
+        .await;
 
-    assert!(result.is_ok(), "Should accept conversation with valid contact, got error: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should accept conversation with valid contact, got error: {:?}",
+        result.err()
+    );
 }
 
 // ============================================================================
@@ -204,15 +238,14 @@ async fn test_conversation_with_valid_contact_succeeds() {
 async fn test_message_must_have_exactly_one_sender() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     // Create test data
     let admin = create_test_auth_user(db).await;
     // admin is already AuthenticatedUser
-    let inbox_id = &uuid::Uuid::new_v4().to_string(); create_test_inbox(db, inbox_id).await;
+    let inbox_id = &uuid::Uuid::new_v4().to_string();
+    create_test_inbox(db, inbox_id).await;
     let (user, _contact) = create_test_contact_with_inbox(db, inbox_id, "test@contact.com").await;
 
     let conv_request = CreateConversation {
@@ -220,12 +253,16 @@ async fn test_message_must_have_exactly_one_sender() {
         contact_id: user.id.clone(), // Pass user_id, service converts to contact.id
         subject: Some("Test".to_string()),
     };
-    let conversation = conversation_service::create_conversation(&db, &admin, conv_request, None)
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service =
+        ConversationService::new(repo.clone(), repo.clone(), repo.clone(), repo.clone());
+    let conversation = conversation_service
+        .create_conversation(&admin, conv_request, None)
         .await
         .expect("Failed to create conversation");
 
     // FR-007: Attempt to create message without sender (contact_id = None)
-    let message_service = MessageService::new(db.clone());
+    let message_service = MessageService::new(repo.clone(), repo.clone());
     let incoming_request = IncomingMessageRequest {
         conversation_id: conversation.id.clone(),
         content: "Test message".to_string(),
@@ -236,28 +273,34 @@ async fn test_message_must_have_exactly_one_sender() {
         received_at: None,
     };
 
-    let result = message_service.create_incoming_message(incoming_request).await;
+    let result = message_service
+        .create_incoming_message(incoming_request)
+        .await;
 
     // FR-008: Verify rejection with specific error message
     assert!(result.is_err(), "Should reject message without sender");
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Message must have exactly one sender"),
-        "Expected error to contain 'Message must have exactly one sender', got: {}", error);
+    assert!(
+        error
+            .to_string()
+            .contains("Message must have exactly one sender"),
+        "Expected error to contain 'Message must have exactly one sender', got: {}",
+        error
+    );
 }
 
 #[tokio::test]
 async fn test_message_with_valid_sender_succeeds() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     // Create test data
     let admin = create_test_auth_user(db).await;
     // admin is already AuthenticatedUser
-    let inbox_id = &uuid::Uuid::new_v4().to_string(); create_test_inbox(db, inbox_id).await;
+    let inbox_id = &uuid::Uuid::new_v4().to_string();
+    create_test_inbox(db, inbox_id).await;
     let (user, _contact) = create_test_contact_with_inbox(db, inbox_id, "test@contact.com").await;
 
     let conv_request = CreateConversation {
@@ -265,12 +308,16 @@ async fn test_message_with_valid_sender_succeeds() {
         contact_id: user.id.clone(), // Pass user_id, service converts to contact.id
         subject: Some("Test".to_string()),
     };
-    let conversation = conversation_service::create_conversation(&db, &admin, conv_request, None)
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service =
+        ConversationService::new(repo.clone(), repo.clone(), repo.clone(), repo.clone());
+    let conversation = conversation_service
+        .create_conversation(&admin, conv_request, None)
         .await
         .expect("Failed to create conversation");
 
     // Create message with valid sender
-    let message_service = MessageService::new(db.clone());
+    let message_service = MessageService::new(repo.clone(), repo.clone());
     let incoming_request = IncomingMessageRequest {
         conversation_id: conversation.id.clone(),
         content: "Test message".to_string(),
@@ -281,9 +328,15 @@ async fn test_message_with_valid_sender_succeeds() {
         received_at: None,
     };
 
-    let result = message_service.create_incoming_message(incoming_request).await;
+    let result = message_service
+        .create_incoming_message(incoming_request)
+        .await;
 
-    assert!(result.is_ok(), "Should accept message with valid sender, got error: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should accept message with valid sender, got error: {:?}",
+        result.err()
+    );
 }
 
 // ============================================================================
@@ -294,9 +347,7 @@ async fn test_message_with_valid_sender_succeeds() {
 async fn test_webhook_must_have_at_least_one_event_on_create() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     let webhook_service = WebhookService::new(db.clone());
@@ -315,8 +366,13 @@ async fn test_webhook_must_have_at_least_one_event_on_create() {
     // FR-011: Verify rejection with specific error message
     assert!(result.is_err(), "Should reject webhook with no events");
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Webhook must subscribe to at least one event"),
-        "Expected error to contain 'Webhook must subscribe to at least one event', got: {}", error);
+    assert!(
+        error
+            .to_string()
+            .contains("Webhook must subscribe to at least one event"),
+        "Expected error to contain 'Webhook must subscribe to at least one event', got: {}",
+        error
+    );
 }
 
 #[tokio::test]
@@ -324,9 +380,7 @@ async fn test_webhook_must_have_at_least_one_event_on_create() {
 async fn test_webhook_must_have_at_least_one_event_on_update() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     // Create admin user for webhook created_by FK
@@ -357,13 +411,23 @@ async fn test_webhook_must_have_at_least_one_event_on_update() {
         is_active: None,
     };
 
-    let result = webhook_service.update_webhook(&webhook.id, update_request).await;
+    let result = webhook_service
+        .update_webhook(&webhook.id, update_request)
+        .await;
 
     // FR-011: Verify rejection with specific error message
-    assert!(result.is_err(), "Should reject webhook update with no events");
+    assert!(
+        result.is_err(),
+        "Should reject webhook update with no events"
+    );
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Webhook must subscribe to at least one event"),
-        "Expected error to contain 'Webhook must subscribe to at least one event', got: {}", error);
+    assert!(
+        error
+            .to_string()
+            .contains("Webhook must subscribe to at least one event"),
+        "Expected error to contain 'Webhook must subscribe to at least one event', got: {}",
+        error
+    );
 }
 
 // ============================================================================
@@ -374,9 +438,7 @@ async fn test_webhook_must_have_at_least_one_event_on_update() {
 async fn test_role_must_have_at_least_one_permission_on_create() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     // Create admin user
@@ -390,22 +452,26 @@ async fn test_role_must_have_at_least_one_permission_on_create() {
         permissions: vec![], // Empty array - violates cardinality
     };
 
-    let result = role_service::create_role(&db, &admin, request).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let result = role_service.create_role(&admin, request).await;
 
     // FR-014: Verify rejection with specific error message
     assert!(result.is_err(), "Should reject role with no permissions");
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Role must have at least one permission"),
-        "Expected error to contain 'Role must have at least one permission', got: {}", error);
+    assert!(
+        error
+            .to_string()
+            .contains("Role must have at least one permission"),
+        "Expected error to contain 'Role must have at least one permission', got: {}",
+        error
+    );
 }
 
 #[tokio::test]
 async fn test_role_must_have_at_least_one_permission_on_update() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     // Create admin user
@@ -419,7 +485,9 @@ async fn test_role_must_have_at_least_one_permission_on_update() {
         permissions: vec!["conversations:read".to_string()],
     };
 
-    let role = role_service::create_role(&db, &admin, create_request)
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let role = role_service
+        .create_role(&admin, create_request)
         .await
         .expect("Failed to create role");
 
@@ -430,22 +498,30 @@ async fn test_role_must_have_at_least_one_permission_on_update() {
         permissions: Some(vec![]), // Empty array - violates cardinality
     };
 
-    let result = role_service::update_role(&db, &admin, &role.id, update_request).await;
+    let result = role_service
+        .update_role(&admin, &role.id, update_request)
+        .await;
 
     // FR-014: Verify rejection with specific error message
-    assert!(result.is_err(), "Should reject role update with no permissions");
+    assert!(
+        result.is_err(),
+        "Should reject role update with no permissions"
+    );
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Role must have at least one permission"),
-        "Expected error to contain 'Role must have at least one permission', got: {}", error);
+    assert!(
+        error
+            .to_string()
+            .contains("Role must have at least one permission"),
+        "Expected error to contain 'Role must have at least one permission', got: {}",
+        error
+    );
 }
 
 #[tokio::test]
 async fn test_role_with_valid_permissions_succeeds() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     // Create admin user
@@ -456,10 +532,14 @@ async fn test_role_with_valid_permissions_succeeds() {
     let request = CreateRoleRequest {
         name: format!("Test Role {}", uuid::Uuid::new_v4()),
         description: Some("Test description".to_string()),
-        permissions: vec!["conversations:read".to_string(), "messages:write".to_string()],
+        permissions: vec![
+            "conversations:read".to_string(),
+            "messages:write".to_string(),
+        ],
     };
 
-    let result = role_service::create_role(&db, &admin, request).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let result = role_service.create_role(&admin, request).await;
 
     assert!(result.is_ok(), "Should accept role with valid permissions");
 }
@@ -472,9 +552,7 @@ async fn test_role_with_valid_permissions_succeeds() {
 async fn test_entity_deletion_bypasses_cardinality_validation() {
     // Setup
     // Setup test database
-    let test_db = setup_test_db()
-        .await
-        ;
+    let test_db = setup_test_db().await;
     let db = test_db.db();
 
     // Create admin user
@@ -490,13 +568,20 @@ async fn test_entity_deletion_bypasses_cardinality_validation() {
         role_id: None,
     };
 
-    let create_response = agent_service::create_agent(&db, &admin, create_request)
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let agent_service =
+        AgentService::new(db.clone(), std::sync::Arc::new(db.clone()), session_service);
+    let create_response = agent_service
+        .create_agent(&admin, create_request)
         .await
         .expect("Failed to create agent");
 
     // FR-017: Deletion should succeed even though agent has roles
     // (This tests that deletion is exempt from cardinality validation)
-    let result = agent_service::delete(&db, &admin, &create_response.user_id).await;
+    let result = agent_service.delete(&admin, &create_response.user_id).await;
 
-    assert!(result.is_ok(), "Entity deletion should bypass cardinality checks");
+    assert!(
+        result.is_ok(),
+        "Entity deletion should bypass cardinality checks"
+    );
 }
