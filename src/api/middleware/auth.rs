@@ -10,9 +10,6 @@ use axum::{
 };
 use std::sync::Arc;
 
-use crate::domain::ports::conversation_repository::ConversationRepository;
-use crate::domain::ports::message_repository::MessageRepository;
-
 #[derive(Clone)]
 pub struct AppState {
     pub db: Database,
@@ -38,6 +35,9 @@ pub struct AppState {
     pub conversation_service: crate::services::ConversationService,
     pub message_service: crate::services::MessageService,
     pub macro_service: crate::services::MacroService,
+    pub role_service: crate::services::RoleService,
+    pub inbox_service: crate::services::InboxService,
+    pub auth_service: crate::services::AuthService,
 }
 
 /// Extract and validate session token from Authorization header

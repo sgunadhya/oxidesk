@@ -106,69 +106,121 @@ pub struct AuthResult {
     pub roles: Vec<crate::models::Role>,
 }
 
-/// Authenticate agent with email and password
-/// Performs the full login flow:
-/// 1. Normalize/Validate email
-/// 2. Find user by email (must be Agent type)
-/// 3. Find agent profile
-/// 4. Verify password
-/// 5. Verify at least one role exists
-/// 6. Create session
-pub async fn authenticate(
-    db: &crate::database::Database,
-    session_service: &crate::services::SessionService,
-    email: &str,
-    password: &str,
-    session_duration_hours: i64,
-) -> ApiResult<AuthResult> {
-    use crate::models::{Session, UserType};
-    use crate::services::validate_and_normalize_email;
+use crate::domain::ports::role_repository::RoleRepository;
+use std::sync::Arc;
 
-    // 1. Validate and normalize email
-    let email = validate_and_normalize_email(email)?;
+#[derive(Clone)]
+pub struct AuthService {
+    user_repo: Arc<dyn UserRepository>,
+    agent_repo: Arc<dyn AgentRepository>,
+    role_repo: Arc<dyn RoleRepository>,
+    session_service: crate::services::SessionService,
+}
 
-    // 2. Get user by email
-    let user = db
-        .get_user_by_email_and_type(&email, &UserType::Agent)
-        .await?
-        .ok_or_else(|| {
-            // Use generic error for security (timing attacks notwithstanding)
-            ApiError::Unauthorized
-        })?;
-
-    // 3. Get agent
-    let agent = db
-        .get_agent_by_user_id(&user.id)
-        .await?
-        .ok_or(ApiError::Unauthorized)?;
-
-    // 4. Verify password
-    let password_valid = verify_password(password, &agent.password_hash)?;
-
-    if !password_valid {
-        return Err(ApiError::Unauthorized);
+impl AuthService {
+    pub fn new(
+        user_repo: Arc<dyn UserRepository>,
+        agent_repo: Arc<dyn AgentRepository>,
+        role_repo: Arc<dyn RoleRepository>,
+        session_service: crate::services::SessionService,
+    ) -> Self {
+        Self {
+            user_repo,
+            agent_repo,
+            role_repo,
+            session_service,
+        }
     }
 
-    // 5. Get user roles
-    let roles = db.get_user_roles(&user.id).await?;
+    /// Authenticate agent with email and password
+    /// Performs the full login flow:
+    /// 1. Normalize/Validate email
+    /// 2. Find user by email (must be Agent type)
+    /// 3. Find agent profile
+    /// 4. Verify password
+    /// 5. Verify at least one role exists
+    /// 6. Create session
+    pub async fn authenticate(
+        &self,
+        email: &str,
+        password: &str,
+        session_duration_hours: i64,
+    ) -> ApiResult<AuthResult> {
+        use crate::models::{Session, UserType};
+        use crate::services::validate_and_normalize_email;
 
-    if roles.is_empty() {
-        return Err(ApiError::Internal("User has no roles assigned".to_string()));
+        // 1. Validate and normalize email
+        let email = validate_and_normalize_email(email)?;
+
+        // 2. Get user by email
+        let user = self
+            .user_repo
+            .get_user_by_email_and_type(&email, &UserType::Agent)
+            .await?
+            .ok_or_else(|| {
+                // Use generic error for security (timing attacks notwithstanding)
+                ApiError::Unauthorized
+            })?;
+
+        // 3. Get agent
+        let agent = self
+            .agent_repo
+            .get_agent_by_user_id(&user.id)
+            .await?
+            .ok_or(ApiError::Unauthorized)?;
+
+        // 4. Verify password
+        let password_valid = verify_password(password, &agent.password_hash)?;
+
+        if !password_valid {
+            return Err(ApiError::Unauthorized);
+        }
+
+        // 5. Get user roles
+        let roles = self.role_repo.get_user_roles(&user.id).await?;
+
+        // Convert Domain Roles to Model Roles?
+        // RoleRepository::get_user_roles returns Vec<Role> (crate::domain::models::role::Role unless I aliased it?)
+        // AuthService expects crate::models::Role in AuthResult.
+        // I need to be careful about types.
+
+        // Let's check imports.
+        // `use crate::domain::ports::role_repository::RoleRepository;`
+        // In `src/domain/ports/role_repository.rs`, it returns `Vec<Role>` where `Role` is `crate::domain::models::role::Role`.
+        // `AuthResult` has `pub roles: Vec<crate::models::Role>`.
+        // I need to map them.
+
+        let model_roles: Vec<crate::models::Role> = roles
+            .into_iter()
+            .map(|r| crate::models::Role {
+                id: r.id,
+                name: r.name,
+                description: r.description,
+                permissions: r.permissions,
+                is_protected: r.is_protected,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+            })
+            .collect();
+
+        if model_roles.is_empty() {
+            return Err(ApiError::Internal("User has no roles assigned".to_string()));
+        }
+
+        // 6. Generate session token
+        let token = generate_session_token();
+
+        // 7. Create session
+        let session = Session::new(user.id.clone(), token, session_duration_hours);
+        self.session_service.create_session(&session).await?;
+
+        Ok(AuthResult {
+            session,
+            user,
+            agent,
+            roles: model_roles,
+        })
     }
-
-    // 6. Generate session token
-    let token = generate_session_token();
-
-    // 7. Create session
-    let session = Session::new(user.id.clone(), token, session_duration_hours);
-    session_service.create_session(&session).await?;
-
-    Ok(AuthResult {
-        session,
-        user,
-        agent,
-        roles,
-    })
 }
 
 #[cfg(test)]

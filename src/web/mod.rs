@@ -2,7 +2,7 @@ use crate::domain::ports::agent_repository::AgentRepository;
 use crate::{
     api::middleware::{AppState, AuthenticatedUser},
     models::CreateAgentRequest,
-    services,
+
 };
 use askama::Template;
 use axum::{
@@ -232,14 +232,10 @@ pub async fn show_login_page() -> impl IntoResponse {
 
 pub async fn handle_login(State(state): State<AppState>, Form(form): Form<LoginForm>) -> Response {
     // Delegate to auth service
-    let auth_result = match services::auth::authenticate(
-        &state.db,
-        &state.session_service,
-        &form.email,
-        &form.password,
-        state.session_duration_hours,
-    )
-    .await
+    let auth_result = match state
+        .auth_service
+        .authenticate(&form.email, &form.password, state.session_duration_hours)
+        .await
     {
         Ok(result) => result,
         Err(_) => {
@@ -543,7 +539,7 @@ pub async fn delete_role(
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
     Path(id): Path<String>,
 ) -> Response {
-    match services::role_service::delete(&state.db, &auth_user, &id).await {
+    match state.role_service.delete(&auth_user, &id).await {
         Ok(()) => Html("").into_response(),
         Err(e) => HtmlTemplate(ErrorPartial {
             message: e.to_string(),
@@ -1177,7 +1173,7 @@ pub async fn create_ticket(
     };
 
     // Determine Inbox ID using Service
-    let inbox_id = match crate::services::inbox_service::get_default_inbox_id(&state.db).await {
+    let inbox_id = match state.inbox_service.get_default_inbox_id().await {
         Ok(id) => id,
         Err(e) => return Html(format!("Error fetching inbox: {}", e)).into_response(),
     };

@@ -1,18 +1,25 @@
+use crate::domain::errors::{DomainError, DomainResult};
 use crate::domain::models::role::Role;
 use crate::domain::ports::role_repository::RoleRepository;
-use crate::domain::errors::{DomainError, DomainResult};
 
-pub struct RoleDomainService<R: RoleRepository> {
-    repository: R,
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct RoleDomainService {
+    repository: Arc<dyn RoleRepository>,
 }
 
-impl<R: RoleRepository> RoleDomainService<R> {
-    pub fn new(repository: R) -> Self {
+impl RoleDomainService {
+    pub fn new(repository: Arc<dyn RoleRepository>) -> Self {
         Self { repository }
     }
 
     pub async fn list_roles(&self) -> DomainResult<Vec<Role>> {
         self.repository.list_roles().await
+    }
+
+    pub async fn list_permissions(&self) -> DomainResult<Vec<crate::models::Permission>> {
+        self.repository.list_permissions().await
     }
 
     pub async fn get_role(&self, id: &str) -> DomainResult<Role> {
@@ -52,7 +59,9 @@ impl<R: RoleRepository> RoleDomainService<R> {
 
         // Check uniqueness
         if self.repository.get_role_by_name(&name).await?.is_some() {
-            return Err(DomainError::Conflict("Role name already exists".to_string()));
+            return Err(DomainError::Conflict(
+                "Role name already exists".to_string(),
+            ));
         }
 
         // Create
@@ -73,12 +82,14 @@ impl<R: RoleRepository> RoleDomainService<R> {
 
         // Domain Rule: Cannot modify protected roles
         if role.is_protected {
-            return Err(DomainError::Forbidden("Cannot modify Admin role".to_string()));
+            return Err(DomainError::Forbidden(
+                "Cannot modify Admin role".to_string(),
+            ));
         }
 
         // Validation if permissions are updated
         if let Some(ref perms) = permissions {
-             if perms.is_empty() {
+            if perms.is_empty() {
                 return Err(DomainError::ValidationError(
                     "Role must have at least one permission".to_string(),
                 ));
@@ -97,23 +108,27 @@ impl<R: RoleRepository> RoleDomainService<R> {
         // Check name uniqueness if changed
         if let Some(ref n) = name {
             if n.trim().is_empty() {
-                 return Err(DomainError::ValidationError(
+                return Err(DomainError::ValidationError(
                     "Role name cannot be empty".to_string(),
                 ));
             }
             if n != &role.name {
-                 if self.repository.get_role_by_name(n).await?.is_some() {
-                    return Err(DomainError::Conflict("Role name already exists".to_string()));
+                if self.repository.get_role_by_name(n).await?.is_some() {
+                    return Err(DomainError::Conflict(
+                        "Role name already exists".to_string(),
+                    ));
                 }
             }
         }
 
-        self.repository.update_role(
-            id, 
-            name.as_deref(), 
-            description.as_deref(), 
-            permissions.as_deref()
-        ).await?;
+        self.repository
+            .update_role(
+                id,
+                name.as_deref(),
+                description.as_deref(),
+                permissions.as_deref(),
+            )
+            .await?;
 
         self.get_role(id).await
     }
@@ -123,13 +138,15 @@ impl<R: RoleRepository> RoleDomainService<R> {
 
         // Domain Rule: Cannot delete protected roles
         if role.is_protected {
-            return Err(DomainError::Forbidden("Cannot modify Admin role".to_string()));
+            return Err(DomainError::Forbidden(
+                "Cannot modify Admin role".to_string(),
+            ));
         }
 
         // Domain Rule: Cannot delete if assigned
         let count = self.repository.count_users_with_role(id).await?;
         if count > 0 {
-             return Err(DomainError::Conflict(format!(
+            return Err(DomainError::Conflict(format!(
                 "Cannot delete role: {} agents currently assigned",
                 count
             )));

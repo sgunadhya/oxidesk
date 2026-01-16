@@ -8,8 +8,10 @@
 // - Role Permission Requirement: Roles must have at least one permission
 
 use oxidesk::{
-    database::Database, domain::ports::user_repository::UserRepository, models::*, services::*,
+    database::Database, domain::ports::role_repository::RoleRepository,
+    domain::ports::user_repository::UserRepository, models::*, services::*,
 };
+use std::sync::Arc;
 
 mod helpers;
 use helpers::*;
@@ -450,7 +452,8 @@ async fn test_role_must_have_at_least_one_permission_on_create() {
         permissions: vec![], // Empty array - violates cardinality
     };
 
-    let result = role_service::create_role(&db, &admin, request).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let result = role_service.create_role(&admin, request).await;
 
     // FR-014: Verify rejection with specific error message
     assert!(result.is_err(), "Should reject role with no permissions");
@@ -482,7 +485,9 @@ async fn test_role_must_have_at_least_one_permission_on_update() {
         permissions: vec!["conversations:read".to_string()],
     };
 
-    let role = role_service::create_role(&db, &admin, create_request)
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let role = role_service
+        .create_role(&admin, create_request)
         .await
         .expect("Failed to create role");
 
@@ -493,7 +498,9 @@ async fn test_role_must_have_at_least_one_permission_on_update() {
         permissions: Some(vec![]), // Empty array - violates cardinality
     };
 
-    let result = role_service::update_role(&db, &admin, &role.id, update_request).await;
+    let result = role_service
+        .update_role(&admin, &role.id, update_request)
+        .await;
 
     // FR-014: Verify rejection with specific error message
     assert!(
@@ -531,7 +538,8 @@ async fn test_role_with_valid_permissions_succeeds() {
         ],
     };
 
-    let result = role_service::create_role(&db, &admin, request).await;
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
+    let result = role_service.create_role(&admin, request).await;
 
     assert!(result.is_ok(), "Should accept role with valid permissions");
 }

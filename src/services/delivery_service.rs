@@ -1,5 +1,6 @@
 use crate::api::middleware::error::ApiResult;
 use crate::database::Database;
+use crate::domain::ports::message_repository::MessageRepository;
 use crate::models::{Message, MessageStatus};
 use async_trait::async_trait;
 use std::sync::Arc;

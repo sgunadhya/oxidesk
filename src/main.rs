@@ -110,7 +110,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize webhook service
     let webhook_service = oxidesk::WebhookService::new(db.clone());
     let conversation_tag_service = ConversationTagService::new(db.clone(), event_bus.clone());
+    use oxidesk::domain::ports::agent_repository::AgentRepository;
+    use oxidesk::domain::ports::inbox_repository::InboxRepository;
+    use oxidesk::domain::ports::role_repository::RoleRepository;
+    use oxidesk::domain::ports::user_repository::UserRepository;
+
+    let inbox_service = InboxService::new(Arc::new(db.clone()) as Arc<dyn InboxRepository>);
     let tag_service = TagService::new(db.clone());
+    let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
     tracing::info!("Automation service initialized");
     let connection_manager: Arc<dyn ConnectionManager> = Arc::new(InMemoryConnectionManager::new());
     tracing::info!("Connection manager initialized");
@@ -244,6 +251,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let macro_repo = oxidesk::domain::ports::macro_repository::MacroRepository::new(db.clone());
     let macro_service = oxidesk::services::MacroService::new(macro_repo);
 
+    // Initialize AuthService
+    let auth_service = oxidesk::services::AuthService::new(
+        Arc::new(db.clone()) as Arc<dyn UserRepository>,
+        Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+        Arc::new(db.clone()) as Arc<dyn RoleRepository>,
+        session_service.clone(),
+    );
+
     // Create application state
     let state = AppState {
         db: db.clone(),
@@ -269,6 +284,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         message_service,
         oidc_service,
         macro_service,
+        role_service,
+        inbox_service,
+        auth_service,
     };
 
     // Start automation listener background task

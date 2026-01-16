@@ -38,14 +38,14 @@ pub async fn login(
     }
 
     // Attempt authentication
-    let auth_result = match auth::authenticate(
-        &state.db,
-        &state.session_service,
-        &request.email,
-        &request.password,
-        state.session_duration_hours,
-    )
-    .await
+    let auth_result = match state
+        .auth_service
+        .authenticate(
+            &request.email,
+            &request.password,
+            state.session_duration_hours,
+        )
+        .await
     {
         Ok(result) => {
             // Reset rate limiter on successful login
@@ -334,17 +334,19 @@ pub async fn oidc_callback(
         .ok_or_else(|| ApiError::NotFound("OIDC provider not found".to_string()))?;
 
     // Handle callback and create session
-    let callback_result = match state.oidc_service.handle_callback(
-        &state.db,
-        &state.session_service,
-        &provider,
-        code,
-        state_param,
-        expected_state,
-        pkce_verifier,
-        state.session_duration_hours,
-    )
-    .await
+    let callback_result = match state
+        .oidc_service
+        .handle_callback(
+            &state.db,
+            &state.session_service,
+            &provider,
+            code,
+            state_param,
+            expected_state,
+            pkce_verifier,
+            state.session_duration_hours,
+        )
+        .await
     {
         Ok(result) => {
             // Log successful OIDC login

@@ -1,4 +1,3 @@
-use crate::database::Database;
 use crate::domain::ports::agent_repository::AgentRepository;
 use crate::domain::ports::contact_repository::ContactRepository;
 use crate::domain::ports::conversation_repository::ConversationRepository;
@@ -218,6 +217,7 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::Database;
 
     #[tokio::test]
     async fn test_format_subject_with_reference() {

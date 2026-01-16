@@ -3,6 +3,7 @@ pub mod attachment_repository;
 pub mod contact_repository;
 pub mod conversation_repository;
 pub mod email_repository;
+pub mod inbox_repository;
 pub mod macro_repository;
 pub mod message_repository;
 pub mod oidc_repository;

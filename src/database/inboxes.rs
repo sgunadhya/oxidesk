@@ -4,10 +4,14 @@ use crate::models::Inbox;
 use chrono;
 use sqlx::Row;
 
-impl Database {
+use crate::domain::ports::inbox_repository::InboxRepository;
+use async_trait::async_trait;
+
+#[async_trait]
+impl InboxRepository for Database {
     /// Soft delete an inbox
     /// Sets deleted_at timestamp and records who performed the deletion
-    pub async fn soft_delete_inbox(&self, inbox_id: &str, deleted_by: &str) -> ApiResult<()> {
+    async fn soft_delete_inbox(&self, inbox_id: &str, deleted_by: &str) -> ApiResult<()> {
         let now = chrono::Utc::now().to_rfc3339();
 
         let result = sqlx::query(
@@ -32,7 +36,7 @@ impl Database {
 
     /// Restore a soft deleted inbox
     /// Clears deleted_at and deleted_by fields
-    pub async fn restore_inbox(&self, inbox_id: &str) -> ApiResult<()> {
+    async fn restore_inbox(&self, inbox_id: &str) -> ApiResult<()> {
         let result = sqlx::query(
             "UPDATE inboxes
              SET deleted_at = NULL, deleted_by = NULL
@@ -52,7 +56,7 @@ impl Database {
     }
 
     // Inbox operations
-    pub async fn create_inbox(&self, inbox: &Inbox) -> ApiResult<()> {
+    async fn create_inbox(&self, inbox: &Inbox) -> ApiResult<()> {
         sqlx::query(
             "INSERT INTO inboxes (id, name, channel_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
         )
@@ -66,7 +70,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn list_inboxes(&self) -> ApiResult<Vec<Inbox>> {
+    async fn list_inboxes(&self) -> ApiResult<Vec<Inbox>> {
         let rows = sqlx::query(
             "SELECT id, name, channel_type, created_at, updated_at, deleted_at, deleted_by
              FROM inboxes
@@ -89,5 +93,25 @@ impl Database {
             });
         }
         Ok(inboxes)
+    }
+}
+
+// Legacy Inherent Implementation (delegating to trait impl if needed, or removing if safe)
+// Keeping simple inherent wrappers if other modules rely on them, or removing if we update all consumers.
+impl Database {
+    pub async fn soft_delete_inbox(&self, inbox_id: &str, deleted_by: &str) -> ApiResult<()> {
+        <Self as InboxRepository>::soft_delete_inbox(self, inbox_id, deleted_by).await
+    }
+
+    pub async fn restore_inbox(&self, inbox_id: &str) -> ApiResult<()> {
+        <Self as InboxRepository>::restore_inbox(self, inbox_id).await
+    }
+
+    pub async fn create_inbox(&self, inbox: &Inbox) -> ApiResult<()> {
+        <Self as InboxRepository>::create_inbox(self, inbox).await
+    }
+
+    pub async fn list_inboxes(&self) -> ApiResult<Vec<Inbox>> {
+        <Self as InboxRepository>::list_inboxes(self).await
     }
 }

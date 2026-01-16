@@ -4,39 +4,41 @@ use crate::models::{Message, MessageStatus, MessageType};
 use sqlx::Row;
 use time;
 
-impl Database {
-    // Message operations
-    pub async fn create_message(&self, message: &Message) -> ApiResult<()> {
+use crate::domain::ports::message_repository::MessageRepository;
+
+#[async_trait::async_trait]
+impl MessageRepository for Database {
+    async fn create_message(&self, message: &Message) -> ApiResult<()> {
         sqlx::query(
             "INSERT INTO messages (id, conversation_id, type, status, content, author_id, is_immutable, retry_count, created_at, sent_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
-        .bind(&message.id)
-        .bind(&message.conversation_id)
-        .bind(message.message_type.as_str())
-        .bind(message.status.as_str())
-        .bind(&message.content)
-        .bind(&message.author_id)
-        .bind(message.is_immutable)
-        .bind(message.retry_count)
-        .bind(&message.created_at)
-        .bind(&message.sent_at)
-        .bind(&message.updated_at)
-        .execute(&self.pool)
-        .await?;
+            .bind(&message.id)
+            .bind(&message.conversation_id)
+            .bind(message.message_type.as_str())
+            .bind(message.status.as_str())
+            .bind(&message.content)
+            .bind(&message.author_id)
+            .bind(message.is_immutable)
+            .bind(message.retry_count)
+            .bind(&message.created_at)
+            .bind(&message.sent_at)
+            .bind(&message.updated_at)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
 
-    pub async fn get_message_by_id(&self, id: &str) -> ApiResult<Option<Message>> {
+    async fn get_message_by_id(&self, message_id: &str) -> ApiResult<Option<Message>> {
         let row = sqlx::query(
             "SELECT id, conversation_id, type, status, content, author_id, is_immutable, retry_count, created_at, sent_at, updated_at
              FROM messages
              WHERE id = ?",
         )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?;
+            .bind(message_id)
+            .fetch_optional(&self.pool)
+            .await?;
 
         if let Some(row) = row {
             let message_type_str: String = row.try_get("type")?;
@@ -60,13 +62,12 @@ impl Database {
         }
     }
 
-    pub async fn list_messages(
+    async fn list_messages(
         &self,
         conversation_id: &str,
         limit: i64,
         offset: i64,
     ) -> ApiResult<(Vec<Message>, i64)> {
-        // Get total count
         let count_row =
             sqlx::query("SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?")
                 .bind(conversation_id)
@@ -82,11 +83,11 @@ impl Database {
              ORDER BY created_at DESC
              LIMIT ? OFFSET ?",
         )
-        .bind(conversation_id)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&self.pool)
-        .await?;
+            .bind(conversation_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await?;
 
         let mut messages = Vec::new();
         for row in rows {
@@ -111,7 +112,7 @@ impl Database {
         Ok((messages, total_count))
     }
 
-    pub async fn update_message_status(
+    async fn update_message_status(
         &self,
         message_id: &str,
         status: MessageStatus,
@@ -127,106 +128,28 @@ impl Database {
                  SET status = ?, sent_at = ?, updated_at = ?, is_immutable = ?
                  WHERE id = ?",
             )
-            .bind(status.as_str())
-            .bind(sent_at_value)
-            .bind(&now)
-            .bind(status.is_immutable())
-            .bind(message_id)
-            .execute(&self.pool)
-            .await?;
+                .bind(status.as_str())
+                .bind(sent_at_value)
+                .bind(&now)
+                .bind(status.is_immutable())
+                .bind(message_id)
+                .execute(&self.pool)
+                .await?;
         } else {
             sqlx::query(
                 "UPDATE messages
                  SET status = ?, updated_at = ?, is_immutable = ?
                  WHERE id = ?",
             )
-            .bind(status.as_str())
-            .bind(&now)
-            .bind(status.is_immutable())
-            .bind(message_id)
-            .execute(&self.pool)
-            .await?;
+                .bind(status.as_str())
+                .bind(&now)
+                .bind(status.is_immutable())
+                .bind(message_id)
+                .execute(&self.pool)
+                .await?;
         }
 
         Ok(())
-    }
-
-    pub async fn update_conversation_message_timestamps(
-        &self,
-        conversation_id: &str,
-        message_id: &str,
-        last_message_at: &str,
-        last_reply_at: Option<&str>,
-    ) -> ApiResult<()> {
-        if let Some(reply_at) = last_reply_at {
-            sqlx::query(
-                "UPDATE conversations
-                 SET last_message_id = ?, last_message_at = ?, last_reply_at = ?, updated_at = ?
-                 WHERE id = ?",
-            )
-            .bind(message_id)
-            .bind(last_message_at)
-            .bind(reply_at)
-            .bind(last_message_at)
-            .bind(conversation_id)
-            .execute(&self.pool)
-            .await?;
-        } else {
-            sqlx::query(
-                "UPDATE conversations
-                 SET last_message_id = ?, last_message_at = ?, updated_at = ?
-                 WHERE id = ?",
-            )
-            .bind(message_id)
-            .bind(last_message_at)
-            .bind(last_message_at)
-            .bind(conversation_id)
-            .execute(&self.pool)
-            .await?;
-        }
-
-        Ok(())
-    }
-
-    pub async fn count_messages(&self, conversation_id: &str) -> ApiResult<i64> {
-        let row = sqlx::query("SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?")
-            .bind(conversation_id)
-            .fetch_one(&self.pool)
-            .await?;
-
-        let count: i64 = row.try_get("count")?;
-        Ok(count)
-    }
-}
-
-use crate::domain::ports::message_repository::MessageRepository;
-
-#[async_trait::async_trait]
-impl MessageRepository for Database {
-    async fn create_message(&self, message: &Message) -> ApiResult<()> {
-        Database::create_message(self, message).await
-    }
-
-    async fn get_message_by_id(&self, message_id: &str) -> ApiResult<Option<Message>> {
-        Database::get_message_by_id(self, message_id).await
-    }
-
-    async fn list_messages(
-        &self,
-        conversation_id: &str,
-        limit: i64,
-        offset: i64,
-    ) -> ApiResult<(Vec<Message>, i64)> {
-        Database::list_messages(self, conversation_id, limit, offset).await
-    }
-
-    async fn update_message_status(
-        &self,
-        message_id: &str,
-        status: MessageStatus,
-        sent_at: Option<&str>,
-    ) -> ApiResult<()> {
-        Database::update_message_status(self, message_id, status, sent_at).await
     }
 
     async fn update_conversation_message_timestamps(
@@ -236,18 +159,45 @@ impl MessageRepository for Database {
         last_message_at: &str,
         last_reply_at: Option<&str>,
     ) -> ApiResult<()> {
-        Database::update_conversation_message_timestamps(
-            self,
-            conversation_id,
-            message_id,
-            last_message_at,
-            last_reply_at,
-        )
-        .await
+
+        if let Some(reply_at) = last_reply_at {
+            sqlx::query(
+                "UPDATE conversations
+                 SET last_message_id = ?, last_message_at = ?, last_reply_at = ?, updated_at = ?
+                 WHERE id = ?",
+            )
+                .bind(message_id)
+                .bind(last_message_at)
+                .bind(reply_at)
+                .bind(last_message_at)
+                .bind(conversation_id)
+                .execute(&self.pool)
+                .await?;
+        } else {
+            sqlx::query(
+                "UPDATE conversations
+                 SET last_message_id = ?, last_message_at = ?, updated_at = ?
+                 WHERE id = ?",
+            )
+                .bind(message_id)
+                .bind(last_message_at)
+                .bind(last_message_at)
+                .bind(conversation_id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        Ok(())
     }
 
     async fn count_messages(&self, conversation_id: &str) -> ApiResult<i64> {
-        Database::count_messages(self, conversation_id).await
+        let row = sqlx::query("SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?")
+            .bind(conversation_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        let count: i64 = row.try_get("count")?;
+        Ok(count)
     }
 
     async fn create_notification(

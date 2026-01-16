@@ -229,6 +229,86 @@ impl RoleRepository for Database {
 
         Ok(row.try_get("count").unwrap_or(0))
     }
+
+    async fn list_permissions(&self) -> DomainResult<Vec<Permission>> {
+        let rows = sqlx::query(
+            "SELECT id, name, description, created_at, updated_at
+             FROM permissions
+             ORDER BY name",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| DomainError::Internal(e.to_string()))?;
+
+        let mut permissions = Vec::new();
+        for row in rows {
+            permissions.push(Permission {
+                id: row
+                    .try_get("id")
+                    .map_err(|e| DomainError::Internal(e.to_string()))?,
+                name: row
+                    .try_get("name")
+                    .map_err(|e| DomainError::Internal(e.to_string()))?,
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| DomainError::Internal(e.to_string()))?,
+                updated_at: row
+                    .try_get("updated_at")
+                    .map_err(|e| DomainError::Internal(e.to_string()))?,
+            });
+        }
+
+        Ok(permissions)
+    }
+
+    async fn get_user_roles(&self, user_id: &str) -> DomainResult<Vec<DomainRole>> {
+        let rows = sqlx::query(
+            "SELECT r.id, r.name, r.description, r.permissions, CAST(r.is_protected AS INTEGER) as is_protected, r.created_at, r.updated_at
+             FROM roles r
+             INNER JOIN user_roles ur ON r.id = ur.role_id
+             WHERE ur.user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| DomainError::Internal(e.to_string()))?;
+
+        let mut roles = Vec::new();
+        for row in rows {
+            let permissions_json: String = row
+                .try_get("permissions")
+                .map_err(|e| DomainError::Internal(e.to_string()))?;
+            let permissions: Vec<String> =
+                serde_json::from_str(&permissions_json).unwrap_or_else(|_| Vec::new());
+
+            roles.push(DomainRole {
+                id: row
+                    .try_get("id")
+                    .map_err(|e| DomainError::Internal(e.to_string()))?,
+                name: row
+                    .try_get("name")
+                    .map_err(|e| DomainError::Internal(e.to_string()))?,
+                description: row
+                    .try_get::<Option<String>, _>("description")
+                    .ok()
+                    .flatten(),
+                permissions,
+                is_protected: row.try_get::<i32, _>("is_protected").unwrap_or(0) != 0,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| DomainError::Internal(e.to_string()))?,
+                updated_at: row
+                    .try_get("updated_at")
+                    .map_err(|e| DomainError::Internal(e.to_string()))?,
+            });
+        }
+
+        Ok(roles)
+    }
 }
 
 // Legacy Inherent Implementation

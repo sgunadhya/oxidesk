@@ -11,6 +11,10 @@ use helpers::conversation_helpers::create_test_conversation;
 use helpers::*;
 use oxidesk::database::Database;
 use oxidesk::domain::ports::contact_repository::ContactRepository;
+use oxidesk::domain::ports::conversation_repository::ConversationRepository;
+use oxidesk::domain::ports::email_repository::EmailRepository;
+use oxidesk::domain::ports::inbox_repository::InboxRepository;
+use oxidesk::domain::ports::message_repository::MessageRepository;
 use oxidesk::domain::ports::user_repository::UserRepository;
 use oxidesk::models::{
     Contact, ConversationStatus, CreateConversation, InboxEmailConfig, Message, User, UserType,
