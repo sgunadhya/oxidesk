@@ -1,11 +1,12 @@
-use oxidesk::database::agents::AgentRepository;
+use oxidesk::domain::ports::agent_repository::AgentRepository;
+use oxidesk::domain::ports::user_repository::UserRepository;
 mod helpers;
 
 use helpers::*;
 use oxidesk::{
     models::{CreateAgentRequest, UserType},
-    services::agent_service::create_agent,
     services::verify_password,
+    services::AgentService,
 };
 
 #[tokio::test]
@@ -25,7 +26,9 @@ async fn test_create_agent_service_flow() {
     };
 
     // 3. Call create_agent
-    let response = create_agent(db, &admin_user, request.clone())
+    let agent_service = AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let response = agent_service
+        .create_agent(&admin_user, request.clone())
         .await
         .expect("Failed to create agent");
 

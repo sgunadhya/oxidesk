@@ -3,9 +3,19 @@ use crate::database::Database;
 use crate::models::{User, UserType};
 use sqlx::Row;
 
+use crate::domain::ports::user_repository::UserRepository;
+use async_trait::async_trait;
+
+// Internal helpers
 impl Database {
-    // User operations
-    pub async fn create_user(&self, user: &User) -> ApiResult<()> {
+    pub(crate) async fn create_user_internal<'e, E>(
+        &self,
+        executor: E,
+        user: &User,
+    ) -> ApiResult<()>
+    where
+        E: sqlx::Executor<'e, Database = sqlx::Any>,
+    {
         sqlx::query(
             "INSERT INTO users (id, email, user_type, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?)",
@@ -18,13 +28,21 @@ impl Database {
         })
         .bind(&user.created_at)
         .bind(&user.updated_at)
-        .execute(&self.pool)
+        .execute(executor)
         .await?;
 
         Ok(())
     }
+}
 
-    pub async fn get_user_by_email_and_type(
+#[async_trait]
+impl UserRepository for Database {
+    // User operations
+    async fn create_user(&self, user: &User) -> ApiResult<()> {
+        self.create_user_internal(&self.pool, user).await
+    }
+
+    async fn get_user_by_email_and_type(
         &self,
         email: &str,
         user_type: &UserType,
@@ -63,7 +81,7 @@ impl Database {
         }
     }
 
-    pub async fn get_user_by_id(&self, id: &str) -> ApiResult<Option<User>> {
+    async fn get_user_by_id(&self, id: &str) -> ApiResult<Option<User>> {
         let row = sqlx::query(
             "SELECT id, email, user_type, created_at, updated_at, deleted_at, deleted_by
              FROM users
@@ -92,12 +110,7 @@ impl Database {
         }
     }
 
-    pub async fn update_user_email(
-        &self,
-        id: &str,
-        email: &str,
-        updated_at: &str,
-    ) -> ApiResult<()> {
+    async fn update_user_email(&self, id: &str, email: &str, updated_at: &str) -> ApiResult<()> {
         sqlx::query("UPDATE users SET email = ?, updated_at = ? WHERE id = ?")
             .bind(email)
             .bind(updated_at)
@@ -111,7 +124,7 @@ impl Database {
     // Soft Delete operations
     /// Soft delete a user (agent or contact)
     /// Sets deleted_at timestamp and records who performed the deletion
-    pub async fn soft_delete_user(&self, user_id: &str, deleted_by: &str) -> ApiResult<()> {
+    async fn soft_delete_user(&self, user_id: &str, deleted_by: &str) -> ApiResult<()> {
         let now = chrono::Utc::now().to_rfc3339();
 
         let result = sqlx::query(
@@ -142,7 +155,7 @@ impl Database {
 
     /// Restore a soft deleted user
     /// Clears deleted_at and deleted_by fields
-    pub async fn restore_user(&self, user_id: &str) -> ApiResult<()> {
+    async fn restore_user(&self, user_id: &str) -> ApiResult<()> {
         let result = sqlx::query(
             "UPDATE users
              SET deleted_at = NULL, deleted_by = NULL
@@ -162,7 +175,7 @@ impl Database {
     }
 
     // Generic user operations
-    pub async fn list_users(
+    async fn list_users(
         &self,
         limit: i64,
         offset: i64,
@@ -235,7 +248,7 @@ impl Database {
         Ok((users, total_count))
     }
 
-    pub async fn get_users_by_usernames(&self, usernames: &[String]) -> ApiResult<Vec<User>> {
+    async fn get_users_by_usernames(&self, usernames: &[String]) -> ApiResult<Vec<User>> {
         if usernames.is_empty() {
             return Ok(Vec::new());
         }
@@ -272,6 +285,47 @@ impl Database {
                 updated_at: row.try_get("updated_at")?,
                 deleted_at: None,
                 deleted_by: None,
+            });
+        }
+
+        Ok(users)
+    }
+
+    async fn get_users_by_ids(&self, ids: &[String]) -> ApiResult<Vec<User>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let query_str = format!(
+            "SELECT id, email, user_type, created_at, updated_at, deleted_at, deleted_by
+             FROM users
+             WHERE id IN ({}) AND deleted_at IS NULL",
+            placeholders
+        );
+
+        let mut query = sqlx::query(&query_str);
+        for id in ids {
+            query = query.bind(id);
+        }
+
+        let rows = query.fetch_all(&self.pool).await?;
+
+        let mut users = Vec::new();
+        for row in rows {
+            let user_type_str: String = row.try_get("user_type")?;
+            users.push(User {
+                id: row.try_get("id")?,
+                email: row.try_get("email")?,
+                user_type: if user_type_str == "agent" {
+                    UserType::Agent
+                } else {
+                    UserType::Contact
+                },
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+                deleted_at: row.try_get("deleted_at").ok(),
+                deleted_by: row.try_get("deleted_by").ok(),
             });
         }
 

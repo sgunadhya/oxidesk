@@ -7,7 +7,9 @@
 // - Webhook Event Subscription: Webhooks must have at least one event
 // - Role Permission Requirement: Roles must have at least one permission
 
-use oxidesk::{database::Database, models::*, services::*};
+use oxidesk::{
+    database::Database, domain::ports::user_repository::UserRepository, models::*, services::*,
+};
 
 mod helpers;
 use helpers::*;
@@ -111,7 +113,9 @@ async fn test_agent_must_have_at_least_one_role_on_update() {
         role_id: None, // Will use default role
     };
 
-    let create_response = agent_service::create_agent(&db, &admin, create_request)
+    let agent_service = AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let create_response = agent_service
+        .create_agent(&admin, create_request)
         .await
         .expect("Failed to create agent");
 
@@ -121,8 +125,9 @@ async fn test_agent_must_have_at_least_one_role_on_update() {
         role_ids: Some(vec![]), // Empty array - violates cardinality
     };
 
-    let result =
-        agent_service::update_agent(&db, &admin, &create_response.user_id, update_request).await;
+    let result = agent_service
+        .update_agent(&admin, &create_response.user_id, update_request)
+        .await;
 
     // FR-003: Verify rejection with specific error message
     assert!(result.is_err(), "Should reject agent update with no roles");
@@ -535,13 +540,15 @@ async fn test_entity_deletion_bypasses_cardinality_validation() {
         role_id: None,
     };
 
-    let create_response = agent_service::create_agent(&db, &admin, create_request)
+    let agent_service = AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let create_response = agent_service
+        .create_agent(&admin, create_request)
         .await
         .expect("Failed to create agent");
 
     // FR-017: Deletion should succeed even though agent has roles
     // (This tests that deletion is exempt from cardinality validation)
-    let result = agent_service::delete(&db, &admin, &create_response.user_id).await;
+    let result = agent_service.delete(&admin, &create_response.user_id).await;
 
     assert!(
         result.is_ok(),

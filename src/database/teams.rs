@@ -1,6 +1,7 @@
 use crate::api::middleware::error::{ApiError, ApiResult};
 use crate::database::Database;
-use crate::models::{Team, TeamMemberRole, TeamMembership, User, UserType};
+use crate::domain::ports::user_repository::UserRepository;
+use crate::models::{Team, TeamMemberRole, TeamMembership, User};
 use sqlx::Row;
 
 impl Database {
@@ -132,34 +133,26 @@ impl Database {
     }
 
     pub async fn get_team_members(&self, team_id: &str) -> ApiResult<Vec<User>> {
-        let rows = sqlx::query(
-            "SELECT u.id, u.email, u.user_type, u.created_at, u.updated_at
-             FROM users u
-             INNER JOIN team_memberships tm ON u.id = tm.user_id
-             WHERE tm.team_id = ?
-             ORDER BY u.email ASC",
-        )
-        .bind(team_id)
-        .fetch_all(&self.pool)
-        .await?;
+        // Get member IDs first
+        let rows = sqlx::query("SELECT user_id FROM team_memberships WHERE team_id = ?")
+            .bind(team_id)
+            .fetch_all(&self.pool)
+            .await?;
 
-        let mut users = Vec::new();
-        for row in rows {
-            let user_type_str: String = row.try_get("user_type")?;
-            users.push(User {
-                id: row.try_get("id")?,
-                email: row.try_get("email")?,
-                user_type: match user_type_str.as_str() {
-                    "agent" => UserType::Agent,
-                    "contact" => UserType::Contact,
-                    _ => UserType::Agent,
-                },
-                created_at: row.try_get("created_at")?,
-                updated_at: row.try_get("updated_at")?,
-                deleted_at: None,
-                deleted_by: None,
-            });
+        let user_ids: Vec<String> = rows
+            .iter()
+            .map(|row| row.try_get("user_id"))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if user_ids.is_empty() {
+            return Ok(Vec::new());
         }
+
+        // Get users via repository
+        let mut users = self.get_users_by_ids(&user_ids).await?;
+
+        // Sort by email ASC to match original behavior
+        users.sort_by(|a, b| a.email.cmp(&b.email));
 
         Ok(users)
     }

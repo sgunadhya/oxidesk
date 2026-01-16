@@ -42,6 +42,8 @@ pub mod webhook_service;
 pub mod webhook_signature;
 pub mod webhook_worker;
 
+pub use action_executor::*;
+pub use agent_service::*;
 pub use api_key_service::*;
 pub use assignment_service::*;
 pub use attachment_service::*;
@@ -50,6 +52,7 @@ pub use auth_logger::*;
 pub use automation_service::*;
 pub use availability_service::*;
 pub use connection_manager::*;
+pub use contact_service::*;
 pub use conversation_tag_service::*;
 pub use csrf::*;
 pub use delivery_service::*;

@@ -3,9 +3,13 @@ use crate::database::Database;
 use crate::models::{Contact, ContactChannel, User, UserType};
 use sqlx::Row;
 
-impl Database {
+use crate::domain::ports::contact_repository::ContactRepository;
+use async_trait::async_trait;
+
+#[async_trait]
+impl ContactRepository for Database {
     // Contact operations
-    pub async fn create_contact(&self, contact: &Contact) -> ApiResult<()> {
+    async fn create_contact(&self, contact: &Contact) -> ApiResult<()> {
         // Handle Option<String> for first_name
         let first_name_value: Option<&str> = contact.first_name.as_deref();
 
@@ -22,7 +26,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn find_contact_by_user_id(&self, user_id: &str) -> ApiResult<Option<Contact>> {
+    async fn find_contact_by_user_id(&self, user_id: &str) -> ApiResult<Option<Contact>> {
         let row = sqlx::query(
             "SELECT id, user_id, first_name
              FROM contacts
@@ -46,7 +50,7 @@ impl Database {
         }
     }
 
-    pub async fn create_contact_channel(&self, channel: &ContactChannel) -> ApiResult<()> {
+    async fn create_contact_channel(&self, channel: &ContactChannel) -> ApiResult<()> {
         sqlx::query(
             "INSERT INTO contact_channels (id, contact_id, inbox_id, email, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?)",
@@ -65,7 +69,7 @@ impl Database {
 
     /// Get contact by email (Feature 016: User Creation)
     /// Used for idempotent contact creation - check if contact exists before creating
-    pub async fn get_contact_by_email(&self, email: &str) -> ApiResult<Option<Contact>> {
+    async fn get_contact_by_email(&self, email: &str) -> ApiResult<Option<Contact>> {
         let row = sqlx::query(
             "SELECT c.id, c.user_id, c.first_name
              FROM contacts c
@@ -90,7 +94,7 @@ impl Database {
     /// Create contact from incoming message (Feature 016: User Creation)
     /// Creates user + contact + contact_channel in a single transaction
     /// Returns the created contact_id
-    pub async fn create_contact_from_message(
+    async fn create_contact_from_message(
         &self,
         email: &str,
         full_name: Option<&str>,
@@ -100,17 +104,7 @@ impl Database {
 
         // Create user
         let user = User::new(email.to_string(), UserType::Contact);
-        sqlx::query(
-            "INSERT INTO users (id, email, user_type, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(&user.id)
-        .bind(&user.email)
-        .bind("contact")
-        .bind(&user.created_at)
-        .bind(&user.updated_at)
-        .execute(&mut *tx)
-        .await?;
+        self.create_user_internal(&mut *tx, &user).await?;
 
         // Create contact
         let contact = Contact::new(user.id.clone(), full_name.map(|s| s.to_string()));
@@ -146,11 +140,7 @@ impl Database {
     }
 
     // Contact update operations
-    pub async fn update_contact(
-        &self,
-        contact_id: &str,
-        first_name: &Option<String>,
-    ) -> ApiResult<()> {
+    async fn update_contact(&self, contact_id: &str, first_name: Option<String>) -> ApiResult<()> {
         let first_name_value: Option<&str> = first_name.as_deref();
 
         sqlx::query(
@@ -166,35 +156,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn delete_contact(&self, user_id: &str) -> ApiResult<()> {
-        sqlx::query("DELETE FROM users WHERE id = ?")
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
-    }
-
-    pub async fn delete_user(&self, user_id: &str) -> ApiResult<()> {
-        sqlx::query("DELETE FROM users WHERE id = ?")
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
-    }
-
-    pub async fn update_contact_name(&self, id: &str, first_name: &str) -> ApiResult<()> {
-        sqlx::query("UPDATE contacts SET first_name = ? WHERE id = ?")
-            .bind(first_name)
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
-    }
-
-    pub async fn find_contact_channels(&self, contact_id: &str) -> ApiResult<Vec<ContactChannel>> {
+    async fn find_contact_channels(&self, contact_id: &str) -> ApiResult<Vec<ContactChannel>> {
         let rows = sqlx::query(
             "SELECT id, contact_id, inbox_id, email, created_at, updated_at
              FROM contact_channels
@@ -220,7 +182,7 @@ impl Database {
     }
 
     // List contacts with pagination
-    pub async fn list_contacts(&self, limit: i64, offset: i64) -> ApiResult<Vec<(User, Contact)>> {
+    async fn list_contacts(&self, limit: i64, offset: i64) -> ApiResult<Vec<(User, Contact)>> {
         let rows = sqlx::query(
             "SELECT u.id, u.email, u.user_type, u.created_at, u.updated_at,
                     c.id as contact_id, c.user_id as contact_user_id, c.first_name
@@ -263,7 +225,7 @@ impl Database {
     }
 
     // Count total contacts
-    pub async fn count_contacts(&self) -> ApiResult<i64> {
+    async fn count_contacts(&self) -> ApiResult<i64> {
         let row = sqlx::query(
             "SELECT COUNT(*) as count
              FROM users
@@ -273,5 +235,34 @@ impl Database {
         .await?;
 
         Ok(row.try_get("count")?)
+    }
+    async fn delete_contact(&self, contact_id: &str) -> ApiResult<()> {
+        sqlx::query("DELETE FROM users WHERE id = ?")
+            .bind(contact_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+}
+
+impl Database {
+    pub async fn delete_user(&self, user_id: &str) -> ApiResult<()> {
+        sqlx::query("DELETE FROM users WHERE id = ?")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_contact_name(&self, id: &str, first_name: &str) -> ApiResult<()> {
+        sqlx::query("UPDATE contacts SET first_name = ? WHERE id = ?")
+            .bind(first_name)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 }

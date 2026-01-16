@@ -1,4 +1,5 @@
-use crate::database::agents::AgentRepository;
+use crate::domain::ports::agent_repository::AgentRepository;
+use crate::domain::ports::user_repository::UserRepository;
 use crate::{
     api::middleware::ApiError,
     database::Database,

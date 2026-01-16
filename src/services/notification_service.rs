@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use super::connection_manager::{ConnectionManager, NotificationEvent};
 use crate::database::Database;
+use crate::domain::ports::user_repository::UserRepository;
 use crate::models::UserNotification;
 
 /// Notification service for handling user notifications

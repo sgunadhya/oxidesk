@@ -1,4 +1,5 @@
-use oxidesk::database::agents::AgentRepository;
+use oxidesk::domain::ports::agent_repository::AgentRepository;
+use oxidesk::domain::ports::user_repository::UserRepository;
 mod helpers;
 use uuid::Uuid;
 

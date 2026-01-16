@@ -1,6 +1,7 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
+    domain::ports::user_repository::UserRepository,
     models::*,
 };
 use regex::Regex;
@@ -69,7 +70,7 @@ impl MacroService {
         }
 
         // Handle whitespace variations (e.g., {{ contact_name }})
-        let re = Regex::new(r"\{\{\s*(\w+)\s*\}\}").unwrap();
+        let re = Regex::new(r"\{\{\s*(\w+)\s*}}").unwrap();
         for cap in re.captures_iter(&result.clone()) {
             let full_match = &cap[0];
             let var_name = &cap[1];

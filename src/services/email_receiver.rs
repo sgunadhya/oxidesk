@@ -17,15 +17,21 @@ use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 /// Email receiver service
 pub struct EmailReceiverService {
     db: Database,
+    contact_service: crate::services::ContactService,
     parser: EmailParserService,
     attachment_service: AttachmentService,
 }
 
 impl EmailReceiverService {
     /// Create a new email receiver service
-    pub fn new(db: Database, attachment_service: AttachmentService) -> Self {
+    pub fn new(
+        db: Database,
+        contact_service: crate::services::ContactService,
+        attachment_service: AttachmentService,
+    ) -> Self {
         Self {
             db,
+            contact_service,
             parser: EmailParserService::new(),
             attachment_service,
         }
@@ -179,13 +185,17 @@ impl EmailReceiverService {
         name: Option<&str>,
     ) -> ApiResult<String> {
         // Try to find existing contact by email
-        if let Some(contact) = self.db.get_contact_by_email(email_address).await? {
+        if let Some(contact) = self
+            .contact_service
+            .get_contact_by_email(email_address)
+            .await?
+        {
             return Ok(contact.id);
         }
 
-        // Create new contact using the database method
+        // Create new contact using the service method
         let contact_id = self
-            .db
+            .contact_service
             .create_contact_from_message(email_address, name, inbox_id)
             .await?;
 
@@ -382,8 +392,13 @@ pub fn spawn_email_polling_worker(
                     // Process each inbox concurrently
                     let mut handles = Vec::new();
                     for config in configs {
+                        let contact_service = crate::services::ContactService::new(
+                            std::sync::Arc::new(db.clone()),
+                            std::sync::Arc::new(db.clone()),
+                        );
                         let receiver = EmailReceiverService::new(
                             db.clone(),
+                            contact_service,
                             AttachmentService::new(db.clone(), attachment_storage_path.clone()),
                         );
                         let inbox_id = config.inbox_id.clone();

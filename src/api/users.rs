@@ -1,4 +1,4 @@
-use crate::database::agents::AgentRepository;
+use crate::domain::ports::agent_repository::AgentRepository;
 use crate::{
     api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
     models::*,
@@ -58,7 +58,7 @@ pub async fn list_users(
 
     // Get users with pagination and optional type filter
     let (users, total_count) = state
-        .db
+        .user_service
         .list_users(per_page, offset, user_type_filter)
         .await?;
 
@@ -70,7 +70,7 @@ pub async fn list_users(
         match user.user_type {
             UserType::Agent => {
                 // Get agent details
-                if let Some(agent) = state.db.get_agent_by_user_id(&user.id).await? {
+                if let Some(agent) = state.agent_service.get_agent_by_user_id(&user.id).await? {
                     let roles = state.db.get_user_roles(&user.id).await?;
 
                     let role_responses: Vec<RoleResponse> = roles
@@ -97,8 +97,16 @@ pub async fn list_users(
             }
             UserType::Contact => {
                 // Get contact details
-                if let Some(contact) = state.db.find_contact_by_user_id(&user.id).await? {
-                    let channels = state.db.find_contact_channels(&contact.id).await?;
+                // Get contact details
+                if let Some(contact) = state
+                    .contact_service
+                    .find_contact_by_user_id(&user.id)
+                    .await?
+                {
+                    let channels = state
+                        .contact_service
+                        .find_contact_channels(&contact.id)
+                        .await?;
 
                     user_responses.push(UserSummary::Contact {
                         id: user.id.clone(),
@@ -130,7 +138,7 @@ pub async fn get_user(
 ) -> ApiResult<Json<UserDetail>> {
     // Get user
     let user = state
-        .db
+        .user_service
         .get_user_by_id(&id)
         .await?
         .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
@@ -139,7 +147,7 @@ pub async fn get_user(
         UserType::Agent => {
             // Get agent details
             let agent = state
-                .db
+                .agent_service
                 .get_agent_by_user_id(&user.id)
                 .await?
                 .ok_or_else(|| ApiError::NotFound("Agent details not found".to_string()))?;
@@ -172,12 +180,15 @@ pub async fn get_user(
         UserType::Contact => {
             // Get contact details
             let contact = state
-                .db
+                .contact_service
                 .find_contact_by_user_id(&user.id)
                 .await?
                 .ok_or_else(|| ApiError::NotFound("Contact details not found".to_string()))?;
 
-            let channels = state.db.find_contact_channels(&contact.id).await?;
+            let channels = state
+                .contact_service
+                .find_contact_channels(&contact.id)
+                .await?;
 
             Ok(Json(UserDetail::Contact(ContactResponse {
                 id: user.id.clone(),
@@ -206,7 +217,7 @@ pub async fn delete_user(
 
     // Get user
     let user = state
-        .db
+        .user_service
         .get_user_by_id(&id)
         .await?
         .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
@@ -236,10 +247,7 @@ pub async fn delete_user(
         }
         UserType::Contact => {
             // Delete user (cascade will delete contact and contact_channels)
-            sqlx::query("DELETE FROM users WHERE id = ?")
-                .bind(&id)
-                .execute(state.db.pool())
-                .await?;
+            state.contact_service.delete(&auth_user, &id).await?;
         }
     }
 

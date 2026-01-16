@@ -1,9 +1,10 @@
-use async_trait::async_trait;
 use crate::api::middleware::error::{ApiError, ApiResult};
 use crate::database::Database;
+use crate::domain::ports::agent_repository::AgentRepository;
 use crate::models::{
     ActivityEventType, Agent, AgentActivityLog, AgentAvailability, User, UserType,
 };
+use async_trait::async_trait;
 use chrono;
 use sqlx::Row;
 use time;
@@ -16,13 +17,13 @@ impl AgentRepository for Database {
             "INSERT INTO agents (id, user_id, first_name, last_name, password_hash)
              VALUES (?, ?, ?, ?, ?)",
         )
-            .bind(&agent.id)
-            .bind(&agent.user_id)
-            .bind(&agent.first_name)
-            .bind(&agent.last_name)
-            .bind(&agent.password_hash)
-            .execute(&self.pool)
-            .await?;
+        .bind(&agent.id)
+        .bind(&agent.user_id)
+        .bind(&agent.first_name)
+        .bind(&agent.last_name)
+        .bind(&agent.password_hash)
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
@@ -41,17 +42,7 @@ impl AgentRepository for Database {
 
         // Create user
         let user = User::new(email.to_string(), UserType::Agent);
-        sqlx::query(
-            "INSERT INTO users (id, email, user_type, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?)",
-        )
-            .bind(&user.id)
-            .bind(&user.email)
-            .bind("agent")
-            .bind(&user.created_at)
-            .bind(&user.updated_at)
-            .execute(&mut *tx)
-            .await?;
+        self.create_user_internal(&mut *tx, &user).await?;
 
         // Create agent
         let agent = Agent::new(
@@ -81,11 +72,11 @@ impl AgentRepository for Database {
             "INSERT INTO user_roles (user_id, role_id, created_at)
              VALUES (?, ?, ?)",
         )
-            .bind(&user.id)
-            .bind(role_id)
-            .bind(&now)
-            .execute(&mut *tx)
-            .await?;
+        .bind(&user.id)
+        .bind(role_id)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
 
         tx.commit().await?;
 
@@ -100,9 +91,9 @@ impl AgentRepository for Database {
              FROM agents
              WHERE user_id = ?",
         )
-            .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await?;
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
 
         if let Some(row) = row {
             let status_str: String = row
@@ -195,8 +186,8 @@ impl AgentRepository for Database {
              FROM users
              WHERE user_type = 'agent' AND deleted_at IS NULL",
         )
-            .fetch_one(&self.pool)
-            .await?;
+        .fetch_one(&self.pool)
+        .await?;
 
         Ok(row.try_get("count")?)
     }
@@ -208,8 +199,8 @@ impl AgentRepository for Database {
              INNER JOIN roles r ON r.id = ur.role_id
              WHERE r.name = 'Admin'",
         )
-            .fetch_one(&self.pool)
-            .await?;
+        .fetch_one(&self.pool)
+        .await?;
 
         Ok(row.try_get("count")?)
     }
@@ -220,28 +211,24 @@ impl AgentRepository for Database {
              SET first_name = ?
              WHERE id = ?",
         )
-            .bind(first_name)
-            .bind(agent_id)
-            .execute(&self.pool)
-            .await?;
+        .bind(first_name)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
 
-    async fn update_agent_password(
-        &self,
-        agent_id: &str,
-        password_hash: &str,
-    ) -> ApiResult<()> {
+    async fn update_agent_password(&self, agent_id: &str, password_hash: &str) -> ApiResult<()> {
         sqlx::query(
             "UPDATE agents
              SET password_hash = ?
              WHERE id = ?",
         )
-            .bind(password_hash)
-            .bind(agent_id)
-            .execute(&self.pool)
-            .await?;
+        .bind(password_hash)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
@@ -256,50 +243,13 @@ impl AgentRepository for Database {
              SET password_hash = ?
              WHERE user_id = ?",
         )
-            .bind(password_hash)
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
+        .bind(password_hash)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
-}
-
-#[async_trait]
-pub trait AgentRepository:  Send + Sync {
-    // Agent operations
-    async fn create_agent(&self, agent: &Agent) -> ApiResult<()>;
-    /// Create agent with role assignment in transaction (Feature 016: User Creation)
-    /// Creates user + agent + role assignment atomically
-    /// Returns the created agent_id and user_id
-    async fn create_agent_with_role(
-        &self,
-        email: &str,
-        first_name: &str,
-        last_name: Option<&str>,
-        password_hash: &str,
-        role_id: &str,
-    ) -> ApiResult<(String, String)>;
-    async fn get_agent_by_user_id(&self, user_id: &str) -> ApiResult<Option<Agent>>;
-    // List agents with pagination (348-401 in view, originally 451)
-    async fn list_agents(&self, limit: i64, offset: i64) -> ApiResult<Vec<(User, Agent)>>;
-    // Count total agents
-    async fn count_agents(&self) -> ApiResult<i64>;
-    // Count admin users (for last admin check)
-    async fn count_admin_users(&self) -> ApiResult<i64>;
-    // Agent update operations
-    async fn update_agent(&self, agent_id: &str, first_name: &str) -> ApiResult<()>;
-    async fn update_agent_password(
-        &self,
-        agent_id: &str,
-        password_hash: &str,
-    ) -> ApiResult<()>;
-    /// Update agent password hash by user_id (for password reset)
-    async fn update_agent_password_by_user_id(
-        &self,
-        user_id: &str,
-        password_hash: &str,
-    ) -> ApiResult<()>;
 }
 
 impl Database {

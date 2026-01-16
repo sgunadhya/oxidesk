@@ -1,5 +1,7 @@
 use crate::api::middleware::{ApiError, ApiResult, AuthenticatedUser};
 use crate::database::Database;
+use crate::domain::ports::contact_repository::ContactRepository;
+use crate::domain::ports::user_repository::UserRepository;
 use crate::events::EventBus;
 use crate::models::conversation::*;
 use crate::models::user::UserType;

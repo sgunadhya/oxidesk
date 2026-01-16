@@ -1,6 +1,7 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
     database::Database,
+    domain::ports::user_repository::UserRepository,
     events::{EventBus, SystemEvent},
     models::{IncomingMessageRequest, Message, SendMessageRequest, UserNotification},
     services::{connection_manager::ConnectionManager, DeliveryService, NotificationService},

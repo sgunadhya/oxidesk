@@ -1,4 +1,6 @@
-use oxidesk::database::agents::AgentRepository;
+use oxidesk::domain::ports::agent_repository::AgentRepository;
+use oxidesk::domain::ports::contact_repository::ContactRepository;
+use oxidesk::domain::ports::user_repository::UserRepository;
 /// Feature 025: Mutual Exclusion Invariants - Integration Tests
 ///
 /// This test suite validates that mutual exclusion constraints are properly enforced:
@@ -9,7 +11,7 @@ use oxidesk::database::agents::AgentRepository;
 mod helpers;
 
 use helpers::test_db::setup_test_db;
-use oxidesk::{database::Database, events::EventBus, models::*, services::sla_service::SlaService};
+use oxidesk::{database::Database, models::*, services::sla_service::SlaService};
 use std::sync::Arc;
 
 // ===== Test Helpers =====

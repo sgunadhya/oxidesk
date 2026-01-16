@@ -3,6 +3,7 @@
 /// Implements MessageDeliveryProvider trait for sending agent replies via SMTP.
 /// Formats emails with reference numbers and sends using lettre.
 use crate::database::Database;
+use crate::domain::ports::contact_repository::ContactRepository;
 use crate::models::Message;
 use crate::services::{EmailParserService, MessageDeliveryProvider};
 use lettre::{

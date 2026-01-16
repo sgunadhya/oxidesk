@@ -1,4 +1,4 @@
-use crate::database::agents::AgentRepository;
+use crate::domain::ports::agent_repository::AgentRepository;
 use crate::{
     api::middleware::error::ApiError, database::Database, models::*,
     services::connection_manager::ConnectionManager,
@@ -25,6 +25,9 @@ pub struct AppState {
     pub sla_service: crate::services::SlaService,
     pub connection_manager: Arc<dyn ConnectionManager>,
     pub rate_limiter: crate::services::AuthRateLimiter,
+    pub agent_service: crate::services::AgentService,
+    pub user_service: crate::services::UserService,
+    pub contact_service: crate::services::ContactService,
 }
 
 /// Extract and validate session token from Authorization header
@@ -39,7 +42,7 @@ pub async fn require_auth(
         // Agent authenticated via API key
         // Get user and roles to build AuthenticatedUser
         let user = state
-            .db
+            .user_service
             .get_user_by_id(&agent.user_id)
             .await?
             .ok_or(ApiError::Unauthorized)?;
@@ -105,7 +108,7 @@ pub async fn require_auth(
 
     // Get user
     let user = state
-        .db
+        .user_service
         .get_user_by_id(&session.user_id)
         .await?
         .ok_or(ApiError::Unauthorized)?;

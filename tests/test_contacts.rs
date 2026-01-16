@@ -2,6 +2,8 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
+    domain::ports::contact_repository::ContactRepository,
+    domain::ports::user_repository::UserRepository,
     models::{Contact, ContactChannel, User, UserType},
     services::validate_and_normalize_email,
 };

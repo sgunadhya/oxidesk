@@ -1,6 +1,7 @@
 // Modules are imported from the library crate
 
-use oxidesk::database::agents::AgentRepository;
+use oxidesk::domain::ports::agent_repository::AgentRepository;
+use oxidesk::domain::ports::user_repository::UserRepository;
 use oxidesk::{
     api::{
         self,
@@ -164,6 +165,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         job_processor.start().await;
     });
 
+    // Initialize Agent Service
+    let agent_service =
+        oxidesk::services::AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    tracing::info!("Agent service initialized");
+
+    // Initialize User Service
+    let user_service = oxidesk::services::UserService::new(std::sync::Arc::new(db.clone()));
+    tracing::info!("User service initialized");
+
+    // Initialize Contact Service
+    let contact_service = oxidesk::services::ContactService::new(
+        std::sync::Arc::new(db.clone()),
+        std::sync::Arc::new(db.clone()),
+    );
+    tracing::info!("Contact service initialized");
+
     // Create application state
     let state = AppState {
         db: db.clone(),
@@ -179,6 +196,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         rate_limiter,
         webhook_service: webhook_service.clone(),
         tag_service: tag_service.clone(),
+        agent_service: agent_service.clone(),
+        user_service: user_service.clone(),
+        contact_service: contact_service.clone(),
     };
 
     // Start automation listener background task

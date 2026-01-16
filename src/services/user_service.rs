@@ -1,12 +1,75 @@
+use crate::api::middleware::error::ApiResult;
 /// User Service
 /// Feature: User Creation (016)
 ///
 /// Provides user creation business logic including:
 /// - Email display name parsing for contact creation
 /// - Contact creation from incoming messages (idempotent)
-use crate::api::middleware::error::ApiError;
-use crate::database::Database;
+use crate::domain::ports::user_repository::UserRepository;
 use regex::Regex;
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct UserService {
+    user_repo: Arc<dyn UserRepository>,
+}
+
+impl UserService {
+    pub fn new(user_repo: Arc<dyn UserRepository>) -> Self {
+        Self { user_repo }
+    }
+
+    pub async fn create_user(&self, user: &crate::models::User) -> ApiResult<()> {
+        self.user_repo.create_user(user).await
+    }
+
+    pub async fn get_user_by_id(&self, id: &str) -> ApiResult<Option<crate::models::User>> {
+        self.user_repo.get_user_by_id(id).await
+    }
+
+    pub async fn get_user_by_email_and_type(
+        &self,
+        email: &str,
+        user_type: &crate::models::UserType,
+    ) -> ApiResult<Option<crate::models::User>> {
+        self.user_repo
+            .get_user_by_email_and_type(email, user_type)
+            .await
+    }
+
+    pub async fn list_users(
+        &self,
+        limit: i64,
+        offset: i64,
+        user_type_filter: Option<crate::models::UserType>,
+    ) -> ApiResult<(Vec<crate::models::User>, i64)> {
+        self.user_repo
+            .list_users(limit, offset, user_type_filter)
+            .await
+    }
+
+    pub async fn update_user_email(
+        &self,
+        id: &str,
+        email: &str,
+        updated_at: &str,
+    ) -> ApiResult<()> {
+        self.user_repo
+            .update_user_email(id, email, updated_at)
+            .await
+    }
+
+    pub async fn soft_delete_user(&self, user_id: &str, deleted_by: &str) -> ApiResult<()> {
+        self.user_repo.soft_delete_user(user_id, deleted_by).await
+    }
+
+    pub async fn restore_user(&self, user_id: &str) -> ApiResult<()> {
+        self.user_repo.restore_user(user_id).await
+    }
+}
+
+// Keep legacy functions for now, but they will need refactoring or moving if they use DB directly
+// create_contact_from_message uses Database, so we leave it as is or move it to ContactService later.
 
 /// Parse email display name from "From" header
 ///
@@ -108,49 +171,6 @@ pub fn parse_email_display_name(from_header: &str) -> (Option<String>, Option<St
 ///     "Alice Johnson <alice@example.com>"
 /// ).await?;
 /// ```
-pub async fn create_contact_from_message(
-    db: &Database,
-    inbox_id: &str,
-    from_header: &str,
-) -> Result<String, ApiError> {
-    // Parse email and display name
-    let (first_name, last_name, email) = parse_email_display_name(from_header);
-
-    // Validate email format
-    let normalized_email = crate::services::validate_and_normalize_email(&email)?;
-
-    // Check if contact already exists (idempotent)
-    if let Some(existing_contact) = db.get_contact_by_email(&normalized_email).await? {
-        tracing::debug!(
-            "Contact already exists for email {}, returning existing contact_id: {}",
-            normalized_email,
-            existing_contact.id
-        );
-        return Ok(existing_contact.id);
-    }
-
-    // Combine first_name and last_name into full_name for contact
-    let full_name = match (first_name, last_name) {
-        (Some(first), Some(last)) => Some(format!("{} {}", first, last)),
-        (Some(first), None) => Some(first),
-        (None, Some(last)) => Some(last),
-        (None, None) => None,
-    };
-
-    // Create contact in transaction (handled by database layer)
-    let contact_id = db
-        .create_contact_from_message(&normalized_email, full_name.as_deref(), inbox_id)
-        .await?;
-
-    tracing::info!(
-        "Created contact {} for email {} from message in inbox {}",
-        contact_id,
-        normalized_email,
-        inbox_id
-    );
-
-    Ok(contact_id)
-}
 
 #[cfg(test)]
 mod tests {

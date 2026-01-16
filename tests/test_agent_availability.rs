@@ -1,4 +1,4 @@
-use oxidesk::database::agents::AgentRepository;
+use oxidesk::domain::ports::agent_repository::AgentRepository;
 mod helpers;
 
 use chrono::{Duration, Utc};

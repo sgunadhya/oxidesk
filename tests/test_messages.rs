@@ -2,6 +2,7 @@ mod helpers;
 
 use helpers::test_db::setup_test_db;
 use oxidesk::database::Database;
+use oxidesk::domain::ports::user_repository::UserRepository;
 use oxidesk::models::{
     Conversation, ConversationStatus, IncomingMessageRequest, Message, MessageStatus, MessageType,
     SendMessageRequest, User, UserType,

@@ -24,13 +24,23 @@ pub async fn receive_incoming_message(
     // Feature 016: Automatic contact creation from from_header
     if request.contact_id.is_none() {
         if let Some(ref from_header) = request.from_header {
+            // Parse email and display name
+            let (first_name, last_name, email) =
+                crate::services::user_service::parse_email_display_name(from_header);
+
+            // Combine first_name and last_name
+            let full_name = match (first_name, last_name) {
+                (Some(first), Some(last)) => Some(format!("{} {}", first, last)),
+                (Some(first), None) => Some(first),
+                (None, Some(last)) => Some(last),
+                (None, None) => None,
+            };
+
             // Create or get existing contact
-            let contact_id = crate::services::user_service::create_contact_from_message(
-                &state.db,
-                &request.inbox_id,
-                from_header,
-            )
-            .await?;
+            let contact_id = state
+                .contact_service
+                .create_contact_from_message(&email, full_name.as_deref(), &request.inbox_id)
+                .await?;
 
             request.contact_id = Some(contact_id);
         } else {

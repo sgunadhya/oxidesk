@@ -1,5 +1,6 @@
-use crate::database::agents::AgentRepository;
 use crate::api::middleware::error::{ApiError, ApiResult};
+use crate::domain::ports::agent_repository::AgentRepository;
+use crate::domain::ports::user_repository::UserRepository;
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2, ParamsBuilder,
