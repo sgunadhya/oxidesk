@@ -236,8 +236,8 @@ pub async fn oidc_login(
 ) -> ApiResult<axum::response::Redirect> {
     // Get provider configuration
     let provider = state
-        .db
-        .get_oidc_provider_by_name(&provider_name)
+        .oidc_service
+        .get_provider_by_name(&provider_name)
         .await?
         .ok_or_else(|| ApiError::NotFound("OIDC provider not found".to_string()))?;
 
@@ -249,7 +249,7 @@ pub async fn oidc_login(
     }
 
     // Initiate OIDC flow
-    let auth_request = OidcService::initiate_login(&provider).await?;
+    let auth_request = state.oidc_service.initiate_login(&provider).await?;
 
     // Store state, nonce, and PKCE verifier in database for validation on callback
     // This prevents CSRF and replay attacks
@@ -260,7 +260,7 @@ pub async fn oidc_login(
         auth_request.pkce_verifier.clone(),
     );
 
-    state.db.create_oidc_state(&oidc_state).await?;
+    state.oidc_service.create_state(&oidc_state).await?;
 
     // Redirect to provider's authorization URL
     Ok(axum::response::Redirect::temporary(
@@ -304,8 +304,8 @@ pub async fn oidc_callback(
 
     // Retrieve and consume stored OIDC state (one-time use for security)
     let stored_state = state
-        .db
-        .consume_oidc_state(&state_param)
+        .oidc_service
+        .consume_state(&state_param)
         .await?
         .ok_or_else(|| ApiError::BadRequest("Invalid or expired state parameter".to_string()))?;
 
@@ -328,13 +328,13 @@ pub async fn oidc_callback(
 
     // Get provider configuration
     let provider = state
-        .db
-        .get_oidc_provider_by_name(&provider_name)
+        .oidc_service
+        .get_provider_by_name(&provider_name)
         .await?
         .ok_or_else(|| ApiError::NotFound("OIDC provider not found".to_string()))?;
 
     // Handle callback and create session
-    let callback_result = match OidcService::handle_callback(
+    let callback_result = match state.oidc_service.handle_callback(
         &state.db,
         &state.session_service,
         &provider,

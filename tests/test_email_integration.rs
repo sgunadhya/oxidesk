@@ -17,6 +17,7 @@ use oxidesk::models::{
 };
 use oxidesk::services::{AttachmentService, EmailParserService};
 use std::path::PathBuf;
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Helper: Create test database with inbox and contact for email testing
@@ -478,8 +479,10 @@ async fn test_attachment_size_validation() {
     let temp_dir = std::env::temp_dir().join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&temp_dir).unwrap();
 
+    let attachment_repo = Arc::new(db.clone())
+        as Arc<dyn oxidesk::domain::ports::attachment_repository::AttachmentRepository>;
     let attachment_service =
-        AttachmentService::new(db.clone(), temp_dir.to_str().unwrap().to_string());
+        AttachmentService::new(attachment_repo, temp_dir.to_str().unwrap().to_string());
 
     let message_id = Uuid::new_v4().to_string();
 
@@ -512,8 +515,10 @@ async fn test_attachment_content_type_validation() {
     let temp_dir = std::env::temp_dir().join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&temp_dir).unwrap();
 
+    let attachment_repo = Arc::new(db.clone())
+        as Arc<dyn oxidesk::domain::ports::attachment_repository::AttachmentRepository>;
     let attachment_service =
-        AttachmentService::new(db.clone(), temp_dir.to_str().unwrap().to_string());
+        AttachmentService::new(attachment_repo, temp_dir.to_str().unwrap().to_string());
 
     let message_id = Uuid::new_v4().to_string();
     let content = b"Executable content";
@@ -545,8 +550,10 @@ async fn test_attachment_storage_and_retrieval() {
     let temp_dir = std::env::temp_dir().join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&temp_dir).unwrap();
 
+    let attachment_repo = Arc::new(db.clone())
+        as Arc<dyn oxidesk::domain::ports::attachment_repository::AttachmentRepository>;
     let attachment_service =
-        AttachmentService::new(db.clone(), temp_dir.to_str().unwrap().to_string());
+        AttachmentService::new(attachment_repo, temp_dir.to_str().unwrap().to_string());
 
     // Create a conversation and message first (needed for foreign key)
     let conversation = create_test_conversation(
@@ -634,8 +641,10 @@ async fn test_multiple_attachments() {
     let temp_dir = std::env::temp_dir().join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&temp_dir).unwrap();
 
+    let attachment_repo = Arc::new(db.clone())
+        as Arc<dyn oxidesk::domain::ports::attachment_repository::AttachmentRepository>;
     let attachment_service =
-        AttachmentService::new(db.clone(), temp_dir.to_str().unwrap().to_string());
+        AttachmentService::new(attachment_repo, temp_dir.to_str().unwrap().to_string());
 
     // Create a conversation and message first (needed for foreign key)
     let conversation = create_test_conversation(

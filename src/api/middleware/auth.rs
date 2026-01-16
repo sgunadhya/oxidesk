@@ -10,6 +10,9 @@ use axum::{
 };
 use std::sync::Arc;
 
+use crate::domain::ports::conversation_repository::ConversationRepository;
+use crate::domain::ports::message_repository::MessageRepository;
+
 #[derive(Clone)]
 pub struct AppState {
     pub db: Database,
@@ -18,17 +21,23 @@ pub struct AppState {
     pub delivery_service: crate::services::DeliveryService,
     pub notification_service: crate::services::NotificationService,
     pub availability_service: crate::services::AvailabilityService,
-    pub automation_service: crate::services::AutomationService,
-    pub conversation_tag_service: crate::services::ConversationTagService,
-    pub tag_service: crate::services::TagService,
-    pub webhook_service: crate::services::WebhookService,
     pub sla_service: crate::services::SlaService,
+    pub automation_service: Arc<crate::services::AutomationService>,
+    pub conversation_tag_service: crate::services::ConversationTagService,
     pub connection_manager: Arc<dyn ConnectionManager>,
     pub rate_limiter: crate::services::AuthRateLimiter,
+    pub webhook_service: crate::services::WebhookService,
+    pub tag_service: crate::services::TagService,
     pub agent_service: crate::services::AgentService,
     pub user_service: crate::services::UserService,
     pub contact_service: crate::services::ContactService,
     pub session_service: crate::services::SessionService,
+    pub oidc_service: crate::services::OidcService,
+    pub email_service: crate::services::EmailService,
+    pub attachment_service: crate::services::AttachmentService,
+    pub conversation_service: crate::services::ConversationService,
+    pub message_service: crate::services::MessageService,
+    pub macro_service: crate::services::MacroService,
 }
 
 /// Extract and validate session token from Authorization header

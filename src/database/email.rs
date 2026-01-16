@@ -6,6 +6,9 @@ use crate::models::{
 use sqlx::Row;
 use time;
 
+use crate::domain::ports::attachment_repository::AttachmentRepository;
+use crate::domain::ports::email_repository::EmailRepository;
+
 impl Database {
     // ========================================
     // Email Integration Operations
@@ -480,5 +483,68 @@ impl Database {
             })?;
 
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl EmailRepository for Database {
+    async fn get_inbox_email_config(&self, inbox_id: &str) -> ApiResult<Option<InboxEmailConfig>> {
+        self.get_inbox_email_config(inbox_id).await
+    }
+
+    async fn get_enabled_email_configs(&self) -> ApiResult<Vec<InboxEmailConfig>> {
+        self.get_enabled_email_configs().await
+    }
+
+    async fn create_inbox_email_config(
+        &self,
+        config: &InboxEmailConfig,
+    ) -> ApiResult<InboxEmailConfig> {
+        self.create_inbox_email_config(config).await
+    }
+
+    async fn update_inbox_email_config(
+        &self,
+        id: &str,
+        updates: &UpdateInboxEmailConfigRequest,
+    ) -> ApiResult<InboxEmailConfig> {
+        self.update_inbox_email_config(id, updates).await
+    }
+
+    async fn delete_inbox_email_config(&self, id: &str) -> ApiResult<()> {
+        self.delete_inbox_email_config(id).await
+    }
+
+    async fn update_last_poll_time(&self, inbox_id: &str) -> ApiResult<()> {
+        self.update_last_poll_time(inbox_id).await
+    }
+
+    async fn log_email_processing(
+        &self,
+        log: &EmailProcessingLog,
+    ) -> ApiResult<EmailProcessingLog> {
+        self.log_email_processing(log).await
+    }
+
+    async fn check_email_processed(
+        &self,
+        inbox_id: &str,
+        email_message_id: &str,
+    ) -> ApiResult<bool> {
+        self.check_email_processed(inbox_id, email_message_id).await
+    }
+}
+
+#[async_trait::async_trait]
+impl AttachmentRepository for Database {
+    async fn create_message_attachment(
+        &self,
+        attachment: &MessageAttachment,
+    ) -> ApiResult<MessageAttachment> {
+        self.create_message_attachment(attachment).await
+    }
+
+    async fn get_message_attachments(&self, message_id: &str) -> ApiResult<Vec<MessageAttachment>> {
+        self.get_message_attachments(message_id).await
     }
 }

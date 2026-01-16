@@ -659,14 +659,12 @@ pub async fn create_contact(
 
 pub async fn show_inbox(
     State(state): State<AppState>,
-    axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
+    axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
 ) -> impl IntoResponse {
-    let conversations = match crate::services::conversation_service::list_conversations(
-        &state.db, 1, 50, None, // status
-        None, // inbox_id
-        None, // contact_id
-    )
-    .await
+    let conversations = match state
+        .conversation_service
+        .list_conversations(&auth_user, 1, 50, None, None, None)
+        .await
     {
         Ok(list) => list.conversations,
         Err(_) => vec![],
@@ -713,18 +711,17 @@ pub async fn show_inbox(
 
 pub async fn show_conversation(
     State(state): State<AppState>,
-    axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
+    axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
     Path(id): Path<String>,
     headers: axum::http::HeaderMap,
 ) -> impl IntoResponse {
     let is_htmx = headers.get("HX-Request").is_some();
 
     // Fetch conversation
-    let conversation =
-        match crate::services::conversation_service::get_conversation(&state.db, &id).await {
-            Ok(c) => c,
-            Err(_) => return Html("Conversation not found").into_response(),
-        };
+    let conversation = match state.conversation_service.get_conversation(&id).await {
+        Ok(c) => c,
+        Err(_) => return Html("Conversation not found").into_response(),
+    };
 
     // Fetch contact name for detail view
     let contact_name = match state
@@ -766,8 +763,7 @@ pub async fn show_conversation(
         .collect();
 
     // Message Logic
-    let message_service = crate::services::MessageService::new(state.db.clone());
-    let (messages, _total) = match message_service.list_messages(&id, 1, 50).await {
+    let (messages, _total) = match state.message_service.list_messages(&id, 1, 50).await {
         Ok(res) => res,
         Err(_) => (vec![], 0),
     };
@@ -798,10 +794,10 @@ pub async fn show_conversation(
         HtmlTemplate(template).into_response()
     } else {
         // Full page render
-        let all_convs = match crate::services::conversation_service::list_conversations(
-            &state.db, 1, 50, None, None, None,
-        )
-        .await
+        let all_convs = match state
+            .conversation_service
+            .list_conversations(&auth_user, 1, 50, None, None, None)
+            .await
         {
             Ok(list) => list.conversations,
             Err(_) => vec![],
@@ -865,13 +861,16 @@ pub async fn assign_ticket(
             .into_response();
     }
 
-    match crate::services::conversation_service::assign_conversation(
-        &state.db,
-        &id,
-        &form.agent_id,
-        &auth_user.user.id,
-    )
-    .await
+    match state
+        .conversation_service
+        .assign_conversation(
+            &id,
+            Some(form.agent_id.clone()), // Assign to user
+            None,                        // Assign to team (none)
+            auth_user.user.id.clone(),   // assigned_by
+            None,                        // event_bus
+        )
+        .await
     {
         Ok(_) => (
             StatusCode::OK,
@@ -907,10 +906,12 @@ pub async fn resolve_ticket(
         snooze_duration: None,
     };
 
-    match crate::services::conversation_service::update_conversation_status(
-        &state.db, &id, request, None, None, // No event bus for now or pass context
-    )
-    .await
+    match state
+        .conversation_service
+        .update_conversation_status(
+            &id, request, None, None, // No event bus for now or pass context
+        )
+        .await
     {
         Ok(_) => {
             // We should re-render the detail view to show the new status button state
@@ -944,10 +945,10 @@ pub async fn reopen_ticket(
         snooze_duration: None,
     };
 
-    match crate::services::conversation_service::update_conversation_status(
-        &state.db, &id, request, None, None,
-    )
-    .await
+    match state
+        .conversation_service
+        .update_conversation_status(&id, request, None, None)
+        .await
     {
         Ok(_) => Redirect::to(&format!("/inbox/conversations/{}", id)).into_response(),
         Err(e) => (
@@ -974,14 +975,7 @@ pub async fn send_message(
         content: form.content,
     };
 
-    let message_service = crate::services::MessageService::with_all_services(
-        state.db.clone(),
-        state.delivery_service.clone(),
-        state.event_bus.clone(),
-        state.connection_manager.clone(),
-    );
-
-    match message_service.send_message(id.clone(), auth_user.user.id, request).await {
+    match state.message_service.send_message(id.clone(), auth_user.user.id, request).await {
         Ok(msg) => {
             Html(format!(r#"
             <div class="flex justify-end">
@@ -1002,7 +996,7 @@ pub async fn send_message(
 
 pub async fn show_contact_profile(
     State(state): State<AppState>,
-    axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
+    axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
     Path(id): Path<String>, // This is the user_id (since contacts list uses user.id)
 ) -> impl IntoResponse {
     // 1. Fetch User (to get email and created_at)
@@ -1037,17 +1031,17 @@ pub async fn show_contact_profile(
         })
         .collect();
 
-    // 4. Fetch Conversations
-    // We need a way to list conversations by contact_id. The service has this capability.
-    let conversations = match crate::services::conversation_service::list_conversations(
-        &state.db,
-        1,
-        100,              // limit
-        None,             // status
-        None,             // inbox_id
-        Some(id.clone()), // contact_id (user_id)
-    )
-    .await
+    let conversations = match state
+        .conversation_service
+        .list_conversations(
+            &auth_user,
+            1,
+            100,              // limit
+            None,             // status
+            None,             // inbox_id
+            Some(id.clone()), // contact_id (user_id)
+        )
+        .await
     {
         Ok(list) => list.conversations,
         Err(_) => vec![],
@@ -1194,10 +1188,12 @@ pub async fn create_ticket(
         subject: Some(form.subject),
     };
 
-    match crate::services::conversation_service::create_conversation(
-        &state.db, &auth_user, request, None, // No SLA service for now
-    )
-    .await
+    match state
+        .conversation_service
+        .create_conversation(
+            &auth_user, request, None, // No SLA service for now
+        )
+        .await
     {
         Ok(conv) => Redirect::to(&format!("/inbox/c/{}", conv.id)).into_response(),
         Err(e) => Html(format!("Error creating ticket: {}", e)).into_response(),

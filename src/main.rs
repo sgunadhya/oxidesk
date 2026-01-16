@@ -63,6 +63,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Connected to database successfully");
 
+    let attachment_storage_path =
+        std::env::var("ATTACHMENT_STORAGE_PATH").unwrap_or_else(|_| "./attachments".to_string());
+    std::fs::create_dir_all(&attachment_storage_path)?;
+
     // Run migrations
     db.run_migrations().await.map_err(|e| {
         tracing::error!("Failed to run migrations: {}", e);
@@ -99,10 +103,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("SLA service initialized");
 
     // Initialize automation service
-    let automation_service = oxidesk::AutomationService::new(
+    let automation_service = std::sync::Arc::new(oxidesk::AutomationService::new(
         std::sync::Arc::new(db.clone()),
         AutomationConfig::default(),
-    );
+    ));
     // Initialize webhook service
     let webhook_service = oxidesk::WebhookService::new(db.clone());
     let conversation_tag_service = ConversationTagService::new(db.clone(), event_bus.clone());
@@ -154,8 +158,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Initialize Session Service
-    let session_service =
-        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     tracing::info!("Session service initialized");
 
     // Start JobProcessor
@@ -190,6 +193,57 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     tracing::info!("Contact service initialized");
 
+    // Initialize Repositories
+    let email_repo: std::sync::Arc<dyn oxidesk::domain::ports::email_repository::EmailRepository> =
+        std::sync::Arc::new(db.clone());
+    let attachment_repo: std::sync::Arc<
+        dyn oxidesk::domain::ports::attachment_repository::AttachmentRepository,
+    > = std::sync::Arc::new(db.clone());
+    let conversation_repo: std::sync::Arc<
+        dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+    > = std::sync::Arc::new(db.clone());
+    let message_repo: std::sync::Arc<
+        dyn oxidesk::domain::ports::message_repository::MessageRepository,
+    > = std::sync::Arc::new(db.clone());
+    let user_repo: std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository> =
+        std::sync::Arc::new(db.clone());
+    let contact_repo: std::sync::Arc<
+        dyn oxidesk::domain::ports::contact_repository::ContactRepository,
+    > = std::sync::Arc::new(db.clone());
+    let team_repo: std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository> =
+        std::sync::Arc::new(db.clone());
+
+    // Initialize OIDC service
+    let oidc_repository = oxidesk::domain::ports::oidc_repository::OidcRepository::new(db.clone());
+    let oidc_service = oxidesk::services::OidcService::new(oidc_repository);
+    tracing::info!("OIDC service initialized");
+
+    // Initialize Services (wrapping repositories)
+    let email_service = oxidesk::services::EmailService::new(email_repo.clone());
+    let attachment_service = oxidesk::services::AttachmentService::new(
+        attachment_repo.clone(),
+        std::path::PathBuf::from(&attachment_storage_path),
+    );
+
+    let conversation_service = oxidesk::services::ConversationService::new(
+        conversation_repo.clone(),
+        user_repo.clone(),
+        contact_repo.clone(),
+        team_repo.clone(),
+    );
+
+    let message_service = oxidesk::services::MessageService::with_all_services(
+        message_repo.clone(),
+        conversation_repo.clone(),
+        delivery_service.clone(),
+        event_bus.clone(),
+        connection_manager.clone(),
+    );
+
+    // Initialize MacroService
+    let macro_repo = oxidesk::domain::ports::macro_repository::MacroRepository::new(db.clone());
+    let macro_service = oxidesk::services::MacroService::new(macro_repo);
+
     // Create application state
     let state = AppState {
         db: db.clone(),
@@ -209,6 +263,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         user_service: user_service.clone(),
         contact_service: contact_service.clone(),
         session_service: session_service.clone(),
+        email_service,
+        attachment_service,
+        conversation_service,
+        message_service,
+        oidc_service,
+        macro_service,
     };
 
     // Start automation listener background task
@@ -1128,11 +1188,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Spawn email polling worker (Feature 021)
-    let attachment_storage_path =
-        std::env::var("ATTACHMENT_STORAGE_PATH").unwrap_or_else(|_| "./attachments".to_string());
-    std::fs::create_dir_all(&attachment_storage_path)?;
-    let _email_polling_handle =
-        oxidesk::spawn_email_polling_worker(db.clone(), attachment_storage_path);
+
+    // Create contact service factory
+    let db_for_factory = db.clone();
+    let contact_service_factory = move || {
+        oxidesk::services::ContactService::new(
+            std::sync::Arc::new(db_for_factory.clone()),
+            std::sync::Arc::new(db_for_factory.clone()),
+        )
+    };
+
+    let _email_polling_handle = oxidesk::spawn_email_polling_worker(
+        email_repo,
+        conversation_repo,
+        message_repo,
+        attachment_repo,
+        contact_service_factory,
+        attachment_storage_path,
+    );
     tracing::info!("Email polling worker started");
 
     // Start server

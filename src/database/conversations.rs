@@ -841,3 +841,162 @@ impl Database {
         Ok(user_ids)
     }
 }
+
+use crate::domain::ports::conversation_repository::ConversationRepository;
+
+#[async_trait::async_trait]
+impl ConversationRepository for Database {
+    async fn create_conversation(&self, create: &CreateConversation) -> ApiResult<Conversation> {
+        Database::create_conversation(self, create).await
+    }
+
+    async fn get_conversation_by_id(&self, id: &str) -> ApiResult<Option<Conversation>> {
+        Database::get_conversation_by_id(self, id).await
+    }
+
+    async fn get_conversation_by_reference_number(
+        &self,
+        reference_number: i64,
+    ) -> ApiResult<Option<Conversation>> {
+        Database::get_conversation_by_reference_number(self, reference_number).await
+    }
+
+    async fn update_conversation_status(
+        &self,
+        conversation_id: &str,
+        status: ConversationStatus,
+    ) -> ApiResult<()> {
+        Database::update_conversation_status(self, conversation_id, status).await
+    }
+
+    async fn update_conversation_fields(
+        &self,
+        id: &str,
+        status: ConversationStatus,
+        resolved_at: Option<String>,
+        closed_at: Option<String>,
+        snoozed_until: Option<String>,
+    ) -> ApiResult<Conversation> {
+        Database::update_conversation_fields(
+            self,
+            id,
+            status,
+            resolved_at,
+            closed_at,
+            snoozed_until,
+        )
+        .await
+    }
+
+    async fn list_conversations(
+        &self,
+        limit: i64,
+        offset: i64,
+        status: Option<ConversationStatus>,
+        inbox_id: Option<String>,
+        contact_id: Option<String>,
+    ) -> ApiResult<Vec<Conversation>> {
+        Database::list_conversations(self, limit, offset, status, inbox_id, contact_id).await
+    }
+
+    async fn count_conversations(
+        &self,
+        status: Option<ConversationStatus>,
+        inbox_id: Option<String>,
+        contact_id: Option<String>,
+    ) -> ApiResult<i64> {
+        Database::count_conversations(self, status, inbox_id, contact_id).await
+    }
+
+    async fn set_conversation_priority(
+        &self,
+        conversation_id: &str,
+        priority: &Priority,
+    ) -> ApiResult<()> {
+        Database::set_conversation_priority(self, conversation_id, priority).await
+    }
+
+    async fn clear_conversation_priority(&self, conversation_id: &str) -> ApiResult<()> {
+        Database::clear_conversation_priority(self, conversation_id).await
+    }
+
+    // Assignment operations
+    async fn assign_conversation_to_user(
+        &self,
+        conversation_id: &str,
+        user_id: Option<String>,
+        assigned_by: Option<String>,
+    ) -> ApiResult<()> {
+        Database::assign_conversation_to_user(self, conversation_id, user_id, assigned_by).await
+    }
+
+    async fn assign_conversation_to_team(
+        &self,
+        conversation_id: &str,
+        team_id: Option<String>,
+        assigned_by: Option<String>,
+    ) -> ApiResult<()> {
+        Database::assign_conversation_to_team(self, conversation_id, team_id, assigned_by).await
+    }
+
+    async fn add_conversation_participant(
+        &self,
+        conversation_id: &str,
+        user_id: &str,
+        role: &str,
+    ) -> ApiResult<()> {
+        Database::add_conversation_participant(self, conversation_id, user_id, role).await
+    }
+
+    async fn get_unassigned_conversations(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<Conversation>, i64)> {
+        Database::get_unassigned_conversations(self, limit, offset).await
+    }
+
+    async fn get_user_assigned_conversations(
+        &self,
+        user_id: &str,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<Conversation>, i64)> {
+        Database::get_user_assigned_conversations(self, user_id, limit, offset).await
+    }
+
+    async fn get_team_conversations(
+        &self,
+        team_id: &str,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<Conversation>, i64)> {
+        Database::get_team_conversations(self, team_id, limit, offset).await
+    }
+
+    async fn unassign_agent_open_conversations(&self, user_id: &str) -> ApiResult<u64> {
+        Database::unassign_agent_open_conversations(self, user_id).await
+    }
+
+    async fn unassign_conversation_user(&self, conversation_id: &str) -> ApiResult<()> {
+        Database::unassign_conversation_user(self, conversation_id).await
+    }
+
+    async fn record_assignment(&self, history: &AssignmentHistory) -> ApiResult<()> {
+        Database::record_assignment(self, history).await
+    }
+
+    async fn get_assignment_history(
+        &self,
+        conversation_id: &str,
+    ) -> ApiResult<Vec<AssignmentHistory>> {
+        Database::get_assignment_history(self, conversation_id).await
+    }
+
+    async fn find_contact_by_user_id(
+        &self,
+        user_id: &str,
+    ) -> ApiResult<Option<crate::models::Contact>> {
+        Database::find_contact_by_user_id(self, user_id).await
+    }
+}

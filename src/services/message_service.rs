@@ -1,60 +1,60 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
-    database::Database,
-    domain::ports::user_repository::UserRepository,
+    domain::ports::conversation_repository::ConversationRepository,
+    domain::ports::message_repository::MessageRepository,
     events::{EventBus, SystemEvent},
     models::{IncomingMessageRequest, Message, SendMessageRequest, UserNotification},
     services::{connection_manager::ConnectionManager, DeliveryService, NotificationService},
 };
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct MessageService {
-    db: Database,
+    message_repo: Arc<dyn MessageRepository>,
+    conversation_repo: Arc<dyn ConversationRepository>,
     delivery_service: Option<DeliveryService>,
     event_bus: Option<Arc<dyn EventBus>>,
     connection_manager: Option<Arc<dyn ConnectionManager>>,
 }
 
 impl MessageService {
-    pub fn new(db: Database) -> Self {
+    pub fn new(
+        message_repo: Arc<dyn MessageRepository>,
+        conversation_repo: Arc<dyn ConversationRepository>,
+    ) -> Self {
         Self {
-            db,
+            message_repo,
+            conversation_repo,
             delivery_service: None,
             event_bus: None,
             connection_manager: None,
         }
     }
 
-    pub fn with_delivery(db: Database, delivery_service: DeliveryService) -> Self {
+    pub fn with_delivery(
+        message_repo: Arc<dyn MessageRepository>,
+        conversation_repo: Arc<dyn ConversationRepository>,
+        delivery_service: DeliveryService,
+    ) -> Self {
         Self {
-            db,
+            message_repo,
+            conversation_repo,
             delivery_service: Some(delivery_service),
             event_bus: None,
             connection_manager: None,
         }
     }
 
-    pub fn with_delivery_and_events(
-        db: Database,
-        delivery_service: DeliveryService,
-        event_bus: Arc<dyn EventBus>,
-    ) -> Self {
-        Self {
-            db,
-            delivery_service: Some(delivery_service),
-            event_bus: Some(event_bus),
-            connection_manager: None,
-        }
-    }
-
     pub fn with_all_services(
-        db: Database,
+        message_repo: Arc<dyn MessageRepository>,
+        conversation_repo: Arc<dyn ConversationRepository>,
         delivery_service: DeliveryService,
         event_bus: Arc<dyn EventBus>,
         connection_manager: Arc<dyn ConnectionManager>,
     ) -> Self {
         Self {
-            db,
+            message_repo,
+            conversation_repo,
             delivery_service: Some(delivery_service),
             event_bus: Some(event_bus),
             connection_manager: Some(connection_manager),
@@ -62,10 +62,6 @@ impl MessageService {
     }
 
     /// Create an incoming message from external source (webhook)
-    /// Validates content, creates message, and updates conversation timestamps
-    ///
-    /// Feature 016: contact_id must be resolved before calling this method
-    /// (either provided directly or via automatic contact creation from from_header)
     pub async fn create_incoming_message(
         &self,
         request: IncomingMessageRequest,
@@ -75,7 +71,7 @@ impl MessageService {
 
         // Verify conversation exists
         let _conversation = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(&request.conversation_id)
             .await?
             .ok_or_else(|| {
@@ -85,8 +81,7 @@ impl MessageService {
                 ))
             })?;
 
-        // Feature 023: Contact ID must be resolved by this point (cardinality invariant)
-        // FR-007, FR-008: Message must have exactly one sender
+        // Feature 023: Contact ID must be resolved by this point
         let contact_id = request.contact_id.ok_or_else(|| {
             ApiError::BadRequest("Message must have exactly one sender".to_string())
         })?;
@@ -96,10 +91,10 @@ impl MessageService {
             Message::new_incoming(request.conversation_id.clone(), request.content, contact_id);
 
         // Save to database
-        self.db.create_message(&message).await?;
+        self.message_repo.create_message(&message).await?;
 
         // Update conversation timestamps
-        self.db
+        self.message_repo
             .update_conversation_message_timestamps(
                 &request.conversation_id,
                 &message.id,
@@ -128,7 +123,6 @@ impl MessageService {
     }
 
     /// Send an outgoing message from agent to customer
-    /// Validates content, creates message, queues for delivery
     pub async fn send_message(
         &self,
         conversation_id: String,
@@ -140,25 +134,22 @@ impl MessageService {
 
         // Verify conversation exists
         let _conversation = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(&conversation_id)
             .await?
             .ok_or_else(|| {
                 ApiError::NotFound(format!("Conversation {} not found", conversation_id))
             })?;
 
-        // TODO: Add permission check (messages:write)
-        // TODO: Add conversation access validation (agent assigned to conversation)
-
         // Create outgoing message
         let message =
             Message::new_outgoing(conversation_id.clone(), request.content, agent_id.clone());
 
         // Save to database
-        self.db.create_message(&message).await?;
+        self.message_repo.create_message(&message).await?;
 
         // Update conversation timestamps (last_reply_at for agent replies)
-        self.db
+        self.message_repo
             .update_conversation_message_timestamps(
                 &conversation_id,
                 &message.id,
@@ -186,7 +177,10 @@ impl MessageService {
         let mention_usernames = NotificationService::extract_mentions(&message.content);
         if !mention_usernames.is_empty() {
             // Batch verify usernames
-            let mentioned_users = self.db.get_users_by_usernames(&mention_usernames).await?;
+            let mentioned_users = self
+                .message_repo
+                .get_users_by_usernames(&mention_usernames)
+                .await?;
 
             // Create notifications (filter self-mentions)
             let mut notifications = Vec::new();
@@ -202,7 +196,7 @@ impl MessageService {
                     message.author_id.clone(),
                 );
 
-                self.db.create_notification(&notification).await?;
+                self.message_repo.create_notification(&notification).await?;
                 notifications.push(notification);
             }
 
@@ -230,7 +224,7 @@ impl MessageService {
 
     /// Get message by ID
     pub async fn get_message(&self, message_id: &str) -> ApiResult<Message> {
-        self.db
+        self.message_repo
             .get_message_by_id(message_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Message {} not found", message_id)))
@@ -244,7 +238,7 @@ impl MessageService {
         per_page: i64,
     ) -> ApiResult<(Vec<Message>, i64)> {
         let offset = (page - 1) * per_page;
-        self.db
+        self.message_repo
             .list_messages(conversation_id, per_page, offset)
             .await
     }
@@ -282,31 +276,10 @@ impl MessageService {
             None
         };
 
-        self.db
+        self.message_repo
             .update_message_status(message_id, new_status, sent_at)
             .await?;
 
         Ok(())
-    }
-}
-
-impl Clone for MessageService {
-    fn clone(&self) -> Self {
-        Self {
-            db: self.db.clone(),
-            delivery_service: self.delivery_service.clone(),
-            event_bus: self.event_bus.clone(),
-            connection_manager: self.connection_manager.clone(),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn test_message_service_creation() {
-        // Just a placeholder test to verify compilation
-        // Real tests will be integration tests
     }
 }

@@ -95,8 +95,7 @@ async fn test_password_change_destroys_all_user_sessions() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let session_service =
-        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
         db.clone(),
         std::sync::Arc::new(db.clone()),
@@ -200,8 +199,7 @@ async fn test_password_change_requires_reauthentication() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let session_service =
-        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
         db.clone(),
         std::sync::Arc::new(db.clone()),
@@ -304,8 +302,7 @@ async fn test_password_change_does_not_affect_other_users() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let session_service =
-        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
         db.clone(),
         std::sync::Arc::new(db.clone()),
@@ -402,8 +399,7 @@ async fn test_password_change_with_no_active_sessions() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let session_service =
-        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
         db.clone(),
         std::sync::Arc::new(db.clone()),
@@ -483,8 +479,7 @@ async fn test_password_change_permission_required() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let session_service =
-        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
         db.clone(),
         std::sync::Arc::new(db.clone()),

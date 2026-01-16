@@ -418,7 +418,10 @@ async fn test_delivery_service_integration() {
     let delivery_service = DeliveryService::new(db.clone(), provider);
 
     // Create message service WITH delivery
-    let _message_service = MessageService::with_delivery(db.clone(), delivery_service);
+    // Create message service WITH delivery
+    let repo = std::sync::Arc::new(db.clone());
+    let _message_service =
+        MessageService::with_delivery(repo.clone(), repo.clone(), delivery_service);
 
     // This test verifies the wiring exists and compiles correctly
     // In production, messages will be queued when send_message is called
@@ -541,7 +544,9 @@ async fn test_e2e_incoming_message_flow() {
     let conversation_id = "test_conv_456";
 
     // Create message service
-    let _message_service = MessageService::new(db.clone());
+    // Create message service
+    let repo = std::sync::Arc::new(db.clone());
+    let _message_service = MessageService::new(repo.clone(), repo.clone());
 
     // Simulate incoming message via webhook
     let request = IncomingMessageRequest {
@@ -575,7 +580,10 @@ async fn test_e2e_outgoing_message_flow() {
     let delivery_service = DeliveryService::new(db.clone(), provider);
 
     // Create message service with delivery
-    let _message_service = MessageService::with_delivery(db.clone(), delivery_service);
+    // Create message service with delivery
+    let repo = std::sync::Arc::new(db.clone());
+    let _message_service =
+        MessageService::with_delivery(repo.clone(), repo.clone(), delivery_service);
 
     // Agent sends message
     let agent_id = "agent_123";

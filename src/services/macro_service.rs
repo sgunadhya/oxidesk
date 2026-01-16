@@ -1,11 +1,9 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
-    database::Database,
-    domain::ports::user_repository::UserRepository,
+    domain::ports::macro_repository::MacroRepository,
     models::*,
 };
 use regex::Regex;
-
 use time::OffsetDateTime;
 
 /// Context for variable substitution
@@ -29,9 +27,17 @@ pub struct MacroApplicationResult {
 }
 
 /// Service for macro management and application
-pub struct MacroService;
+#[derive(Clone)]
+pub struct MacroService {
+    macro_repo: MacroRepository,
+}
 
 impl MacroService {
+    /// Create a new MacroService
+    pub fn new(macro_repo: MacroRepository) -> Self {
+        Self { macro_repo }
+    }
+
     /// Replace variables in template with context data
     pub fn replace_variables(template: &str, context: &VariableContext) -> (String, i32) {
         let mut result = template.to_string();
@@ -103,7 +109,7 @@ impl MacroService {
 
     /// Check if user has access to macro
     pub async fn check_macro_access(
-        db: &Database,
+        &self,
         macro_obj: &Macro,
         user_id: &str,
     ) -> ApiResult<bool> {
@@ -113,15 +119,15 @@ impl MacroService {
         }
 
         // Check direct user access
-        if db.user_has_macro_access(&macro_obj.id, user_id).await? {
+        if self.macro_repo.user_has_macro_access(&macro_obj.id, user_id).await? {
             return Ok(true);
         }
 
         // Check team access
         // Get user's teams
-        let teams = db.get_user_teams(user_id).await?;
+        let teams = self.macro_repo.get_user_teams(user_id).await?;
         for team in teams {
-            if db.team_has_macro_access(&macro_obj.id, &team.id).await? {
+            if self.macro_repo.team_has_macro_access(&macro_obj.id, &team.id).await? {
                 return Ok(true);
             }
         }
@@ -131,32 +137,32 @@ impl MacroService {
 
     /// Load conversation context for variable substitution
     pub async fn load_conversation_context(
-        db: &Database,
+        &self,
         conversation_id: &str,
         agent_id: &str,
     ) -> ApiResult<VariableContext> {
         // Get conversation
-        let conversation = db
+        let conversation = self.macro_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Conversation not found".to_string()))?;
 
         // Get contact
-        let contact = db.get_user_by_id(&conversation.contact_id).await?;
+        let contact = self.macro_repo.get_user_by_id(&conversation.contact_id).await?;
         let contact_email = contact.as_ref().map(|c| c.email.clone());
 
         // For contact_name, we'll use email as fallback since User model doesn't have name field
         let contact_name = contact.map(|c| c.email.clone());
 
         // Get agent
-        let agent = db
+        let agent = self.macro_repo
             .get_user_by_id(agent_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
 
         // Get team if assigned
         let team_name = if let Some(team_id) = &conversation.assigned_team_id {
-            db.get_team_by_id(team_id).await?.map(|t| t.name)
+            self.macro_repo.get_team_by_id(team_id).await?.map(|t| t.name)
         } else {
             None
         };
@@ -174,37 +180,37 @@ impl MacroService {
 
     /// Apply macro to conversation
     pub async fn apply_macro(
-        db: &Database,
+        &self,
         macro_id: &str,
         conversation_id: &str,
         agent_id: &str,
     ) -> ApiResult<MacroApplicationResult> {
         // Get macro
-        let mut macro_obj = db
+        let mut macro_obj = self.macro_repo
             .get_macro_by_id(macro_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Macro not found".to_string()))?;
 
         // Check access
-        if !Self::check_macro_access(db, &macro_obj, agent_id).await? {
+        if !self.check_macro_access(&macro_obj, agent_id).await? {
             return Err(ApiError::Forbidden(
                 "You do not have access to this macro".to_string(),
             ));
         }
 
         // Load actions
-        let actions = db.get_macro_actions(macro_id).await?;
+        let actions = self.macro_repo.get_macro_actions(macro_id).await?;
         macro_obj.actions = Some(actions.clone());
 
         // Load conversation context
-        let context = Self::load_conversation_context(db, conversation_id, agent_id).await?;
+        let context = self.load_conversation_context(conversation_id, agent_id).await?;
 
         // Replace variables
         let (message_content, variables_replaced) =
             Self::replace_variables(&macro_obj.message_content, &context);
 
         // Increment usage count
-        db.increment_macro_usage(macro_id).await?;
+        self.macro_repo.increment_macro_usage(macro_id).await?;
 
         // Create application log
         let now = OffsetDateTime::now_utc();
@@ -225,7 +231,7 @@ impl MacroService {
             .unwrap(),
             variables_replaced,
         };
-        db.create_macro_application_log(&log).await?;
+        self.macro_repo.create_macro_application_log(&log).await?;
 
         Ok(MacroApplicationResult {
             message_content,
@@ -236,7 +242,7 @@ impl MacroService {
 
     /// Create a new macro
     pub async fn create_macro(
-        db: &Database,
+        &self,
         name: String,
         message_content: String,
         actions: Vec<(String, String, i32)>, // (action_type, action_value, action_order)
@@ -244,7 +250,7 @@ impl MacroService {
         access_control: String,
     ) -> ApiResult<Macro> {
         // Check for duplicate name
-        if let Some(_) = db.get_macro_by_name(&name).await? {
+        if let Some(_) = self.macro_repo.get_macro_by_name(&name).await? {
             return Err(ApiError::Conflict(format!(
                 "Macro with name '{}' already exists",
                 name
@@ -274,7 +280,7 @@ impl MacroService {
         macro_obj.validate().map_err(|e| ApiError::BadRequest(e))?;
 
         // Save macro
-        db.create_macro(&macro_obj).await?;
+        self.macro_repo.create_macro(&macro_obj).await?;
 
         // Save actions
         let mut macro_actions = Vec::new();
@@ -290,7 +296,7 @@ impl MacroService {
             // Validate action
             action.validate().map_err(|e| ApiError::BadRequest(e))?;
 
-            db.create_macro_action(&action).await?;
+            self.macro_repo.create_macro_action(&action).await?;
             macro_actions.push(action);
         }
 
@@ -301,15 +307,14 @@ impl MacroService {
     }
 
     /// Update an existing macro
-    pub async fn update_macro(
-        db: &Database,
+    pub async fn update_macro(&self,
         macro_id: &str,
         message_content: Option<String>,
         actions: Option<Vec<(String, String, i32)>>,
         access_control: Option<String>,
     ) -> ApiResult<Macro> {
         // Get existing macro
-        let mut macro_obj = db
+        let mut macro_obj = self.macro_repo
             .get_macro_by_id(macro_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Macro not found".to_string()))?;
@@ -331,12 +336,12 @@ impl MacroService {
         macro_obj.validate().map_err(|e| ApiError::BadRequest(e))?;
 
         // Save macro
-        db.update_macro(&macro_obj).await?;
+        self.macro_repo.update_macro(&macro_obj).await?;
 
         // Update actions if provided
         if let Some(new_actions) = actions {
             // Delete existing actions
-            db.delete_macro_actions(macro_id).await?;
+            self.macro_repo.delete_macro_actions(macro_id).await?;
 
             // Create new actions
             let mut macro_actions = Vec::new();
@@ -352,7 +357,7 @@ impl MacroService {
                 // Validate action
                 action.validate().map_err(|e| ApiError::BadRequest(e))?;
 
-                db.create_macro_action(&action).await?;
+                self.macro_repo.create_macro_action(&action).await?;
                 macro_actions.push(action);
             }
             macro_obj.actions = Some(macro_actions);
@@ -362,42 +367,42 @@ impl MacroService {
     }
 
     /// Delete a macro
-    pub async fn delete_macro(db: &Database, macro_id: &str) -> ApiResult<()> {
+    pub async fn delete_macro(&self, macro_id: &str) -> ApiResult<()> {
         // Check if macro exists
-        let _ = db
+        let _ = self.macro_repo
             .get_macro_by_id(macro_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Macro not found".to_string()))?;
 
         // Delete macro (cascade will handle actions and access)
-        db.delete_macro(macro_id).await?;
+        self.macro_repo.delete_macro(macro_id).await?;
 
         Ok(())
     }
 
     /// Get macro by ID with actions
-    pub async fn get_macro(db: &Database, macro_id: &str) -> ApiResult<Macro> {
-        let mut macro_obj = db
+    pub async fn get_macro(&self, macro_id: &str) -> ApiResult<Macro> {
+        let mut macro_obj = self.macro_repo
             .get_macro_by_id(macro_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Macro not found".to_string()))?;
 
         // Load actions
-        let actions = db.get_macro_actions(macro_id).await?;
+        let actions = self.macro_repo.get_macro_actions(macro_id).await?;
         macro_obj.actions = Some(actions);
 
         Ok(macro_obj)
     }
 
     /// List accessible macros for user
-    pub async fn list_accessible_macros(db: &Database, user_id: &str) -> ApiResult<Vec<Macro>> {
+    pub async fn list_accessible_macros(&self, user_id: &str) -> ApiResult<Vec<Macro>> {
         // Get all macros
-        let all_macros = db.list_macros().await?;
+        let all_macros = self.macro_repo.list_macros().await?;
 
         // Filter by access
         let mut accessible_macros = Vec::new();
         for macro_obj in all_macros {
-            if Self::check_macro_access(db, &macro_obj, user_id).await? {
+            if self.check_macro_access(&macro_obj, user_id).await? {
                 accessible_macros.push(macro_obj);
             }
         }
@@ -407,14 +412,14 @@ impl MacroService {
 
     /// Grant access to a macro
     pub async fn grant_access(
-        db: &Database,
+        &self,
         macro_id: &str,
         entity_type: &str,
         entity_id: &str,
         granted_by: &str,
     ) -> ApiResult<()> {
         // Check if macro exists
-        let _ = db
+        let _ = self.macro_repo
             .get_macro_by_id(macro_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Macro not found".to_string()))?;
@@ -428,12 +433,12 @@ impl MacroService {
 
         // Validate entity exists
         if entity_type == "user" {
-            let _ = db
+            let _ = self.macro_repo
                 .get_user_by_id(entity_id)
                 .await?
                 .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
         } else {
-            let _ = db
+            let _ = self.macro_repo
                 .get_team_by_id(entity_id)
                 .await?
                 .ok_or_else(|| ApiError::NotFound("Team not found".to_string()))?;
@@ -452,29 +457,39 @@ impl MacroService {
             granted_by: granted_by.to_string(),
         };
 
-        db.create_macro_access(&access).await?;
+        self.macro_repo.create_macro_access(&access).await?;
 
         Ok(())
     }
 
     /// Revoke access to a macro
     pub async fn revoke_access(
-        db: &Database,
+        &self,
         macro_id: &str,
         entity_type: &str,
         entity_id: &str,
     ) -> ApiResult<()> {
         // Check if macro exists
-        let _ = db
+        let _ = self.macro_repo
             .get_macro_by_id(macro_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Macro not found".to_string()))?;
 
         // Delete access entry
-        db.delete_macro_access(macro_id, entity_type, entity_id)
+        self.macro_repo.delete_macro_access(macro_id, entity_type, entity_id)
             .await?;
 
         Ok(())
+    }
+
+    /// Get macro access grants
+    pub async fn get_macro_access(&self, macro_id: &str) -> ApiResult<Vec<MacroAccess>> {
+        self.macro_repo.get_macro_access(macro_id).await
+    }
+
+    /// Get macro application logs
+    pub async fn get_macro_logs(&self, macro_id: &str, limit: i32, offset: i32) -> ApiResult<Vec<MacroApplicationLog>> {
+        self.macro_repo.get_macro_application_logs(macro_id, limit, offset).await
     }
 }
 

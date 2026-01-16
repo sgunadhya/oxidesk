@@ -1,18 +1,17 @@
 use crate::api::middleware::error::ApiResult;
-use crate::database::Database;
+// Database import removed
 use crate::domain::ports::session_repository::SessionRepository;
 use crate::models::Session;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct SessionService {
-    db: Database,
     session_repo: Arc<dyn SessionRepository>,
 }
 
 impl SessionService {
-    pub fn new(db: Database, session_repo: Arc<dyn SessionRepository>) -> Self {
-        Self { db, session_repo }
+    pub fn new(session_repo: Arc<dyn SessionRepository>) -> Self {
+        Self { session_repo }
     }
 
     pub async fn create_session(&self, session: &Session) -> ApiResult<()> {

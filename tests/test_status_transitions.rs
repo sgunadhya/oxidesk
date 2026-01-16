@@ -1,5 +1,5 @@
 use oxidesk::models::conversation::{ConversationStatus, UpdateStatusRequest};
-use oxidesk::services::conversation_service;
+
 use oxidesk::EventBus;
 
 mod helpers;
@@ -33,14 +33,22 @@ async fn test_agent_can_update_open_to_resolved() {
     };
 
     // Use service
-    let result = conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        update_request,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await;
+    // Use service
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service = oxidesk::services::ConversationService::new(
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+    );
+    let result = conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            update_request,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await;
 
     assert!(
         result.is_ok(),
@@ -83,15 +91,22 @@ async fn test_resolved_at_timestamp_set_on_status_change() {
         snooze_duration: None,
     };
 
-    conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        update_request,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await
-    .expect("Failed to update status");
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service = oxidesk::services::ConversationService::new(
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+    );
+    conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            update_request,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await
+        .expect("Failed to update status");
 
     let updated = db
         .get_conversation_by_id(&conversation.id)
@@ -126,15 +141,22 @@ async fn test_invalid_status_transition_rejected() {
         snooze_duration: Some("1h".to_string()),
     };
 
-    conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        update_snooze,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await
-    .unwrap();
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service = oxidesk::services::ConversationService::new(
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+    );
+    conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            update_snooze,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await
+        .unwrap();
 
     let updated = db
         .get_conversation_by_id(&conversation.id)
@@ -147,15 +169,15 @@ async fn test_invalid_status_transition_rejected() {
         status: ConversationStatus::Open,
         snooze_duration: None,
     };
-    conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        update_open,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await
-    .unwrap();
+    conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            update_open,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await
+        .unwrap();
 
     let updated = db
         .get_conversation_by_id(&conversation.id)
@@ -191,15 +213,22 @@ async fn test_automation_rules_evaluated_on_status_change() {
         snooze_duration: None,
     };
 
-    conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        update_request,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await
-    .expect("Failed to update status");
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service = oxidesk::services::ConversationService::new(
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+    );
+    conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            update_request,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await
+        .expect("Failed to update status");
 
     // Verify event was published
     let event = tokio::time::timeout(tokio::time::Duration::from_secs(1), receiver.next())
@@ -250,15 +279,22 @@ async fn test_resolved_to_closed_transition() {
         snooze_duration: None,
     };
 
-    conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        resolve_request,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await
-    .expect("Failed to resolve conversation");
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service = oxidesk::services::ConversationService::new(
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+    );
+    conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            resolve_request,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await
+        .expect("Failed to resolve conversation");
 
     // Now close it
     let close_request = UpdateStatusRequest {
@@ -266,14 +302,14 @@ async fn test_resolved_to_closed_transition() {
         snooze_duration: None,
     };
 
-    let result = conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        close_request,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await;
+    let result = conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            close_request,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await;
 
     assert!(
         result.is_ok(),
@@ -314,15 +350,22 @@ async fn test_closed_at_timestamp_set() {
         snooze_duration: None,
     };
 
-    conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        resolve_request,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await
-    .expect("Failed to resolve");
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service = oxidesk::services::ConversationService::new(
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+    );
+    conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            resolve_request,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await
+        .expect("Failed to resolve");
 
     assert!(db
         .get_conversation_by_id(&conversation.id)
@@ -337,15 +380,15 @@ async fn test_closed_at_timestamp_set() {
         snooze_duration: None,
     };
 
-    conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        close_request,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await
-    .expect("Failed to close");
+    conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            close_request,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await
+        .expect("Failed to close");
 
     let updated = db
         .get_conversation_by_id(&conversation.id)
@@ -383,15 +426,22 @@ async fn test_reopening_clears_resolved_at() {
         snooze_duration: None,
     };
 
-    conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        resolve_request,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await
-    .expect("Failed to resolve");
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service = oxidesk::services::ConversationService::new(
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+    );
+    conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            resolve_request,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await
+        .expect("Failed to resolve");
 
     let resolved = db
         .get_conversation_by_id(&conversation.id)
@@ -406,15 +456,15 @@ async fn test_reopening_clears_resolved_at() {
         snooze_duration: None,
     };
 
-    conversation_service::update_conversation_status(
-        &db,
-        &conversation.id,
-        reopen_request,
-        Some(auth_user.user.id.clone()),
-        Some(&event_bus),
-    )
-    .await
-    .expect("Failed to reopen");
+    conversation_service
+        .update_conversation_status(
+            &conversation.id,
+            reopen_request,
+            Some(auth_user.user.id.clone()),
+            Some(&event_bus),
+        )
+        .await
+        .expect("Failed to reopen");
 
     let reopened = db
         .get_conversation_by_id(&conversation.id)

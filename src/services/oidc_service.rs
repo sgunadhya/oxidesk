@@ -1,4 +1,5 @@
 use crate::domain::ports::agent_repository::AgentRepository;
+use crate::domain::ports::oidc_repository::OidcRepository;
 use crate::domain::ports::user_repository::UserRepository;
 use crate::{
     api::middleware::ApiError,
@@ -12,8 +13,11 @@ use openidconnect::{
     PkceCodeVerifier, RedirectUrl, Scope, TokenResponse,
 };
 
-/// OIDC service for handling OAuth2/OIDC authentication flows
-pub struct OidcService;
+/// OIDC service for handling OAuth2/OIDC authentication flows and provider management
+#[derive(Clone)]
+pub struct OidcService {
+    oidc_repo: OidcRepository,
+}
 
 /// Authorization request with PKCE
 pub struct OidcAuthRequest {
@@ -23,12 +27,87 @@ pub struct OidcAuthRequest {
     pub pkce_verifier: String,
 }
 
+/// Result of successful OIDC callback
+pub struct CallbackResult {
+    pub session: Session,
+    pub user: User,
+    pub agent: crate::models::Agent,
+    pub roles: Vec<crate::models::Role>,
+}
+
 impl OidcService {
+    /// Create a new OidcService
+    pub fn new(oidc_repo: OidcRepository) -> Self {
+        Self { oidc_repo }
+    }
+
+    // ========================================
+    // Provider CRUD operations
+    // ========================================
+
+    /// Create a new OIDC provider
+    pub async fn create_provider(&self, provider: &OidcProvider) -> Result<(), ApiError> {
+        self.oidc_repo.create_provider(provider).await
+    }
+
+    /// Get OIDC provider by name
+    pub async fn get_provider_by_name(&self, name: &str) -> Result<Option<OidcProvider>, ApiError> {
+        self.oidc_repo.get_provider_by_name(name).await
+    }
+
+    /// List all OIDC providers
+    pub async fn list_providers(&self, enabled_only: bool) -> Result<Vec<OidcProvider>, ApiError> {
+        self.oidc_repo.list_providers(enabled_only).await
+    }
+
+    /// Update an existing OIDC provider
+    pub async fn update_provider(&self, provider: &OidcProvider) -> Result<(), ApiError> {
+        self.oidc_repo.update_provider(provider).await
+    }
+
+    /// Delete an OIDC provider
+    pub async fn delete_provider(&self, id: &str) -> Result<(), ApiError> {
+        self.oidc_repo.delete_provider(id).await
+    }
+
+    /// Toggle OIDC provider enabled status
+    pub async fn toggle_provider(&self, id: &str) -> Result<bool, ApiError> {
+        self.oidc_repo.toggle_provider(id).await
+    }
+
+    /// Check if provider exists by name
+    pub async fn provider_exists(&self, name: &str) -> Result<bool, ApiError> {
+        self.oidc_repo.provider_exists(name).await
+    }
+
+    // ========================================
+    // OIDC state operations (for CSRF protection)
+    // ========================================
+
+    /// Store OIDC state for callback validation
+    pub async fn create_state(&self, state: &crate::models::OidcState) -> Result<(), ApiError> {
+        self.oidc_repo.create_state(state).await
+    }
+
+    /// Consume OIDC state (one-time use)
+    pub async fn consume_state(&self, state: &str) -> Result<Option<crate::models::OidcState>, ApiError> {
+        self.oidc_repo.consume_state(state).await
+    }
+
+    /// Cleanup expired OIDC states
+    pub async fn cleanup_expired_states(&self) -> Result<u64, ApiError> {
+        self.oidc_repo.cleanup_expired_states().await
+    }
+
+    // ========================================
+    // OAuth2/OIDC authentication flow
+    // ========================================
+
     /// Initiate OIDC login flow
     ///
     /// Returns the authorization URL to redirect the user to, along with
     /// state, nonce, and PKCE verifier that must be stored for the callback.
-    pub async fn initiate_login(provider: &OidcProvider) -> Result<OidcAuthRequest, ApiError> {
+    pub async fn initiate_login(&self, provider: &OidcProvider) -> Result<OidcAuthRequest, ApiError> {
         // Create OIDC client
         let client = Self::create_client(provider).await?;
 
@@ -61,6 +140,7 @@ impl OidcService {
     /// Exchanges authorization code for tokens, validates ID token,
     /// and creates or updates user and session.
     pub async fn handle_callback(
+        &self,
         db: &Database,
         session_service: &crate::services::SessionService,
         provider: &OidcProvider,
@@ -178,14 +258,6 @@ impl OidcService {
 
         Ok(client)
     }
-}
-
-/// Result of successful OIDC callback
-pub struct CallbackResult {
-    pub session: Session,
-    pub user: User,
-    pub agent: crate::models::Agent,
-    pub roles: Vec<crate::models::Role>,
 }
 
 #[cfg(test)]

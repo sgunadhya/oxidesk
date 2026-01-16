@@ -198,3 +198,69 @@ impl Database {
         Ok(count)
     }
 }
+
+use crate::domain::ports::message_repository::MessageRepository;
+
+#[async_trait::async_trait]
+impl MessageRepository for Database {
+    async fn create_message(&self, message: &Message) -> ApiResult<()> {
+        Database::create_message(self, message).await
+    }
+
+    async fn get_message_by_id(&self, message_id: &str) -> ApiResult<Option<Message>> {
+        Database::get_message_by_id(self, message_id).await
+    }
+
+    async fn list_messages(
+        &self,
+        conversation_id: &str,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<Message>, i64)> {
+        Database::list_messages(self, conversation_id, limit, offset).await
+    }
+
+    async fn update_message_status(
+        &self,
+        message_id: &str,
+        status: MessageStatus,
+        sent_at: Option<&str>,
+    ) -> ApiResult<()> {
+        Database::update_message_status(self, message_id, status, sent_at).await
+    }
+
+    async fn update_conversation_message_timestamps(
+        &self,
+        conversation_id: &str,
+        message_id: &str,
+        last_message_at: &str,
+        last_reply_at: Option<&str>,
+    ) -> ApiResult<()> {
+        Database::update_conversation_message_timestamps(
+            self,
+            conversation_id,
+            message_id,
+            last_message_at,
+            last_reply_at,
+        )
+        .await
+    }
+
+    async fn count_messages(&self, conversation_id: &str) -> ApiResult<i64> {
+        Database::count_messages(self, conversation_id).await
+    }
+
+    async fn create_notification(
+        &self,
+        notification: &crate::models::UserNotification,
+    ) -> ApiResult<()> {
+        self.create_notification(notification).await
+    }
+
+    async fn get_users_by_usernames(
+        &self,
+        usernames: &[String],
+    ) -> ApiResult<Vec<crate::models::User>> {
+        self.get_users_by_usernames(usernames).await
+    }
+}

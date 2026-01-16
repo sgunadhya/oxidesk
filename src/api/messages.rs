@@ -10,7 +10,6 @@ use serde::Deserialize;
 use crate::{
     api::middleware::{ApiResult, AppState, AuthenticatedUser},
     models::{IncomingMessageRequest, MessageListResponse, PaginationMetadata, SendMessageRequest},
-    services::MessageService,
 };
 
 /// Webhook endpoint for receiving incoming messages from external sources
@@ -50,9 +49,10 @@ pub async fn receive_incoming_message(
         }
     }
 
-    let message_service = MessageService::new(state.db.clone());
-
-    let message = message_service.create_incoming_message(request).await?;
+    let message = state
+        .message_service
+        .create_incoming_message(request)
+        .await?;
 
     Ok((StatusCode::CREATED, Json(message)))
 }
@@ -64,14 +64,8 @@ pub async fn send_message(
     Path(conversation_id): Path<String>,
     Json(request): Json<SendMessageRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    let message_service = MessageService::with_all_services(
-        state.db.clone(),
-        state.delivery_service.clone(),
-        state.event_bus.clone(),
-        state.connection_manager.clone(),
-    );
-
-    let message = message_service
+    let message = state
+        .message_service
         .send_message(conversation_id, auth_user.user.id, request)
         .await?;
 
@@ -84,9 +78,7 @@ pub async fn get_message(
     axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
     Path(message_id): Path<String>,
 ) -> ApiResult<impl IntoResponse> {
-    let message_service = MessageService::new(state.db.clone());
-
-    let message = message_service.get_message(&message_id).await?;
+    let message = state.message_service.get_message(&message_id).await?;
 
     Ok(Json(message))
 }
@@ -114,9 +106,8 @@ pub async fn list_messages(
     Path(conversation_id): Path<String>,
     Query(query): Query<MessageListQuery>,
 ) -> ApiResult<impl IntoResponse> {
-    let message_service = MessageService::new(state.db.clone());
-
-    let (messages, total) = message_service
+    let (messages, total) = state
+        .message_service
         .list_messages(&conversation_id, query.page, query.per_page)
         .await?;
 

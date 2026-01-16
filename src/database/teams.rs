@@ -216,3 +216,53 @@ impl Database {
         Ok(())
     }
 }
+
+use crate::domain::ports::team_repository::TeamRepository;
+
+#[async_trait::async_trait]
+impl TeamRepository for Database {
+    async fn create_team(&self, team: &Team) -> ApiResult<()> {
+        Database::create_team(self, team).await
+    }
+
+    async fn get_team_by_id(&self, id: &str) -> ApiResult<Option<Team>> {
+        Database::get_team_by_id(self, id).await
+    }
+
+    async fn list_teams(&self) -> ApiResult<Vec<Team>> {
+        Database::list_teams(self).await
+    }
+
+    async fn add_team_member(
+        &self,
+        team_id: &str,
+        user_id: &str,
+        role: TeamMemberRole,
+    ) -> ApiResult<()> {
+        Database::add_team_member(self, team_id, user_id, role).await
+    }
+
+    async fn remove_team_member(&self, team_id: &str, user_id: &str) -> ApiResult<()> {
+        Database::remove_team_member(self, team_id, user_id).await
+    }
+
+    async fn get_team_members(&self, team_id: &str) -> ApiResult<Vec<User>> {
+        Database::get_team_members(self, team_id).await
+    }
+
+    async fn is_team_member(&self, team_id: &str, user_id: &str) -> ApiResult<bool> {
+        Database::is_team_member(self, team_id, user_id).await
+    }
+
+    async fn get_user_teams(&self, user_id: &str) -> ApiResult<Vec<Team>> {
+        Database::get_user_teams(self, user_id).await
+    }
+
+    async fn update_team_sla_policy(
+        &self,
+        team_id: &str,
+        sla_policy_id: Option<&str>,
+    ) -> ApiResult<()> {
+        Database::update_team_sla_policy(self, team_id, sla_policy_id).await
+    }
+}

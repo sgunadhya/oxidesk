@@ -27,27 +27,7 @@ impl ContactRepository for Database {
     }
 
     async fn find_contact_by_user_id(&self, user_id: &str) -> ApiResult<Option<Contact>> {
-        let row = sqlx::query(
-            "SELECT id, user_id, first_name
-             FROM contacts
-             WHERE user_id = ?",
-        )
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        if let Some(row) = row {
-            // Handle NULL for first_name
-            let first_name: Option<String> = row.try_get("first_name").ok();
-
-            Ok(Some(Contact {
-                id: row.try_get("id")?,
-                user_id: row.try_get("user_id")?,
-                first_name,
-            }))
-        } else {
-            Ok(None)
-        }
+        Database::find_contact_by_user_id(self, user_id).await
     }
 
     async fn create_contact_channel(&self, channel: &ContactChannel) -> ApiResult<()> {
@@ -264,5 +244,29 @@ impl Database {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn find_contact_by_user_id(&self, user_id: &str) -> ApiResult<Option<Contact>> {
+        let row = sqlx::query(
+            "SELECT id, user_id, first_name
+             FROM contacts
+             WHERE user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            // Handle NULL for first_name
+            let first_name: Option<String> = row.try_get("first_name").ok();
+
+            Ok(Some(Contact {
+                id: row.try_get("id")?,
+                user_id: row.try_get("user_id")?,
+                first_name,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }

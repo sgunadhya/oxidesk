@@ -113,8 +113,7 @@ async fn test_agent_must_have_at_least_one_role_on_update() {
         role_id: None, // Will use default role
     };
 
-    let session_service =
-        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service =
         AgentService::new(db.clone(), std::sync::Arc::new(db.clone()), session_service);
     let create_response = agent_service
@@ -170,7 +169,12 @@ async fn test_conversation_must_have_exactly_one_contact() {
         subject: Some("Test".to_string()),
     };
 
-    let result = conversation_service::create_conversation(&db, &admin, request, None).await;
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service =
+        ConversationService::new(repo.clone(), repo.clone(), repo.clone(), repo.clone());
+    let result = conversation_service
+        .create_conversation(&admin, request, None)
+        .await;
 
     // FR-006: Verify rejection with specific error message
     assert!(
@@ -210,7 +214,12 @@ async fn test_conversation_with_valid_contact_succeeds() {
         subject: Some("Test".to_string()),
     };
 
-    let result = conversation_service::create_conversation(&db, &admin, request, None).await;
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service =
+        ConversationService::new(repo.clone(), repo.clone(), repo.clone(), repo.clone());
+    let result = conversation_service
+        .create_conversation(&admin, request, None)
+        .await;
 
     assert!(
         result.is_ok(),
@@ -242,12 +251,16 @@ async fn test_message_must_have_exactly_one_sender() {
         contact_id: user.id.clone(), // Pass user_id, service converts to contact.id
         subject: Some("Test".to_string()),
     };
-    let conversation = conversation_service::create_conversation(&db, &admin, conv_request, None)
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service =
+        ConversationService::new(repo.clone(), repo.clone(), repo.clone(), repo.clone());
+    let conversation = conversation_service
+        .create_conversation(&admin, conv_request, None)
         .await
         .expect("Failed to create conversation");
 
     // FR-007: Attempt to create message without sender (contact_id = None)
-    let message_service = MessageService::new(db.clone());
+    let message_service = MessageService::new(repo.clone(), repo.clone());
     let incoming_request = IncomingMessageRequest {
         conversation_id: conversation.id.clone(),
         content: "Test message".to_string(),
@@ -293,12 +306,16 @@ async fn test_message_with_valid_sender_succeeds() {
         contact_id: user.id.clone(), // Pass user_id, service converts to contact.id
         subject: Some("Test".to_string()),
     };
-    let conversation = conversation_service::create_conversation(&db, &admin, conv_request, None)
+    let repo = std::sync::Arc::new(db.clone());
+    let conversation_service =
+        ConversationService::new(repo.clone(), repo.clone(), repo.clone(), repo.clone());
+    let conversation = conversation_service
+        .create_conversation(&admin, conv_request, None)
         .await
         .expect("Failed to create conversation");
 
     // Create message with valid sender
-    let message_service = MessageService::new(db.clone());
+    let message_service = MessageService::new(repo.clone(), repo.clone());
     let incoming_request = IncomingMessageRequest {
         conversation_id: conversation.id.clone(),
         content: "Test message".to_string(),
@@ -543,8 +560,7 @@ async fn test_entity_deletion_bypasses_cardinality_validation() {
         role_id: None,
     };
 
-    let session_service =
-        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service =
         AgentService::new(db.clone(), std::sync::Arc::new(db.clone()), session_service);
     let create_response = agent_service
