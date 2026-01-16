@@ -153,6 +153,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Initialize Session Service
+    let session_service =
+        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    tracing::info!("Session service initialized");
+
     // Start JobProcessor
     let job_processor = oxidesk::services::JobProcessor::new(
         task_queue.clone(),
@@ -160,14 +165,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         rate_limiter.clone(),
         availability_service.clone(),
         sla_service.clone(),
+        session_service.clone(),
     );
     tokio::spawn(async move {
         job_processor.start().await;
     });
 
     // Initialize Agent Service
-    let agent_service =
-        oxidesk::services::AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let agent_service = oxidesk::services::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service.clone(),
+    );
     tracing::info!("Agent service initialized");
 
     // Initialize User Service
@@ -199,6 +208,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         agent_service: agent_service.clone(),
         user_service: user_service.clone(),
         contact_service: contact_service.clone(),
+        session_service: session_service.clone(),
     };
 
     // Start automation listener background task
@@ -1173,13 +1183,13 @@ async fn web_auth_middleware(
     };
 
     // Validate session
-    let session = match state.db.get_session_by_token(&token).await {
+    let session = match state.session_service.get_session_by_token(&token).await {
         Ok(Some(s)) => s,
         _ => return Err(axum::response::Redirect::to("/login")),
     };
 
     if session.is_expired() {
-        let _ = state.db.delete_session(&token).await;
+        let _ = state.session_service.delete_session(&token).await;
         return Err(axum::response::Redirect::to("/login"));
     }
 

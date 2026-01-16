@@ -113,7 +113,10 @@ async fn test_agent_must_have_at_least_one_role_on_update() {
         role_id: None, // Will use default role
     };
 
-    let agent_service = AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service =
+        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let agent_service =
+        AgentService::new(db.clone(), std::sync::Arc::new(db.clone()), session_service);
     let create_response = agent_service
         .create_agent(&admin, create_request)
         .await
@@ -540,7 +543,10 @@ async fn test_entity_deletion_bypasses_cardinality_validation() {
         role_id: None,
     };
 
-    let agent_service = AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service =
+        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let agent_service =
+        AgentService::new(db.clone(), std::sync::Arc::new(db.clone()), session_service);
     let create_response = agent_service
         .create_agent(&admin, create_request)
         .await

@@ -40,6 +40,7 @@ pub async fn login(
     // Attempt authentication
     let auth_result = match auth::authenticate(
         &state.db,
+        &state.session_service,
         &request.email,
         &request.password,
         state.session_duration_hours,
@@ -144,7 +145,10 @@ pub async fn logout(
     .await;
 
     // Delete the session using the token from authenticated user
-    state.db.delete_session(&auth_user.token).await?;
+    state
+        .session_service
+        .delete_session(&auth_user.token)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -332,6 +336,7 @@ pub async fn oidc_callback(
     // Handle callback and create session
     let callback_result = match OidcService::handle_callback(
         &state.db,
+        &state.session_service,
         &provider,
         code,
         state_param,

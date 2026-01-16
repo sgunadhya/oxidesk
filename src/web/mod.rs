@@ -234,6 +234,7 @@ pub async fn handle_login(State(state): State<AppState>, Form(form): Form<LoginF
     // Delegate to auth service
     let auth_result = match services::auth::authenticate(
         &state.db,
+        &state.session_service,
         &form.email,
         &form.password,
         state.session_duration_hours,
@@ -305,7 +306,7 @@ pub async fn handle_logout(
     );
 
     // Delete session
-    let _ = state.db.delete_session(&auth_user.token).await;
+    let _ = state.session_service.delete_session(&auth_user.token).await;
 
     // Clear cookie and redirect
     (

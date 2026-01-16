@@ -16,11 +16,20 @@ const DEFAULT_AGENT_ROLE_ID: &str = "00000000-0000-0000-0000-000000000002";
 pub struct AgentService {
     db: Database,
     agent_repo: Arc<dyn AgentRepository>,
+    session_service: crate::services::SessionService,
 }
 
 impl AgentService {
-    pub fn new(db: Database, agent_repo: Arc<dyn AgentRepository>) -> Self {
-        Self { db, agent_repo }
+    pub fn new(
+        db: Database,
+        agent_repo: Arc<dyn AgentRepository>,
+        session_service: crate::services::SessionService,
+    ) -> Self {
+        Self {
+            db,
+            agent_repo,
+            session_service,
+        }
     }
 
     pub async fn get_agent_by_user_id(&self, user_id: &str) -> ApiResult<Option<Agent>> {
@@ -389,7 +398,7 @@ impl AgentService {
 
         // Destroy all active sessions for this agent (security requirement)
         // This forces the agent to re-authenticate with the new password
-        let session_count = self.db.delete_user_sessions(&user.id).await?;
+        let session_count = self.session_service.delete_user_sessions(&user.id).await?;
 
         tracing::info!(
             "Password changed for agent {} (user_id: {}), destroyed {} sessions",

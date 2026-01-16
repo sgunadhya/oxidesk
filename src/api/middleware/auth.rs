@@ -28,6 +28,7 @@ pub struct AppState {
     pub agent_service: crate::services::AgentService,
     pub user_service: crate::services::UserService,
     pub contact_service: crate::services::ContactService,
+    pub session_service: crate::services::SessionService,
 }
 
 /// Extract and validate session token from Authorization header
@@ -92,19 +93,22 @@ pub async fn require_auth(
 
     // Validate session
     let session = state
-        .db
+        .session_service
         .get_session_by_token(token)
         .await?
         .ok_or(ApiError::Unauthorized)?;
 
     if session.is_expired() {
         // Delete expired session
-        state.db.delete_session(token).await.ok();
+        state.session_service.delete_session(token).await.ok();
         return Err(ApiError::Unauthorized);
     }
 
     // Update last accessed timestamp for sliding window expiration
-    let _ = state.db.update_session_last_accessed(token).await;
+    let _ = state
+        .session_service
+        .update_session_last_accessed(token)
+        .await;
 
     // Get user
     let user = state

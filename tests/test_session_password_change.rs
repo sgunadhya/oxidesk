@@ -1,4 +1,5 @@
 use oxidesk::domain::ports::agent_repository::AgentRepository;
+use oxidesk::domain::ports::session_repository::SessionRepository;
 use oxidesk::domain::ports::user_repository::UserRepository;
 mod helpers;
 
@@ -94,8 +95,13 @@ async fn test_password_change_destroys_all_user_sessions() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let agent_service =
-        agent_service::AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service =
+        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let agent_service = agent_service::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service,
+    );
     let result = agent_service
         .change_agent_password(&auth_user, &user.id, request)
         .await;
@@ -194,8 +200,13 @@ async fn test_password_change_requires_reauthentication() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let agent_service =
-        agent_service::AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service =
+        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let agent_service = agent_service::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service,
+    );
     agent_service
         .change_agent_password(&auth_user, &user.id, request)
         .await
@@ -293,8 +304,13 @@ async fn test_password_change_does_not_affect_other_users() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let agent_service =
-        agent_service::AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service =
+        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let agent_service = agent_service::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service,
+    );
     agent_service
         .change_agent_password(&auth_user, &user1.id, request)
         .await
@@ -386,8 +402,13 @@ async fn test_password_change_with_no_active_sessions() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let agent_service =
-        agent_service::AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service =
+        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let agent_service = agent_service::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service,
+    );
     let result = agent_service
         .change_agent_password(&auth_user, &user.id, request)
         .await;
@@ -462,8 +483,13 @@ async fn test_password_change_permission_required() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let agent_service =
-        agent_service::AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service =
+        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let agent_service = agent_service::AgentService::new(
+        db.clone(),
+        std::sync::Arc::new(db.clone()),
+        session_service,
+    );
     let result = agent_service
         .change_agent_password(&auth_user, &target_user.id, request)
         .await;

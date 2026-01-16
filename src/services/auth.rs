@@ -116,6 +116,7 @@ pub struct AuthResult {
 /// 6. Create session
 pub async fn authenticate(
     db: &crate::database::Database,
+    session_service: &crate::services::SessionService,
     email: &str,
     password: &str,
     session_duration_hours: i64,
@@ -160,7 +161,7 @@ pub async fn authenticate(
 
     // 7. Create session
     let session = Session::new(user.id.clone(), token, session_duration_hours);
-    db.create_session(&session).await?;
+    session_service.create_session(&session).await?;
 
     Ok(AuthResult {
         session,

@@ -4,9 +4,11 @@ use crate::models::{AuthMethod, Session};
 use sqlx::Row;
 use time;
 
-impl Database {
-    // Session operations
-    pub async fn create_session(&self, session: &Session) -> ApiResult<()> {
+use crate::domain::ports::session_repository::SessionRepository;
+
+#[async_trait::async_trait]
+impl SessionRepository for Database {
+    async fn create_session(&self, session: &Session) -> ApiResult<()> {
         let auth_method_str = match session.auth_method {
             AuthMethod::Password => "password",
             AuthMethod::Oidc => "oidc",
@@ -32,7 +34,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_session_by_token(&self, token: &str) -> ApiResult<Option<Session>> {
+    async fn get_session_by_token(&self, token: &str) -> ApiResult<Option<Session>> {
         let row = sqlx::query(
             "SELECT id, user_id, token, csrf_token,
                     CAST(expires_at AS TEXT) as expires_at,
@@ -74,7 +76,7 @@ impl Database {
         }
     }
 
-    pub async fn delete_session(&self, token: &str) -> ApiResult<()> {
+    async fn delete_session(&self, token: &str) -> ApiResult<()> {
         sqlx::query("DELETE FROM sessions WHERE token = ?")
             .bind(token)
             .execute(&self.pool)
@@ -83,7 +85,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn cleanup_expired_sessions(&self) -> ApiResult<u64> {
+    async fn cleanup_expired_sessions(&self) -> ApiResult<u64> {
         let now = time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap();
@@ -96,8 +98,7 @@ impl Database {
         Ok(result.rows_affected())
     }
 
-    /// Get all sessions for a user (for testing and management)
-    pub async fn get_user_sessions(&self, user_id: &str) -> ApiResult<Vec<Session>> {
+    async fn get_user_sessions(&self, user_id: &str) -> ApiResult<Vec<Session>> {
         // Cast datetime columns to TEXT for compatibility with sqlx::any driver
         let rows = sqlx::query(
             "SELECT id, user_id, token, csrf_token,
@@ -140,8 +141,7 @@ impl Database {
         Ok(sessions)
     }
 
-    /// Delete all sessions for a user (for session destruction on password reset)
-    pub async fn delete_user_sessions(&self, user_id: &str) -> ApiResult<u64> {
+    async fn delete_user_sessions(&self, user_id: &str) -> ApiResult<u64> {
         let result = sqlx::query(
             "DELETE FROM sessions
              WHERE user_id = ?",
@@ -153,8 +153,7 @@ impl Database {
         Ok(result.rows_affected())
     }
 
-    /// Update session last_accessed_at timestamp
-    pub async fn update_session_last_accessed(&self, token: &str) -> ApiResult<()> {
+    async fn update_session_last_accessed(&self, token: &str) -> ApiResult<()> {
         let now = time::OffsetDateTime::now_utc()
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap();

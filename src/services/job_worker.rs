@@ -16,6 +16,7 @@ pub struct JobProcessor {
     rate_limiter: AuthRateLimiter,
     availability_service: AvailabilityService,
     sla_service: SlaService,
+    session_service: crate::services::SessionService,
     http_client: reqwest::Client,
 }
 
@@ -26,6 +27,7 @@ impl JobProcessor {
         rate_limiter: AuthRateLimiter,
         availability_service: AvailabilityService,
         sla_service: SlaService,
+        session_service: crate::services::SessionService,
     ) -> Self {
         let http_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
@@ -38,6 +40,7 @@ impl JobProcessor {
             rate_limiter,
             availability_service,
             sla_service,
+            session_service,
             http_client,
         }
     }
@@ -116,7 +119,7 @@ impl JobProcessor {
     // --- Job Handlers ---
 
     async fn handle_cleanup_sessions(&self) -> Result<(), String> {
-        match self.db.cleanup_expired_sessions().await {
+        match self.session_service.cleanup_expired_sessions().await {
             Ok(count) => {
                 if count > 0 {
                     info!("Cleaned up {} expired sessions", count);

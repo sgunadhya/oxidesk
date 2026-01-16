@@ -26,7 +26,10 @@ async fn test_create_agent_service_flow() {
     };
 
     // 3. Call create_agent
-    let agent_service = AgentService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let session_service =
+        oxidesk::services::SessionService::new(db.clone(), std::sync::Arc::new(db.clone()));
+    let agent_service =
+        AgentService::new(db.clone(), std::sync::Arc::new(db.clone()), session_service);
     let response = agent_service
         .create_agent(&admin_user, request.clone())
         .await

@@ -62,6 +62,7 @@ impl OidcService {
     /// and creates or updates user and session.
     pub async fn handle_callback(
         db: &Database,
+        session_service: &crate::services::SessionService,
         provider: &OidcProvider,
         authorization_code: String,
         state: String,
@@ -142,7 +143,7 @@ impl OidcService {
             Some(provider.name.clone()),
         );
 
-        db.create_session(&session).await?;
+        session_service.create_session(&session).await?;
 
         Ok(CallbackResult {
             session,
