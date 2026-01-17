@@ -9,7 +9,6 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: Database,
     pub session_duration_hours: i64,
     pub event_bus: Arc<dyn crate::events::EventBus>,
     pub delivery_service: services::DeliveryService,
@@ -36,6 +35,10 @@ pub struct AppState {
     pub inbox_service: services::InboxService,
     pub auth_service: services::AuthService,
     pub password_reset_service: services::PasswordResetService,
+    pub team_service: services::TeamService,
+    pub conversation_priority_service: services::ConversationPriorityService,
+    pub assignment_service: services::AssignmentService,
+    pub auth_logger_service: services::AuthLoggerService,
 }
 
 /// Extract and validate session token from Authorization header
@@ -55,7 +58,7 @@ pub async fn require_auth(
             .await?
             .ok_or(ApiError::Unauthorized)?;
 
-        let roles = state.db.get_user_roles(&user.id).await?;
+        let roles = state.role_service.get_user_roles(&user.id).await?;
 
         // Compute permissions from all roles
         let permissions = compute_permissions(&roles);
@@ -131,13 +134,13 @@ pub async fn require_auth(
 
     // Get agent
     let agent = state
-        .db
+        .agent_service
         .get_agent_by_user_id(&user.id)
         .await?
         .ok_or(ApiError::Unauthorized)?;
 
     // Get roles
-    let roles = state.db.get_user_roles(&user.id).await?;
+    let roles = state.role_service.get_user_roles(&user.id).await?;
 
     // Compute permissions from all roles
     let permissions = compute_permissions(&roles);

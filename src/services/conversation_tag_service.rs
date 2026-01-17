@@ -1,6 +1,8 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
-    database::Database,
+    domain::ports::conversation_repository::ConversationRepository,
+    domain::ports::conversation_tag_repository::ConversationTagRepository,
+    domain::ports::tag_repository::TagRepository,
     events::{EventBus, SystemEvent},
     models::*,
 };
@@ -9,13 +11,25 @@ use std::sync::Arc;
 /// Service for conversation tagging operations (agents)
 #[derive(Clone)]
 pub struct ConversationTagService {
-    db: Database,
+    conversation_tag_repo: Arc<dyn ConversationTagRepository>,
+    tag_repo: TagRepository,
+    conversation_repo: Arc<dyn ConversationRepository>,
     event_bus: Arc<dyn EventBus>,
 }
 
 impl ConversationTagService {
-    pub fn new(db: Database, event_bus: Arc<dyn EventBus>) -> Self {
-        Self { db, event_bus }
+    pub fn new(
+        conversation_tag_repo: Arc<dyn ConversationTagRepository>,
+        tag_repo: TagRepository,
+        conversation_repo: Arc<dyn ConversationRepository>,
+        event_bus: Arc<dyn EventBus>,
+    ) -> Self {
+        Self {
+            conversation_tag_repo,
+            tag_repo,
+            conversation_repo,
+            event_bus,
+        }
     }
 
     /// Helper: Check if user has permission
@@ -40,7 +54,7 @@ impl ConversationTagService {
 
         // 2. Verify conversation exists
         let _ = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -55,26 +69,26 @@ impl ConversationTagService {
         }
 
         // 4. Get previous tags for event
-        let previous_tags = self.db.get_conversation_tags(conversation_id).await?;
+        let previous_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
         let previous_tag_ids: Vec<String> = previous_tags.iter().map(|t| t.id.clone()).collect();
 
         // 5. Verify all tags exist and add them
         for tag_id in &request.tag_ids {
             // Verify tag exists
             let _ = self
-                .db
+                .tag_repo
                 .get_tag_by_id(tag_id)
                 .await?
                 .ok_or_else(|| ApiError::NotFound(format!("Tag {} not found", tag_id)))?;
 
             // Add tag (idempotent)
-            self.db
+            self.conversation_tag_repo
                 .add_conversation_tag(conversation_id, tag_id, user_id)
                 .await?;
         }
 
         // 6. Get new tags
-        let new_tags = self.db.get_conversation_tags(conversation_id).await?;
+        let new_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
         let new_tag_ids: Vec<String> = new_tags.iter().map(|t| t.id.clone()).collect();
 
         // 7. Emit ConversationTagsChanged event
@@ -108,7 +122,7 @@ impl ConversationTagService {
 
         // 2. Verify conversation exists
         let _ = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -116,16 +130,16 @@ impl ConversationTagService {
             })?;
 
         // 3. Get previous tags for event
-        let previous_tags = self.db.get_conversation_tags(conversation_id).await?;
+        let previous_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
         let previous_tag_ids: Vec<String> = previous_tags.iter().map(|t| t.id.clone()).collect();
 
         // 4. Remove tag (idempotent)
-        self.db
+        self.conversation_tag_repo
             .remove_conversation_tag(conversation_id, tag_id)
             .await?;
 
         // 5. Get new tags
-        let new_tags = self.db.get_conversation_tags(conversation_id).await?;
+        let new_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
         let new_tag_ids: Vec<String> = new_tags.iter().map(|t| t.id.clone()).collect();
 
         // 6. Emit ConversationTagsChanged event
@@ -159,7 +173,7 @@ impl ConversationTagService {
 
         // 2. Verify conversation exists
         let _ = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -167,25 +181,25 @@ impl ConversationTagService {
             })?;
 
         // 3. Get previous tags for event
-        let previous_tags = self.db.get_conversation_tags(conversation_id).await?;
+        let previous_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
         let previous_tag_ids: Vec<String> = previous_tags.iter().map(|t| t.id.clone()).collect();
 
         // 4. Verify all new tags exist
         for tag_id in &request.tag_ids {
             let _ = self
-                .db
+                .tag_repo
                 .get_tag_by_id(tag_id)
                 .await?
                 .ok_or_else(|| ApiError::NotFound(format!("Tag {} not found", tag_id)))?;
         }
 
         // 5. Replace tags atomically
-        self.db
+        self.conversation_tag_repo
             .replace_conversation_tags(conversation_id, &request.tag_ids, user_id)
             .await?;
 
         // 6. Get new tags
-        let new_tags = self.db.get_conversation_tags(conversation_id).await?;
+        let new_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
         let new_tag_ids: Vec<String> = new_tags.iter().map(|t| t.id.clone()).collect();
 
         // 7. Emit ConversationTagsChanged event
@@ -206,7 +220,7 @@ impl ConversationTagService {
     pub async fn get_conversation_tags(&self, conversation_id: &str) -> ApiResult<Vec<Tag>> {
         // 1. Verify conversation exists
         let _ = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -214,7 +228,7 @@ impl ConversationTagService {
             })?;
 
         // 2. Get tags
-        self.db.get_conversation_tags(conversation_id).await
+        self.conversation_tag_repo.get_conversation_tags(conversation_id).await
     }
 
     /// Get conversations with a specific tag
@@ -226,19 +240,19 @@ impl ConversationTagService {
     ) -> ApiResult<(Vec<Conversation>, i64)> {
         // 1. Verify tag exists
         let _ = self
-            .db
+            .tag_repo
             .get_tag_by_id(tag_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Tag {} not found", tag_id)))?;
 
         // 2. Get conversations
-        self.db
+        self.conversation_tag_repo
             .get_conversations_by_tag(tag_id, limit, offset)
             .await
     }
 
     /// Get user permissions (helper for service layer)
     pub async fn get_user_permissions(&self, user_id: &str) -> ApiResult<Vec<Permission>> {
-        self.db.get_user_permissions(user_id).await
+        self.tag_repo.get_user_permissions(user_id).await
     }
 }

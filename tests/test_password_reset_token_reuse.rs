@@ -30,7 +30,7 @@ async fn test_token_cannot_be_reused_after_successful_reset() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -40,11 +40,11 @@ async fn test_token_cannot_be_reused_after_successful_reset() {
     let token = tokens[0].token.clone();
 
     // Use token once (should succeed)
-    let result1 = PasswordResetService::new(db.clone()).reset_password(&token, "NewPass123!").await;
+    let result1 = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token, "NewPass123!").await;
     assert!(result1.is_ok(), "First use of token should succeed");
 
     // Try to use same token again (should fail)
-    let result2 = PasswordResetService::new(db.clone()).reset_password(&token, "AnotherPass123!").await;
+    let result2 = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token, "AnotherPass123!").await;
     assert!(result2.is_err(), "Second use of token should fail");
 
     match result2.unwrap_err() {
@@ -78,7 +78,7 @@ async fn test_token_marked_used_after_reset() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -92,7 +92,7 @@ async fn test_token_marked_used_after_reset() {
     assert!(!token_before.used, "Token should not be used before reset");
 
     // Use token
-    PasswordResetService::new(db.clone()).reset_password(&token, "NewPass123!")
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token, "NewPass123!")
         .await
         .unwrap();
 
@@ -127,7 +127,7 @@ async fn test_multiple_tokens_can_be_used_once_each() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset three times (each request invalidates previous tokens)
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens1 = db
@@ -136,7 +136,7 @@ async fn test_multiple_tokens_can_be_used_once_each() {
         .unwrap();
     let token1 = tokens1[0].token.clone();
 
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens2 = db
@@ -145,7 +145,7 @@ async fn test_multiple_tokens_can_be_used_once_each() {
         .unwrap();
     let token2 = tokens2.iter().find(|t| !t.used).unwrap().token.clone();
 
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens3 = db
@@ -155,19 +155,19 @@ async fn test_multiple_tokens_can_be_used_once_each() {
     let token3 = tokens3.iter().find(|t| !t.used).unwrap().token.clone();
 
     // Token1 should be invalidated (marked as used when token2 was created)
-    let result1 = PasswordResetService::new(db.clone()).reset_password(&token1, "Pass1_123!").await;
+    let result1 = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token1, "Pass1_123!").await;
     assert!(result1.is_err(), "Token1 should be invalidated");
 
     // Token2 should be invalidated (marked as used when token3 was created)
-    let result2 = PasswordResetService::new(db.clone()).reset_password(&token2, "Pass2_123!").await;
+    let result2 = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token2, "Pass2_123!").await;
     assert!(result2.is_err(), "Token2 should be invalidated");
 
     // Token3 (most recent) should work
-    let result3 = PasswordResetService::new(db.clone()).reset_password(&token3, "Pass3_123!").await;
+    let result3 = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token3, "Pass3_123!").await;
     assert!(result3.is_ok(), "Token3 (most recent) should work");
 
     // Token3 should not work a second time
-    let result3_reuse = PasswordResetService::new(db.clone()).reset_password(&token3, "Pass4_123!").await;
+    let result3_reuse = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token3, "Pass4_123!").await;
     assert!(result3_reuse.is_err(), "Token3 should not work twice");
 
     teardown_test_db(test_db).await;
@@ -194,7 +194,7 @@ async fn test_new_token_invalidates_previous_unused_tokens() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset (get first token)
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens1 = db
@@ -212,7 +212,7 @@ async fn test_new_token_invalidates_previous_unused_tokens() {
     assert!(!first_token_before.used, "First token should not be used");
 
     // Request another password reset (should invalidate first token)
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
 
@@ -228,7 +228,7 @@ async fn test_new_token_invalidates_previous_unused_tokens() {
     );
 
     // Try to use first token (should fail)
-    let result = PasswordResetService::new(db.clone()).reset_password(&first_token, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &first_token, "NewPass123!").await;
     assert!(result.is_err(), "Invalidated token should not work");
 
     teardown_test_db(test_db).await;
@@ -255,7 +255,7 @@ async fn test_token_reuse_returns_same_error_as_expired() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -265,12 +265,12 @@ async fn test_token_reuse_returns_same_error_as_expired() {
     let token = tokens[0].token.clone();
 
     // Use token once
-    PasswordResetService::new(db.clone()).reset_password(&token, "FirstPass123!")
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token, "FirstPass123!")
         .await
         .unwrap();
 
     // Try to reuse token
-    let result = PasswordResetService::new(db.clone()).reset_password(&token, "SecondPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token, "SecondPass123!").await;
 
     // Should return generic "Invalid or expired" error (no distinction for security)
     assert!(result.is_err());
@@ -308,7 +308,7 @@ async fn test_concurrent_use_of_same_token() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -325,11 +325,11 @@ async fn test_concurrent_use_of_same_token() {
     let token_clone2 = token.clone();
 
     let handle1 = tokio::spawn(async move {
-        PasswordResetService::new(db_clone1).reset_password(&token_clone1, "Pass1_123!").await
+        PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db_clone1.clone()), std::sync::Arc::new(db_clone1.clone())).reset_password(&token_clone1, "Pass1_123!").await
     });
 
     let handle2 = tokio::spawn(async move {
-        PasswordResetService::new(db_clone2).reset_password(&token_clone2, "Pass2_123!").await
+        PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db_clone2.clone()), std::sync::Arc::new(db_clone2.clone())).reset_password(&token_clone2, "Pass2_123!").await
     });
 
     let result1 = handle1.await.unwrap();
@@ -344,7 +344,7 @@ async fn test_concurrent_use_of_same_token() {
     );
 
     // A third attempt should definitely fail
-    let result3 = PasswordResetService::new(db.clone()).reset_password(&token, "Pass3_123!").await;
+    let result3 = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token, "Pass3_123!").await;
     assert!(result3.is_err(), "Subsequent use should fail");
 
     teardown_test_db(test_db).await;

@@ -58,7 +58,7 @@ fn validate_credentials_format(api_key: &str, api_secret: &str) -> bool {
 /// Authenticate request with API key
 /// Returns the agent if authentication succeeds, None otherwise
 pub async fn authenticate_with_api_key(
-    db: &Database,
+    agent_service: &crate::services::AgentService,
     api_key: &str,
     api_secret: &str,
 ) -> Result<Option<Agent>, ApiError> {
@@ -68,8 +68,8 @@ pub async fn authenticate_with_api_key(
         return Ok(None);
     }
 
-    // Lookup API key in database
-    let agent = match db.get_agent_by_api_key(api_key).await? {
+    // Lookup API key using agent service
+    let agent = match agent_service.get_agent_by_api_key(api_key).await? {
         Some(agent) => agent,
         None => {
             tracing::debug!("API key not found: {}", &api_key[..10.min(api_key.len())]);
@@ -92,10 +92,10 @@ pub async fn authenticate_with_api_key(
             tracing::info!("API key authentication successful for agent: {}", agent.id);
 
             // Update last used timestamp asynchronously (fire and forget)
-            let db_clone = db.clone();
+            let agent_service_clone = agent_service.clone();
             let api_key_clone = api_key.to_string();
             tokio::spawn(async move {
-                if let Err(e) = db_clone.update_api_key_last_used(&api_key_clone).await {
+                if let Err(e) = agent_service_clone.update_api_key_last_used(&api_key_clone).await {
                     tracing::error!("Failed to update API key last_used_at: {}", e);
                 }
             });
@@ -129,7 +129,7 @@ pub async fn api_key_auth_middleware(
     let headers = request.headers().clone();
     if let Some((api_key, api_secret)) = extract_credentials(&headers) {
         // Attempt authentication
-        match authenticate_with_api_key(&state.db, &api_key, &api_secret).await? {
+        match authenticate_with_api_key(&state.agent_service, &api_key, &api_secret).await? {
             Some(agent) => {
                 // Authentication successful - store agent in request extensions
                 // The require_auth middleware will use this to build AuthenticatedUser

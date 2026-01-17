@@ -509,3 +509,46 @@ impl Database {
         }
     }
 }
+
+// Repository trait implementation
+#[async_trait::async_trait]
+impl crate::domain::ports::conversation_tag_repository::ConversationTagRepository for Database {
+    async fn get_conversation_tags(&self, conversation_id: &str) -> ApiResult<Vec<Tag>> {
+        self.get_conversation_tags(conversation_id).await
+    }
+
+    async fn add_conversation_tag(
+        &self,
+        conversation_id: &str,
+        tag_id: &str,
+        user_id: &str,
+    ) -> ApiResult<()> {
+        self.add_conversation_tag(conversation_id, tag_id, user_id).await
+    }
+
+    async fn remove_conversation_tag(
+        &self,
+        conversation_id: &str,
+        tag_id: &str,
+    ) -> ApiResult<()> {
+        self.remove_conversation_tag(conversation_id, tag_id).await
+    }
+
+    async fn replace_conversation_tags(
+        &self,
+        conversation_id: &str,
+        tag_ids: &[String],
+        user_id: &str,
+    ) -> ApiResult<()> {
+        self.replace_conversation_tags(conversation_id, tag_ids, user_id).await
+    }
+
+    async fn get_conversations_by_tag(
+        &self,
+        tag_id: &str,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<Conversation>, i64)> {
+        self.get_conversations_by_tag(tag_id, limit, offset).await
+    }
+}

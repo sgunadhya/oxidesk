@@ -1,17 +1,4 @@
-use crate::{
-    api::middleware::error::{ApiError, ApiResult},
-    database::Database,
-    domain::ports::user_repository::UserRepository,
-    models::*,
-    services::{
-        auth::{hash_password, validate_password_complexity},
-        password_reset_email_service::{send_password_reset_email, SmtpConfig},
-    },
-    utils::generate_reset_token,
-};
-use std::env;
-
-/// Password Reset Service (struct-based)
+/// Password Reset Service
 /// Feature: 017-password-reset
 ///
 /// Business logic for password reset functionality including:
@@ -19,15 +6,30 @@ use std::env;
 /// - Rate limiting
 /// - Email enumeration prevention
 /// - Session destruction
+use crate::{
+    api::middleware::error::{ApiError, ApiResult},
+    domain::ports::{password_reset_repository::PasswordResetRepository, user_repository::UserRepository},
+    models::*,
+    services::{
+        auth::{hash_password, validate_password_complexity},
+        password_reset_email_service::{send_password_reset_email, SmtpConfig},
+    },
+    utils::generate_reset_token,
+};
+use std::{env, sync::Arc};
+
 #[derive(Clone)]
 pub struct PasswordResetService {
-    db: Database
+    password_reset_repo: PasswordResetRepository,
+    user_repo: Arc<dyn UserRepository>,
 }
 
 impl PasswordResetService {
-    /// Create a new service instance bound to a Database reference
-    pub fn new(db: Database) -> Self {
-        Self { db }
+    pub fn new(password_reset_repo: PasswordResetRepository, user_repo: Arc<dyn UserRepository>) -> Self {
+        Self {
+            password_reset_repo,
+            user_repo,
+        }
     }
 
     /// Request a password reset for an agent email
@@ -39,16 +41,12 @@ impl PasswordResetService {
     ///
     /// # Rate Limiting
     /// Maximum 5 requests per hour per email
-    pub async fn request_password_reset(
-        &self,
-        email: &str,
-    ) -> ApiResult<RequestPasswordResetResponse> {
+    pub async fn request_password_reset(&self, email: &str) -> ApiResult<RequestPasswordResetResponse> {
         // Normalize email
         let email = email.trim().to_lowercase();
 
         // Try to find agent by email
-        let user_option = self
-            .db
+        let user_option = self.user_repo
             .get_user_by_email_and_type(&email, &UserType::Agent)
             .await?;
 
@@ -60,7 +58,7 @@ impl PasswordResetService {
                 .parse()
                 .unwrap_or(5);
 
-            let recent_requests = self.db.count_recent_reset_requests(&user.id, 3600).await?;
+            let recent_requests = self.password_reset_repo.count_recent_requests(&user.id, 3600).await?;
 
             if recent_requests >= rate_limit_window {
                 return Err(ApiError::TooManyRequests(
@@ -73,26 +71,20 @@ impl PasswordResetService {
             let reset_token = PasswordResetToken::new(user.id.clone(), token_value.clone());
 
             // Invalidate previous tokens for this user
-            self.db.invalidate_user_reset_tokens(&user.id).await?;
+            self.password_reset_repo.invalidate_user_tokens(&user.id).await?;
 
             // Store new token
-            self.db.create_password_reset_token(&reset_token).await?;
+            self.password_reset_repo.create_token(&reset_token).await?;
 
             // Send email (async, best-effort)
-            let smtp_config = match SmtpConfig::from_env() {
-                Ok(cfg) => cfg,
-                Err(e) => {
-                    return Err(ApiError::Internal(format!("SMTP configuration error: {}", e)))
-                }
-            };
+            let smtp_config = SmtpConfig::from_env()
+                .map_err(|e| ApiError::Internal(format!("SMTP configuration error: {}", e)))?;
 
             // Spawn email sending in background to not block response
             let email_clone = email.clone();
-            let token_clone = token_value.clone();
-            let smtp_clone = smtp_config.clone();
             tokio::spawn(async move {
                 if let Err(e) =
-                    send_password_reset_email(&email_clone, &token_clone, &smtp_clone).await
+                    send_password_reset_email(&email_clone, &token_value, &smtp_config).await
                 {
                     tracing::error!(
                         "Failed to send password reset email to {}: {}",
@@ -125,16 +117,15 @@ impl PasswordResetService {
     /// - It exists in the database
     /// - It has not been used (used = false)
     /// - It has not expired (expires_at > now)
-    pub async fn validate_reset_token(&self, token: &str) -> ApiResult<PasswordResetToken> {
+    async fn validate_reset_token(&self, token: &str) -> ApiResult<PasswordResetToken> {
         // Validate token format (32 alphanumeric characters)
         if token.len() != 32 || !token.chars().all(|c| c.is_alphanumeric()) {
             return Err(ApiError::BadRequest("Invalid token format".to_string()));
         }
 
         // Lookup token
-        let token_record = self
-            .db
-            .get_password_reset_token(token)
+        let token_record = self.password_reset_repo
+            .get_token(token)
             .await?
             .ok_or_else(|| ApiError::BadRequest("Invalid or expired reset token".to_string()))?;
 
@@ -143,7 +134,7 @@ impl PasswordResetService {
         // for all expired tokens, even if they were previously invalidated
         if token_record.is_expired() {
             // Lazy cleanup: delete expired token
-            self.db.delete_password_reset_token(&token_record.id).await?;
+            self.password_reset_repo.delete_token(&token_record.id).await?;
             return Err(ApiError::BadRequest(
                 "Invalid or expired reset token".to_string(),
             ));
@@ -187,8 +178,7 @@ impl PasswordResetService {
         // Execute all password reset operations atomically in a transaction
         // This ensures that either all operations succeed or none do
         // Prevents inconsistent state (e.g., password changed but token still valid)
-        let session_count = self
-            .db
+        let session_count = self.password_reset_repo
             .reset_password_atomic(&token_record.user_id, &token_record.id, &password_hash)
             .await?;
 

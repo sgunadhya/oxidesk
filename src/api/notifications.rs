@@ -107,7 +107,7 @@ pub async fn list_notifications(
 
     // Fetch notifications from database
     let notifications = state
-        .db
+        .notification_service
         .list_notifications(&user.user.id, query.limit, query.offset)
         .await?;
 
@@ -131,7 +131,7 @@ pub async fn get_unread_count(
     Extension(user): Extension<AuthenticatedUser>,
 ) -> ApiResult<impl IntoResponse> {
     // Fetch unread count from database
-    let count = state.db.get_unread_count(&user.user.id).await?;
+    let count = state.notification_service.get_unread_count(&user.user.id).await?;
 
     Ok(Json(UnreadCountResponse { count }))
 }
@@ -175,7 +175,7 @@ pub async fn mark_notification_as_read(
 ) -> ApiResult<impl IntoResponse> {
     // Get the notification to verify ownership
     let notification = state
-        .db
+        .notification_service
         .get_notification_by_id(&id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Notification not found".to_string()))?;
@@ -188,7 +188,7 @@ pub async fn mark_notification_as_read(
     }
 
     // Mark the notification as read
-    state.db.mark_notification_as_read(&id).await?;
+    state.notification_service.mark_notification_as_read(&id).await?;
 
     Ok(Json(SuccessResponse {
         message: "Notification marked as read".to_string(),
@@ -202,7 +202,7 @@ pub async fn mark_all_notifications_as_read(
 ) -> ApiResult<impl IntoResponse> {
     // Call database method to mark all notifications as read
     let count = state
-        .db
+        .notification_service
         .mark_all_notifications_as_read(&user.user.id)
         .await?;
 

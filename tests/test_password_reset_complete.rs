@@ -32,7 +32,7 @@ async fn test_successful_password_reset_with_valid_token() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -43,7 +43,7 @@ async fn test_successful_password_reset_with_valid_token() {
 
     // Reset password with token
     let new_password = "NewPass123!";
-    let result = PasswordResetService::new(db.clone()).reset_password(token, new_password).await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, new_password).await;
 
     // Should succeed
     assert!(result.is_ok());
@@ -88,7 +88,7 @@ async fn test_password_reset_marks_token_as_used() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -102,7 +102,7 @@ async fn test_password_reset_marks_token_as_used() {
     assert!(!token_before.used, "Token should not be used before reset");
 
     // Reset password
-    PasswordResetService::new(db.clone()).reset_password(token, "NewPass123!")
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, "NewPass123!")
         .await
         .unwrap();
 
@@ -132,7 +132,7 @@ async fn test_password_reset_rejects_invalid_token_format() {
     ];
 
     for invalid_token in &invalid_tokens {
-        let result = PasswordResetService::new(db.clone()).reset_password(invalid_token, "NewPass123!").await;
+        let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( invalid_token, "NewPass123!").await;
 
         assert!(
             result.is_err(),
@@ -162,7 +162,7 @@ async fn test_password_reset_rejects_nonexistent_token() {
     // Try to reset with valid format but non-existent token
     let nonexistent_token = "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6";
 
-    let result = PasswordResetService::new(db.clone()).reset_password(nonexistent_token, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( nonexistent_token, "NewPass123!").await;
 
     assert!(result.is_err());
 
@@ -200,7 +200,7 @@ async fn test_password_reset_rejects_weak_passwords() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -219,7 +219,7 @@ async fn test_password_reset_rejects_weak_passwords() {
     ];
 
     for weak_pass in &weak_passwords {
-        let result = PasswordResetService::new(db.clone()).reset_password(token, weak_pass).await;
+        let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, weak_pass).await;
 
         assert!(
             result.is_err(),
@@ -264,7 +264,7 @@ async fn test_password_reset_updates_password_hash() {
     assert_eq!(agent_before.password_hash, old_password_hash);
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -275,7 +275,7 @@ async fn test_password_reset_updates_password_hash() {
 
     // Reset password
     let new_password = "NewPass123!";
-    PasswordResetService::new(db.clone()).reset_password(token, new_password)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, new_password)
         .await
         .unwrap();
 
@@ -314,7 +314,7 @@ async fn test_password_reset_returns_success_message() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -324,7 +324,7 @@ async fn test_password_reset_returns_success_message() {
     let token = &tokens[0].token;
 
     // Reset password
-    let result = PasswordResetService::new(db.clone()).reset_password(token, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, "NewPass123!").await;
 
     assert!(result.is_ok());
     let response = result.unwrap();

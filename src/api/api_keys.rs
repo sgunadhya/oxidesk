@@ -69,9 +69,7 @@ pub async fn generate_api_key_handler(
     }
 
     // Check if agent exists
-    let agent = state
-        .db
-        .get_agent_by_id(&agent_id)
+    let agent = state.agent_service.get_agent_by_user_id(&agent_id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
 
@@ -93,15 +91,11 @@ pub async fn generate_api_key_handler(
     })?;
 
     // Store in database
-    state
-        .db
-        .create_api_key(&agent_id, &api_key, &api_secret_hash, description)
+    state.agent_service.create_api_key(&agent_id, &api_key, &api_secret_hash, Some(description.to_string()))
         .await?;
 
     // Get updated agent to retrieve created_at
-    let updated_agent = state
-        .db
-        .get_agent_by_id(&agent_id)
+    let updated_agent = state.agent_service.get_agent_by_user_id(&agent_id)
         .await?
         .ok_or_else(|| ApiError::Internal("Failed to retrieve created API key".to_string()))?;
 
@@ -138,9 +132,7 @@ pub async fn revoke_api_key_handler(
     }
 
     // Check if agent exists
-    let agent = state
-        .db
-        .get_agent_by_id(&agent_id)
+    let agent = state.agent_service.get_agent_by_user_id(&agent_id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
 
@@ -152,7 +144,7 @@ pub async fn revoke_api_key_handler(
     }
 
     // Revoke the API key
-    let revoked = state.db.revoke_api_key(&agent_id).await?;
+    let revoked = state.agent_service.revoke_api_key(&agent_id).await?;
 
     if !revoked {
         return Err(ApiError::NotFound(
@@ -197,9 +189,7 @@ pub async fn list_api_keys_handler(
     };
 
     // Get API keys from database
-    let api_keys_data = state
-        .db
-        .list_api_keys(per_page, offset, sort_by, &sort_order)
+    let api_keys_data = state.agent_service.list_api_keys(per_page, offset, sort_by, &sort_order)
         .await?;
 
     let api_keys: Vec<ApiKeyListItem> = api_keys_data
@@ -208,7 +198,7 @@ pub async fn list_api_keys_handler(
             |(agent_id, api_key, description, created_at, last_used_at)| ApiKeyListItem {
                 agent_id,
                 api_key,
-                description,
+                description: description.unwrap_or_else(|| "No description".to_string()),
                 created_at,
                 last_used_at,
             },
@@ -216,7 +206,7 @@ pub async fn list_api_keys_handler(
         .collect();
 
     // Get total count for pagination metadata
-    let total_count = state.db.count_api_keys().await?;
+    let total_count = state.agent_service.count_api_keys().await?;
     let total_pages = (total_count + per_page - 1) / per_page;
 
     Ok(Json(ApiKeyListResponse {
