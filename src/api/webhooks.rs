@@ -8,7 +8,6 @@ use serde::Deserialize;
 use crate::{
     api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
     models::{CreateWebhookRequest, DeliveryListResponse, UpdateWebhookRequest},
-    services::WebhookService,
 };
 
 /// Create a new webhook (admin only)
@@ -24,8 +23,7 @@ pub async fn create_webhook(
         ));
     }
 
-    let service = WebhookService::new(state.db.clone());
-    let webhook = service.create_webhook(request, &auth_user.user.id).await?;
+    let webhook = state.webhook_service.create_webhook(request, &auth_user.user.id).await?;
 
     Ok((axum::http::StatusCode::CREATED, Json(webhook)))
 }
@@ -43,8 +41,7 @@ pub async fn list_webhooks(
         ));
     }
 
-    let service = WebhookService::new(state.db.clone());
-    let response = service.list_webhooks(params.limit, params.offset).await?;
+    let response = state.webhook_service.list_webhooks(params.limit, params.offset).await?;
 
     Ok(Json(response))
 }
@@ -62,8 +59,7 @@ pub async fn get_webhook(
         ));
     }
 
-    let service = WebhookService::new(state.db.clone());
-    let webhook = service.get_webhook(&id).await?;
+    let webhook = state.webhook_service.get_webhook(&id).await?;
 
     Ok(Json(webhook))
 }
@@ -137,11 +133,7 @@ pub async fn test_webhook(
     }
 
     // Get webhook (full model with secret)
-    let webhook = state
-        .db
-        .get_webhook_by_id(&id)
-        .await?
-        .ok_or_else(|| ApiError::NotFound(format!("Webhook not found: {}", id)))?;
+    let webhook = state.webhook_service.get_webhook_full(&id).await?;
 
     // Create test payload
     let test_payload = serde_json::json!({

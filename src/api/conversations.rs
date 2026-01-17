@@ -302,13 +302,8 @@ pub async fn update_conversation_priority(
     }
 
     // Use the priority service to update the conversation
-    let priority_service =
-        crate::services::conversation_priority_service::ConversationPriorityService::new(
-            state.db.clone(),
-            Some(state.event_bus.clone()),
-        );
-
-    let updated = priority_service
+    let updated = state
+        .conversation_priority_service
         .update_conversation_priority(&id, request.priority, &auth_user.user.id)
         .await?;
 

@@ -488,7 +488,7 @@ pub async fn show_roles(
     axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
 ) -> impl IntoResponse {
     // Get all roles
-    let roles = match state.db.list_roles().await {
+    let roles = match state.role_service.list_roles().await {
         Ok(roles) => roles,
         Err(_) => {
             return Html("<div class=\"alert alert-error\">Failed to load roles</div>")

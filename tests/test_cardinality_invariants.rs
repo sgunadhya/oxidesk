@@ -117,7 +117,12 @@ async fn test_agent_must_have_at_least_one_role_on_update() {
 
     let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service =
-        AgentService::new(db.clone(), std::sync::Arc::new(db.clone()), session_service);
+        AgentService::new(
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::role_repository::RoleRepository>,
+        session_service,
+    );
     let create_response = agent_service
         .create_agent(&admin, create_request)
         .await
@@ -350,7 +355,8 @@ async fn test_webhook_must_have_at_least_one_event_on_create() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
 
-    let webhook_service = WebhookService::new(db.clone());
+    let webhook_repo = oxidesk::domain::ports::webhook_repository::WebhookRepository::new(db.clone());
+    let webhook_service = WebhookService::new(webhook_repo);
 
     // FR-009: Attempt to create webhook with empty events array
     let request = CreateWebhookRequest {
@@ -386,7 +392,8 @@ async fn test_webhook_must_have_at_least_one_event_on_update() {
     // Create admin user for webhook created_by FK
     let admin = create_test_auth_user(db).await;
 
-    let webhook_service = WebhookService::new(db.clone());
+    let webhook_repo = oxidesk::domain::ports::webhook_repository::WebhookRepository::new(db.clone());
+    let webhook_service = WebhookService::new(webhook_repo);
 
     // Create webhook with valid events
     let create_request = CreateWebhookRequest {
@@ -570,7 +577,12 @@ async fn test_entity_deletion_bypasses_cardinality_validation() {
 
     let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service =
-        AgentService::new(db.clone(), std::sync::Arc::new(db.clone()), session_service);
+        AgentService::new(
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::role_repository::RoleRepository>,
+        session_service,
+    );
     let create_response = agent_service
         .create_agent(&admin, create_request)
         .await

@@ -38,6 +38,9 @@ pub struct AppState {
     pub role_service: crate::services::RoleService,
     pub inbox_service: crate::services::InboxService,
     pub auth_service: crate::services::AuthService,
+    pub password_reset_service: crate::services::PasswordResetService,
+    pub team_service: crate::services::TeamService,
+    pub conversation_priority_service: crate::services::ConversationPriorityService,
 }
 
 /// Extract and validate session token from Authorization header

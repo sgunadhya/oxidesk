@@ -1,6 +1,6 @@
 use crate::api::middleware::{ApiError, ApiResult, AuthenticatedUser};
-use crate::database::Database;
 use crate::domain::ports::agent_repository::AgentRepository;
+use crate::domain::ports::role_repository::RoleRepository;
 use crate::domain::ports::user_repository::UserRepository;
 use crate::models::*;
 use crate::services::{
@@ -14,20 +14,23 @@ const DEFAULT_AGENT_ROLE_ID: &str = "00000000-0000-0000-0000-000000000002";
 
 #[derive(Clone)]
 pub struct AgentService {
-    db: Database,
     agent_repo: Arc<dyn AgentRepository>,
+    user_repo: Arc<dyn UserRepository>,
+    role_repo: Arc<dyn RoleRepository>,
     session_service: crate::services::SessionService,
 }
 
 impl AgentService {
     pub fn new(
-        db: Database,
         agent_repo: Arc<dyn AgentRepository>,
+        user_repo: Arc<dyn UserRepository>,
+        role_repo: Arc<dyn RoleRepository>,
         session_service: crate::services::SessionService,
     ) -> Self {
         Self {
-            db,
             agent_repo,
+            user_repo,
+            role_repo,
             session_service,
         }
     }
@@ -54,7 +57,7 @@ impl AgentService {
 
         // Check if email already exists for agents (per-type uniqueness)
         if let Some(_) = self
-            .db
+            .user_repo
             .get_user_by_email_and_type(&email, &UserType::Agent)
             .await?
         {
@@ -72,7 +75,7 @@ impl AgentService {
 
         // Verify role exists
         let role = self
-            .db
+            .role_repo
             .get_role_by_id(role_id)
             .await?
             .ok_or_else(|| ApiError::BadRequest(format!("Role not found: {}", role_id)))?;
@@ -91,7 +94,7 @@ impl AgentService {
 
         // Get created user for timestamp
         let user = self
-            .db
+            .user_repo
             .get_user_by_id(&user_id)
             .await?
             .ok_or_else(|| ApiError::Internal("Failed to retrieve created user".to_string()))?;
@@ -123,7 +126,7 @@ impl AgentService {
     pub async fn get_agent(&self, id: &str) -> ApiResult<AgentResponse> {
         // Get user
         let user = self
-            .db
+            .user_repo
             .get_user_by_id(id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
@@ -141,7 +144,7 @@ impl AgentService {
             .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
 
         // Get roles
-        let roles = self.db.get_user_roles(&user.id).await?;
+        let roles = self.role_repo.get_user_roles(&user.id).await?;
 
         let role_responses: Vec<RoleResponse> = roles
             .iter()
@@ -178,7 +181,7 @@ impl AgentService {
 
         // Check if user exists and is an agent
         let user = self
-            .db
+            .user_repo
             .get_user_by_id(id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
@@ -188,7 +191,7 @@ impl AgentService {
         }
 
         // Check if this agent has Admin role
-        let roles = self.db.get_user_roles(&user.id).await?;
+        let roles = self.role_repo.get_user_roles(&user.id).await?;
         let is_admin = roles.iter().any(|r| r.name == "Admin");
 
         if is_admin {
@@ -205,7 +208,7 @@ impl AgentService {
         // Delete user (cascade will delete agent and user_roles)
         // Use database function for soft delete if possible, ensuring it uses standard query
         // Or if there's no repository method for delete user, use db directly (which is what we have)
-        self.db.soft_delete_user(id, &auth_user.user.id).await?; // Assuming soft_delete_user exists on Db
+        self.user_repo.soft_delete_user(id, &auth_user.user.id).await?; // Assuming soft_delete_user exists on Db
 
         Ok(())
     }
@@ -234,7 +237,7 @@ impl AgentService {
         // Build agent responses with roles
         let mut agent_responses = Vec::new();
         for (user, agent) in agents_data {
-            let roles = self.db.get_user_roles(&user.id).await?;
+            let roles = self.role_repo.get_user_roles(&user.id).await?;
 
             let role_responses: Vec<RoleResponse> = roles
                 .iter()
@@ -287,7 +290,7 @@ impl AgentService {
 
         // Check if user exists and is an agent
         let user = self
-            .db
+            .user_repo
             .get_user_by_id(id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
@@ -317,17 +320,17 @@ impl AgentService {
             }
 
             // Remove existing roles
-            self.db.remove_user_roles(&user.id).await?;
+            self.role_repo.remove_user_roles(&user.id).await?;
 
             // Assign new roles
             for role_id in &role_ids {
                 let user_role = UserRole::new(user.id.clone(), role_id.clone());
-                self.db.assign_role_to_user(&user_role).await?;
+                self.role_repo.assign_role_to_user(&user_role).await?;
             }
         }
 
         // Get updated roles for response
-        let roles = self.db.get_user_roles(&user.id).await?;
+        let roles = self.role_repo.get_user_roles(&user.id).await?;
 
         let role_responses: Vec<RoleResponse> = roles
             .iter()
@@ -369,7 +372,7 @@ impl AgentService {
 
         // Check if user exists and is an agent
         let user = self
-            .db
+            .user_repo
             .get_user_by_id(id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;

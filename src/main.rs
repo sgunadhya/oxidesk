@@ -86,8 +86,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Event bus initialized with capacity 100");
 
     // Initialize delivery service with mock provider
+    use oxidesk::domain::ports::message_repository::MessageRepository;
     let delivery_provider = std::sync::Arc::new(oxidesk::services::MockDeliveryProvider::new());
-    let delivery_service = oxidesk::services::DeliveryService::new(db.clone(), delivery_provider);
+    let delivery_service = oxidesk::services::DeliveryService::new(
+        Arc::new(db.clone()) as Arc<dyn MessageRepository>,
+        delivery_provider,
+    );
     tracing::info!("Delivery service initialized with mock provider");
 
     // Initialize notification service
@@ -108,15 +112,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         AutomationConfig::default(),
     ));
     // Initialize webhook service
-    let webhook_service = oxidesk::WebhookService::new(db.clone());
-    let conversation_tag_service = ConversationTagService::new(db.clone(), event_bus.clone());
+    let webhook_repo = oxidesk::domain::ports::webhook_repository::WebhookRepository::new(db.clone());
+    let webhook_service = oxidesk::WebhookService::new(webhook_repo);
+
+    // Initialize Tag Repository
+    let tag_repo = oxidesk::domain::ports::tag_repository::TagRepository::new(db.clone());
+
+    // Initialize Conversation Tag Service
+    use oxidesk::domain::ports::conversation_tag_repository::ConversationTagRepository;
+    let conversation_tag_service = ConversationTagService::new(
+        Arc::new(db.clone()) as Arc<dyn ConversationTagRepository>,
+        tag_repo.clone(),
+        Arc::new(db.clone()) as Arc<dyn ConversationRepository>,
+        event_bus.clone(),
+    );
+    tracing::info!("Conversation tag service initialized");
+
+    // Initialize Conversation Priority Service
+    use oxidesk::domain::ports::conversation_repository::ConversationRepository;
+    let conversation_priority_service = oxidesk::ConversationPriorityService::new(
+        Arc::new(db.clone()) as Arc<dyn ConversationRepository>,
+        Some(event_bus.clone()),
+    );
+    tracing::info!("Conversation priority service initialized");
+
     use oxidesk::domain::ports::agent_repository::AgentRepository;
     use oxidesk::domain::ports::inbox_repository::InboxRepository;
     use oxidesk::domain::ports::role_repository::RoleRepository;
     use oxidesk::domain::ports::user_repository::UserRepository;
 
     let inbox_service = InboxService::new(Arc::new(db.clone()) as Arc<dyn InboxRepository>);
-    let tag_service = TagService::new(db.clone());
+    let tag_service = TagService::new(tag_repo.clone());
     let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
     tracing::info!("Automation service initialized");
     let connection_manager: Arc<dyn ConnectionManager> = Arc::new(InMemoryConnectionManager::new());
@@ -183,8 +209,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize Agent Service
     let agent_service = oxidesk::services::AgentService::new(
-        db.clone(),
-        std::sync::Arc::new(db.clone()),
+        std::sync::Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+        std::sync::Arc::new(db.clone()) as Arc<dyn UserRepository>,
+        std::sync::Arc::new(db.clone()) as Arc<dyn RoleRepository>,
         session_service.clone(),
     );
     tracing::info!("Agent service initialized");
@@ -219,6 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     > = std::sync::Arc::new(db.clone());
     let team_repo: std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository> =
         std::sync::Arc::new(db.clone());
+    let team_service = oxidesk::services::TeamService::new(team_repo.clone());
 
     // Initialize OIDC service
     let oidc_repository = oxidesk::domain::ports::oidc_repository::OidcRepository::new(db.clone());
@@ -259,6 +287,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session_service.clone(),
     );
 
+    // Initialize PasswordResetService
+    let password_reset_repo = oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone());
+    let password_reset_service = oxidesk::services::PasswordResetService::new(
+        password_reset_repo,
+        Arc::new(db.clone()) as Arc<dyn UserRepository>,
+    );
+    tracing::info!("Password reset service initialized");
+
     // Create application state
     let state = AppState {
         db: db.clone(),
@@ -287,6 +323,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         role_service,
         inbox_service,
         auth_service,
+        password_reset_service,
+        team_service,
+        conversation_priority_service,
     };
 
     // Start automation listener background task
