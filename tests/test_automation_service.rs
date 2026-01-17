@@ -3,14 +3,42 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
+    domain::ports::{
+        agent_repository::AgentRepository, automation_repository::AutomationRepository,
+        conversation_repository::ConversationRepository,
+        conversation_tag_repository::ConversationTagRepository, tag_repository::TagRepository,
+        team_repository::TeamRepository, user_repository::UserRepository,
+    },
     models::{
         ActionType, AutomationRule, ComparisonOperator, ConversationStatus, Priority, RuleAction,
         RuleCondition, RuleType,
     },
-    services::automation_service::{AutomationConfig, AutomationService},
+    services::{
+        action_executor::ActionExecutor,
+        automation_service::{AutomationConfig, AutomationService},
+    },
 };
 use serde_json::json;
 use std::collections::HashMap;
+use std::sync::Arc;
+
+/// Helper function to create AutomationService with all required repositories
+fn create_automation_service(db: &oxidesk::Database, config: AutomationConfig) -> AutomationService {
+    let tag_repo = TagRepository::new(db.clone());
+    let action_executor = ActionExecutor::new(
+        Arc::new(db.clone()) as Arc<dyn ConversationRepository>,
+        Arc::new(db.clone()) as Arc<dyn UserRepository>,
+        Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+        Arc::new(db.clone()) as Arc<dyn TeamRepository>,
+        tag_repo,
+        Arc::new(db.clone()) as Arc<dyn ConversationTagRepository>,
+    );
+    AutomationService::new(
+        Arc::new(db.clone()) as Arc<dyn AutomationRepository>,
+        action_executor,
+        config,
+    )
+}
 
 #[tokio::test]
 async fn test_rule_matching_by_event_type() {
@@ -33,7 +61,7 @@ async fn test_rule_matching_by_event_type() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     // Create conversation with Bug tag
     let contact = create_test_contact(db, "test@example.com").await;
@@ -48,7 +76,7 @@ async fn test_rule_matching_by_event_type() {
 
     // Create automation service
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -114,7 +142,7 @@ async fn test_priority_based_rule_ordering() {
     )
         .await;
 
-    let service = AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+    let service = create_automation_service(db, AutomationConfig::default());
 
     let result = service
         .handle_conversation_event(event_type, &conversation, "test-user")
@@ -151,7 +179,7 @@ async fn test_disabled_rules_are_skipped() {
     );
     rule.enabled = false;
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     // Create conversation
     let contact = create_test_contact(db, "test@example.com").await;
@@ -165,7 +193,7 @@ async fn test_disabled_rules_are_skipped() {
 
     // Create automation service
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -206,7 +234,7 @@ async fn test_condition_true_executes_action() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     // Create conversation with status=open (condition will be true)
     let contact = create_test_contact(db, "test@example.com").await;
@@ -220,7 +248,7 @@ async fn test_condition_true_executes_action() {
 
     // Create automation service
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -261,7 +289,7 @@ async fn test_condition_false_skips_action() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     // Create conversation with status=open (condition will be false)
     let contact = create_test_contact(db, "test@example.com").await;
@@ -275,7 +303,7 @@ async fn test_condition_false_skips_action() {
 
     // Create automation service
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -316,7 +344,7 @@ async fn test_cascade_depth_limiting() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     // Create conversation
     let contact = create_test_contact(db, "test@example.com").await;
@@ -333,7 +361,7 @@ async fn test_cascade_depth_limiting() {
         cascade_max_depth: 0,
         ..Default::default()
     };
-    let service = AutomationService::new(std::sync::Arc::new(db.clone()), config);
+    let service = create_automation_service(db, config);
 
     // Handle event at depth 1 (should be blocked)
     let result = service
@@ -377,7 +405,7 @@ async fn test_evaluation_logging() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     // Create conversation
     let contact = create_test_contact(db, "test@example.com").await;
@@ -391,7 +419,7 @@ async fn test_evaluation_logging() {
 
     // Create automation service
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -452,8 +480,8 @@ async fn test_multiple_rules_matching_same_event() {
         },
     );
 
-    db.create_automation_rule(&rule1).await.unwrap();
-    db.create_automation_rule(&rule2).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule1).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule2).await.unwrap();
 
     // Create conversation
     let contact = create_test_contact(db, "test@example.com").await;
@@ -467,7 +495,7 @@ async fn test_multiple_rules_matching_same_event() {
 
     // Create automation service
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Handle event
     let result = service
@@ -522,7 +550,7 @@ async fn test_rule_evaluation_error_does_not_crash() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     // Create conversation
     let contact = create_test_contact(db, "test@example.com").await;
@@ -536,7 +564,7 @@ async fn test_rule_evaluation_error_does_not_crash() {
 
     // Create automation service
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Handle event - should not crash despite error
     let result = service

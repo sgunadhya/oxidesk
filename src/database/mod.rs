@@ -4,6 +4,7 @@ pub mod agents;
 pub mod api_key;
 pub mod auth_event;
 pub mod automation_rules;
+mod automation;
 mod contacts;
 mod conversations;
 mod email;

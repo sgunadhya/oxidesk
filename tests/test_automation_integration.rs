@@ -2,15 +2,43 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
+    automation_rules::AutomationRulesRepository,
+    domain::ports::{
+        agent_repository::AgentRepository, automation_repository::AutomationRepository,
+        conversation_repository::ConversationRepository,
+        conversation_tag_repository::ConversationTagRepository, tag_repository::TagRepository,
+        team_repository::TeamRepository, user_repository::UserRepository,
+    },
     models::{
         ActionType, AutomationRule, ComparisonOperator, ConversationStatus, Priority, RuleAction,
         RuleCondition, RuleType,
     },
-    services::automation_service::{AutomationConfig, AutomationService},
+    services::{
+        action_executor::ActionExecutor,
+        automation_service::{AutomationConfig, AutomationService},
+    },
 };
 use serde_json::json;
 use std::collections::HashMap;
-use oxidesk::automation_rules::AutomationRulesRepository;
+use std::sync::Arc;
+
+/// Helper function to create AutomationService with all required repositories
+fn create_automation_service(db: &oxidesk::Database, config: AutomationConfig) -> AutomationService {
+    let tag_repo = TagRepository::new(db.clone());
+    let action_executor = ActionExecutor::new(
+        Arc::new(db.clone()) as Arc<dyn ConversationRepository>,
+        Arc::new(db.clone()) as Arc<dyn UserRepository>,
+        Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+        Arc::new(db.clone()) as Arc<dyn TeamRepository>,
+        tag_repo,
+        Arc::new(db.clone()) as Arc<dyn ConversationTagRepository>,
+    );
+    AutomationService::new(
+        Arc::new(db.clone()) as Arc<dyn AutomationRepository>,
+        action_executor,
+        config,
+    )
+}
 
 /// User Story 1: Event-Triggered Rule Execution
 /// When a conversation is tagged with "Bug", automatically set priority to "High"
@@ -35,7 +63,7 @@ async fn test_event_triggered_rule_execution() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     // Create test data
     let contact = create_test_contact(db, "user@example.com").await;
@@ -54,7 +82,7 @@ async fn test_event_triggered_rule_execution() {
     conversation.tags = Some(vec!["Bug".to_string()]);
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     service
         .handle_conversation_event("conversation.tags_changed", &conversation, "test-user")
@@ -106,10 +134,10 @@ async fn test_conditional_rule_evaluation() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Test Case 1: Condition matches (priority is "Urgent")
     let contact1 = create_test_contact(db, "user1@example.com").await;
@@ -191,10 +219,10 @@ async fn test_enabled_disabled_rule_control() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Test Case 1: Rule is enabled
     let contact1 = create_test_contact(db, "user1@example.com").await;
@@ -219,7 +247,7 @@ async fn test_enabled_disabled_rule_control() {
     assert_eq!(updated1.priority, Some(Priority::Medium));
 
     // Action: Disable the rule
-    db.disable_automation_rule(&rule.id).await.unwrap();
+    AutomationRulesRepository::disable_automation_rule(db, &rule.id).await.unwrap();
 
     // Test Case 2: Rule is disabled
     let contact2 = create_test_contact(db, "user2@example.com").await;
@@ -245,7 +273,7 @@ async fn test_enabled_disabled_rule_control() {
     assert_eq!(updated2.priority, None);
 
     // Action: Re-enable the rule
-    db.enable_automation_rule(&rule.id).await.unwrap();
+    AutomationRulesRepository::enable_automation_rule(db, &rule.id).await.unwrap();
 
     // Test Case 3: Rule is re-enabled
     let contact3 = create_test_contact(db, "user3@example.com").await;
@@ -326,12 +354,12 @@ async fn test_rule_type_and_event_subscription() {
         },
     );
 
-    db.create_automation_rule(&rule1).await.unwrap();
-    db.create_automation_rule(&rule2).await.unwrap();
-    db.create_automation_rule(&rule3).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule1).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule2).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule3).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Test: Trigger "tags_changed" event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -426,11 +454,11 @@ async fn test_complex_workflow_with_multiple_rules() {
         },
     );
 
-    db.create_automation_rule(&rule1).await.unwrap();
-    db.create_automation_rule(&rule2).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule1).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule2).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Action: Create conversation and add Bug tag
     let contact = create_test_contact(db, "user@example.com").await;

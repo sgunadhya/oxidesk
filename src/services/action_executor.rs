@@ -1,6 +1,9 @@
 use crate::api::middleware::ApiError;
-use crate::database::Database;
 use crate::domain::ports::agent_repository::AgentRepository;
+use crate::domain::ports::conversation_repository::ConversationRepository;
+use crate::domain::ports::conversation_tag_repository::ConversationTagRepository;
+use crate::domain::ports::tag_repository::TagRepository;
+use crate::domain::ports::team_repository::TeamRepository;
 use crate::domain::ports::user_repository::UserRepository;
 use crate::models::{ActionType, ConversationStatus, RuleAction};
 use std::sync::Arc;
@@ -41,20 +44,53 @@ impl From<ApiError> for ActionError {
 
 #[derive(Clone)]
 pub struct ActionExecutor {
-    db: Arc<Database>,
+    conversation_repo: Arc<dyn ConversationRepository>,
+    user_repo: Arc<dyn UserRepository>,
+    agent_repo: Arc<dyn AgentRepository>,
+    team_repo: Arc<dyn TeamRepository>,
+    tag_repo: TagRepository,
+    conversation_tag_repo: Arc<dyn ConversationTagRepository>,
     timeout: Duration,
 }
 
 impl ActionExecutor {
-    pub fn new(db: Arc<Database>) -> Self {
+    pub fn new(
+        conversation_repo: Arc<dyn ConversationRepository>,
+        user_repo: Arc<dyn UserRepository>,
+        agent_repo: Arc<dyn AgentRepository>,
+        team_repo: Arc<dyn TeamRepository>,
+        tag_repo: TagRepository,
+        conversation_tag_repo: Arc<dyn ConversationTagRepository>,
+    ) -> Self {
         Self {
-            db,
+            conversation_repo,
+            user_repo,
+            agent_repo,
+            team_repo,
+            tag_repo,
+            conversation_tag_repo,
             timeout: Duration::from_secs(10),
         }
     }
 
-    pub fn with_timeout(db: Arc<Database>, timeout: Duration) -> Self {
-        Self { db, timeout }
+    pub fn with_timeout(
+        conversation_repo: Arc<dyn ConversationRepository>,
+        user_repo: Arc<dyn UserRepository>,
+        agent_repo: Arc<dyn AgentRepository>,
+        team_repo: Arc<dyn TeamRepository>,
+        tag_repo: TagRepository,
+        conversation_tag_repo: Arc<dyn ConversationTagRepository>,
+        timeout: Duration,
+    ) -> Self {
+        Self {
+            conversation_repo,
+            user_repo,
+            agent_repo,
+            team_repo,
+            tag_repo,
+            conversation_tag_repo,
+            timeout,
+        }
     }
 
     /// Execute an action on a conversation
@@ -81,7 +117,7 @@ impl ActionExecutor {
     ) -> Result<(), ActionError> {
         // Verify conversation exists
         let _conversation = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or(ActionError::ConversationNotFound)?;
@@ -142,7 +178,7 @@ impl ActionExecutor {
         }
 
         let priority_enum = crate::models::Priority::from(priority.to_string());
-        self.db
+        self.conversation_repo
             .set_conversation_priority(conversation_id, &priority_enum)
             .await?;
 
@@ -170,19 +206,19 @@ impl ActionExecutor {
 
         // Verify user exists and is an agent
         let user = self
-            .db
+            .user_repo
             .get_user_by_id(user_id)
             .await?
             .ok_or(ActionError::UserNotFound)?;
 
         // Verify it's an agent
-        self.db
+        self.agent_repo
             .get_agent_by_user_id(&user.id)
             .await?
             .ok_or(ActionError::UserNotFound)?;
 
         // Assign conversation to user
-        self.db
+        self.conversation_repo
             .assign_conversation_to_user(
                 conversation_id,
                 Some(user_id.to_string()),
@@ -214,13 +250,13 @@ impl ActionExecutor {
             })?;
 
         // Verify team exists
-        self.db
+        self.team_repo
             .get_team_by_id(team_id)
             .await?
             .ok_or(ActionError::TeamNotFound)?;
 
         // Assign conversation to team
-        self.db
+        self.conversation_repo
             .assign_conversation_to_team(
                 conversation_id,
                 Some(team_id.to_string()),
@@ -250,7 +286,7 @@ impl ActionExecutor {
             .ok_or_else(|| ActionError::InvalidParameters("Missing 'tag' parameter".to_string()))?;
 
         // Get or create tag
-        let tag = match self.db.get_tag_by_name(tag_name).await? {
+        let tag = match self.tag_repo.get_tag_by_name(tag_name).await? {
             Some(tag) => tag,
             None => {
                 return Err(ActionError::TagNotFound);
@@ -258,7 +294,7 @@ impl ActionExecutor {
         };
 
         // Add tag to conversation (idempotent - won't fail if already exists)
-        self.db
+        self.conversation_tag_repo
             .add_conversation_tag(conversation_id, &tag.id, added_by)
             .await
             .map_err(|e| ActionError::ExecutionFailed(e.to_string()))?;
@@ -284,7 +320,7 @@ impl ActionExecutor {
             .ok_or_else(|| ActionError::InvalidParameters("Missing 'tag' parameter".to_string()))?;
 
         // Get tag by name
-        let tag = match self.db.get_tag_by_name(tag_name).await? {
+        let tag = match self.tag_repo.get_tag_by_name(tag_name).await? {
             Some(tag) => tag,
             None => {
                 // If tag doesn't exist, consider it already removed (idempotent)
@@ -298,7 +334,7 @@ impl ActionExecutor {
         };
 
         // Remove tag from conversation (idempotent - won't fail if not present)
-        self.db
+        self.conversation_tag_repo
             .remove_conversation_tag(conversation_id, &tag.id)
             .await
             .map_err(|e| ActionError::ExecutionFailed(e.to_string()))?;
@@ -339,7 +375,7 @@ impl ActionExecutor {
         };
 
         // Update conversation status
-        self.db
+        self.conversation_repo
             .update_conversation_status(conversation_id, status)
             .await?;
 
@@ -356,7 +392,7 @@ impl ActionExecutor {
 impl Default for ActionExecutor {
     fn default() -> Self {
         panic!(
-            "ActionExecutor cannot be created with default(). Use new() with a Database instance."
+            "ActionExecutor cannot be created with default(). Use new() with repository instances."
         );
     }
 }
