@@ -1000,15 +1000,3 @@ impl ConversationRepository for Database {
         Database::find_contact_by_user_id(self, user_id).await
     }
 }
-
-// Implement AssignmentRepository trait for Database
-#[async_trait::async_trait]
-impl crate::domain::ports::assignment_repository::AssignmentRepository for Database {
-    async fn record_assignment(&self, history: &crate::models::AssignmentHistory) -> ApiResult<()> {
-        self.record_assignment(history).await
-    }
-
-    async fn create_notification(&self, notification: &crate::models::UserNotification) -> ApiResult<()> {
-        self.create_notification(notification).await
-    }
-}

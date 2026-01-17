@@ -102,12 +102,7 @@ async fn test_sla_event_cannot_be_met_and_breached() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let event_bus = Arc::new(oxidesk::LocalEventBus::new(100));
-    let sla_service = SlaService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
-        event_bus,
-    );
+    let sla_service = SlaService::new(db.clone(), event_bus);
 
     // Create prerequisite data
     let (_user, contact, test_inbox) = create_test_contact_with_inbox(&db).await;
@@ -160,12 +155,7 @@ async fn test_sla_status_transition_pending_to_met() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let event_bus = Arc::new(oxidesk::LocalEventBus::new(100));
-    let sla_service = SlaService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
-        event_bus,
-    );
+    let sla_service = SlaService::new(db.clone(), event_bus);
 
     // Create prerequisite data
     let (_user, contact, test_inbox) = create_test_contact_with_inbox(&db).await;
@@ -216,12 +206,7 @@ async fn test_sla_status_transition_pending_to_breached() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let event_bus = Arc::new(oxidesk::LocalEventBus::new(100));
-    let sla_service = SlaService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
-        event_bus,
-    );
+    let sla_service = SlaService::new(db.clone(), event_bus);
 
     // Create prerequisite data
     let (_user, contact, test_inbox) = create_test_contact_with_inbox(&db).await;
@@ -270,12 +255,7 @@ async fn test_sla_breached_cannot_become_met() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let event_bus = Arc::new(oxidesk::LocalEventBus::new(100));
-    let sla_service = SlaService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
-        event_bus,
-    );
+    let sla_service = SlaService::new(db.clone(), event_bus);
 
     // Create prerequisite data
     let (_user, contact, test_inbox) = create_test_contact_with_inbox(&db).await;
@@ -326,12 +306,7 @@ async fn test_sla_status_exclusivity_error_message() {
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let event_bus = Arc::new(oxidesk::LocalEventBus::new(100));
-    let sla_service = SlaService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
-        event_bus,
-    );
+    let sla_service = SlaService::new(db.clone(), event_bus);
 
     // Create prerequisite data
     let (_user, contact, test_inbox) = create_test_contact_with_inbox(&db).await;

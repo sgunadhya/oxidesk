@@ -1,12 +1,11 @@
 use crate::domain::ports::agent_repository::AgentRepository;
 use crate::domain::ports::oidc_repository::OidcRepository;
-use crate::domain::ports::role_repository::RoleRepository;
 use crate::domain::ports::user_repository::UserRepository;
 use crate::{
     api::middleware::ApiError,
+    database::Database,
     models::{AuthMethod, OidcProvider, Session, User, UserType},
 };
-use std::sync::Arc;
 use openidconnect::{
     core::{CoreAuthenticationFlow, CoreClient, CoreProviderMetadata},
     reqwest::async_http_client,
@@ -18,9 +17,6 @@ use openidconnect::{
 #[derive(Clone)]
 pub struct OidcService {
     oidc_repo: OidcRepository,
-    user_repo: Arc<dyn UserRepository>,
-    agent_repo: Arc<dyn AgentRepository>,
-    role_repo: Arc<dyn RoleRepository>,
 }
 
 /// Authorization request with PKCE
@@ -41,18 +37,8 @@ pub struct CallbackResult {
 
 impl OidcService {
     /// Create a new OidcService
-    pub fn new(
-        oidc_repo: OidcRepository,
-        user_repo: Arc<dyn UserRepository>,
-        agent_repo: Arc<dyn AgentRepository>,
-        role_repo: Arc<dyn RoleRepository>,
-    ) -> Self {
-        Self {
-            oidc_repo,
-            user_repo,
-            agent_repo,
-            role_repo,
-        }
+    pub fn new(oidc_repo: OidcRepository) -> Self {
+        Self { oidc_repo }
     }
 
     // ========================================
@@ -155,6 +141,7 @@ impl OidcService {
     /// and creates or updates user and session.
     pub async fn handle_callback(
         &self,
+        db: &Database,
         session_service: &crate::services::SessionService,
         provider: &OidcProvider,
         authorization_code: String,
@@ -199,7 +186,7 @@ impl OidcService {
             .to_string();
 
         // Get or create user
-        let user = match self.user_repo
+        let user = match db
             .get_user_by_email_and_type(&email, &UserType::Agent)
             .await?
         {
@@ -212,31 +199,17 @@ impl OidcService {
         };
 
         // Get agent
-        let agent = self.agent_repo
+        let agent = db
             .get_agent_by_user_id(&user.id)
             .await?
             .ok_or(ApiError::Unauthorized)?;
 
         // Get roles
-        let domain_roles = self.role_repo.get_user_roles(&user.id).await?;
+        let roles = db.get_user_roles(&user.id).await?;
 
-        if domain_roles.is_empty() {
+        if roles.is_empty() {
             return Err(ApiError::Internal("User has no roles assigned".to_string()));
         }
-
-        // Convert domain roles to API roles
-        let roles: Vec<crate::models::Role> = domain_roles
-            .into_iter()
-            .map(|r| crate::models::Role {
-                id: r.id,
-                name: r.name,
-                description: r.description,
-                permissions: r.permissions,
-                is_protected: r.is_protected,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-            })
-            .collect();
 
         // Generate session token
         let token = crate::services::auth::generate_session_token();

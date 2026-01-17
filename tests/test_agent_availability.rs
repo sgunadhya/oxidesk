@@ -19,12 +19,7 @@ async fn setup() -> (
     let test_db = setup_test_db().await;
     let db = test_db.db();
     let event_bus = std::sync::Arc::new(oxidesk::LocalEventBus::new(100)); // Capacity of 100 events
-    let availability_service = AvailabilityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::availability_repository::AvailabilityRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        event_bus.clone(),
-    );
+    let availability_service = AvailabilityService::new(db.clone(), event_bus.clone());
     (test_db, event_bus, availability_service)
 }
 

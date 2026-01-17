@@ -154,12 +154,4 @@ impl RoleDomainService {
 
         self.repository.delete_role(id).await
     }
-
-    pub async fn get_user_roles(&self, user_id: &str) -> DomainResult<Vec<Role>> {
-        self.repository.get_user_roles(user_id).await
-    }
-
-    pub async fn count_users_with_role(&self, role_id: &str) -> DomainResult<i64> {
-        self.repository.count_users_with_role(role_id).await
-    }
 }

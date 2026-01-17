@@ -391,9 +391,10 @@ pub async fn assign_sla_policy_to_team(
 ) -> ApiResult<StatusCode> {
     // Verify team exists
     state
-        .team_service
-        .get_team(&team_id)
-        .await?;
+        .db
+        .get_team_by_id(&team_id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound(format!("Team not found: {}", team_id)))?;
 
     // If SLA policy ID is provided, verify it exists
     if let Some(ref policy_id) = req.sla_policy_id {
@@ -406,7 +407,7 @@ pub async fn assign_sla_policy_to_team(
 
     // Update team's SLA policy
     state
-        .team_service
+        .db
         .update_team_sla_policy(&team_id, req.sla_policy_id.as_deref())
         .await?;
 

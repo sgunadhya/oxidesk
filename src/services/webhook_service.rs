@@ -1,6 +1,6 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
-    domain::ports::webhook_repository::WebhookRepository,
+    database::Database,
     models::{
         CreateWebhookRequest, UpdateWebhookRequest, Webhook, WebhookListResponse, WebhookResponse,
     },
@@ -8,15 +8,14 @@ use crate::{
 use tracing::info;
 
 /// Service for managing webhooks
-#[derive(Clone)]
 pub struct WebhookService {
-    webhook_repo: WebhookRepository,
+    db: Database,
 }
 
 impl WebhookService {
     /// Create a new webhook service
-    pub fn new(webhook_repo: WebhookRepository) -> Self {
-        Self { webhook_repo }
+    pub fn new(db: Database) -> Self {
+        Self { db }
     }
 
     /// Create a new webhook
@@ -43,7 +42,7 @@ impl WebhookService {
         webhook.validate().map_err(|e| ApiError::BadRequest(e))?;
 
         // Save to database
-        self.webhook_repo.create_webhook(&webhook).await?;
+        self.db.create_webhook(&webhook).await?;
 
         info!("Created webhook {} by user {}", webhook.id, created_by);
 
@@ -58,7 +57,7 @@ impl WebhookService {
     ) -> ApiResult<WebhookResponse> {
         // Get existing webhook
         let mut webhook = self
-            .webhook_repo
+            .db
             .get_webhook_by_id(id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Webhook {} not found", id)))?;
@@ -87,7 +86,7 @@ impl WebhookService {
         webhook.validate().map_err(|e| ApiError::BadRequest(e))?;
 
         // Save to database
-        self.webhook_repo.update_webhook(&webhook).await?;
+        self.db.update_webhook(&webhook).await?;
 
         info!("Updated webhook {}", webhook.id);
 
@@ -97,13 +96,13 @@ impl WebhookService {
     /// Delete a webhook
     pub async fn delete_webhook(&self, id: &str) -> ApiResult<()> {
         // Verify webhook exists
-        self.webhook_repo
+        self.db
             .get_webhook_by_id(id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Webhook {} not found", id)))?;
 
         // Delete webhook (cascades to deliveries)
-        self.webhook_repo.delete_webhook(id).await?;
+        self.db.delete_webhook(id).await?;
 
         info!("Deleted webhook {}", id);
 
@@ -114,7 +113,7 @@ impl WebhookService {
     pub async fn toggle_webhook_status(&self, id: &str) -> ApiResult<WebhookResponse> {
         // Get existing webhook
         let mut webhook = self
-            .webhook_repo
+            .db
             .get_webhook_by_id(id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Webhook {} not found", id)))?;
@@ -124,7 +123,7 @@ impl WebhookService {
         webhook.touch();
 
         // Save to database
-        self.webhook_repo.update_webhook(&webhook).await?;
+        self.db.update_webhook(&webhook).await?;
 
         info!(
             "Toggled webhook {} status to {}",
@@ -142,20 +141,12 @@ impl WebhookService {
     /// Get a webhook by ID
     pub async fn get_webhook(&self, id: &str) -> ApiResult<WebhookResponse> {
         let webhook = self
-            .webhook_repo
+            .db
             .get_webhook_by_id(id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Webhook {} not found", id)))?;
 
         Ok(WebhookResponse::from(webhook))
-    }
-
-    /// Get full webhook by ID (including secret) - for internal use
-    pub async fn get_webhook_full(&self, id: &str) -> ApiResult<Webhook> {
-        self.webhook_repo
-            .get_webhook_by_id(id)
-            .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Webhook {} not found", id)))
     }
 
     /// List webhooks with pagination
@@ -173,10 +164,10 @@ impl WebhookService {
         }
 
         // Get webhooks from database
-        let webhooks = self.webhook_repo.list_webhooks(limit, offset).await?;
+        let webhooks = self.db.list_webhooks(limit, offset).await?;
 
         // Get total count
-        let total = self.webhook_repo.count_webhooks().await?;
+        let total = self.db.count_webhooks().await?;
 
         // Convert to response models (without secrets)
         let webhook_responses: Vec<WebhookResponse> =
@@ -187,48 +178,24 @@ impl WebhookService {
             total,
         })
     }
+}
 
-    /// List deliveries for a webhook with pagination
-    pub async fn list_webhook_deliveries(
-        &self,
-        webhook_id: &str,
-        limit: i64,
-        offset: i64,
-        status_filter: Option<&str>,
-    ) -> ApiResult<crate::models::DeliveryListResponse> {
-        // Get deliveries from repository
-        let deliveries = self.webhook_repo
-            .get_deliveries_for_webhook(webhook_id, limit, offset, status_filter)
-            .await?;
-
-        // Get total count
-        let total = self.webhook_repo
-            .count_deliveries_for_webhook(webhook_id, status_filter)
-            .await?;
-
-        // Convert to response models
-        let delivery_responses: Vec<crate::models::DeliveryResponse> = deliveries
-            .into_iter()
-            .map(crate::models::DeliveryResponse::from)
-            .collect();
-
-        Ok(crate::models::DeliveryListResponse {
-            deliveries: delivery_responses,
-            total,
-        })
+impl Clone for WebhookService {
+    fn clone(&self) -> Self {
+        Self {
+            db: self.db.clone(),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::Database;
 
     #[tokio::test]
     async fn test_service_creation() {
         let db = Database::connect("sqlite::memory:").await.unwrap();
-        let webhook_repo = WebhookRepository::new(db);
-        let _service = WebhookService::new(webhook_repo);
+        let _service = WebhookService::new(db);
 
         // Verify service is created
         assert!(true);
@@ -238,8 +205,7 @@ mod tests {
     async fn test_create_webhook_validation() {
         let db = Database::connect("sqlite::memory:").await.unwrap();
         db.run_migrations().await.unwrap();
-        let webhook_repo = WebhookRepository::new(db.clone());
-        let service = WebhookService::new(webhook_repo);
+        let service = WebhookService::new(db.clone());
 
         // Test with invalid name (empty)
         let request = CreateWebhookRequest {
@@ -258,8 +224,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_webhooks_pagination_validation() {
         let db = Database::connect("sqlite::memory:").await.unwrap();
-        let webhook_repo = WebhookRepository::new(db);
-        let service = WebhookService::new(webhook_repo);
+        let service = WebhookService::new(db);
 
         // Test with invalid limit (too high)
         let result = service.list_webhooks(101, 0).await;

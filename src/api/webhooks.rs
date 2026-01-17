@@ -8,6 +8,7 @@ use serde::Deserialize;
 use crate::{
     api::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
     models::{CreateWebhookRequest, DeliveryListResponse, UpdateWebhookRequest},
+    services::WebhookService,
 };
 
 /// Create a new webhook (admin only)
@@ -23,7 +24,8 @@ pub async fn create_webhook(
         ));
     }
 
-    let webhook = state.webhook_service.create_webhook(request, &auth_user.user.id).await?;
+    let service = WebhookService::new(state.db.clone());
+    let webhook = service.create_webhook(request, &auth_user.user.id).await?;
 
     Ok((axum::http::StatusCode::CREATED, Json(webhook)))
 }
@@ -41,7 +43,8 @@ pub async fn list_webhooks(
         ));
     }
 
-    let response = state.webhook_service.list_webhooks(params.limit, params.offset).await?;
+    let service = WebhookService::new(state.db.clone());
+    let response = service.list_webhooks(params.limit, params.offset).await?;
 
     Ok(Json(response))
 }
@@ -59,7 +62,8 @@ pub async fn get_webhook(
         ));
     }
 
-    let webhook = state.webhook_service.get_webhook(&id).await?;
+    let service = WebhookService::new(state.db.clone());
+    let webhook = service.get_webhook(&id).await?;
 
     Ok(Json(webhook))
 }
@@ -133,7 +137,11 @@ pub async fn test_webhook(
     }
 
     // Get webhook (full model with secret)
-    let webhook = state.webhook_service.get_webhook_full(&id).await?;
+    let webhook = state
+        .db
+        .get_webhook_by_id(&id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound(format!("Webhook not found: {}", id)))?;
 
     // Create test payload
     let test_payload = serde_json::json!({
@@ -209,11 +217,28 @@ pub async fn list_webhook_deliveries(
         ));
     }
 
-    // Get deliveries from webhook service
-    let response = state
-        .webhook_service
-        .list_webhook_deliveries(&id, params.limit, params.offset, params.status.as_deref())
+    // Get deliveries from database
+    let deliveries = state
+        .db
+        .get_deliveries_for_webhook(&id, params.limit, params.offset, params.status.as_deref())
         .await?;
+
+    // Get total count
+    let total = state
+        .db
+        .count_deliveries_for_webhook(&id, params.status.as_deref())
+        .await?;
+
+    // Convert to response models
+    let delivery_responses: Vec<crate::models::DeliveryResponse> = deliveries
+        .into_iter()
+        .map(crate::models::DeliveryResponse::from)
+        .collect();
+
+    let response = DeliveryListResponse {
+        deliveries: delivery_responses,
+        total,
+    };
 
     Ok(Json(response))
 }
