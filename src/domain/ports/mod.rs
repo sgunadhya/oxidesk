@@ -1,4 +1,5 @@
 pub mod agent_repository;
+pub mod api_key_repository;
 pub mod assignment_repository;
 pub mod attachment_repository;
 pub mod availability_repository;
@@ -9,6 +10,7 @@ pub mod email_repository;
 pub mod inbox_repository;
 pub mod macro_repository;
 pub mod message_repository;
+pub mod notification_repository;
 pub mod oidc_repository;
 pub mod password_reset_repository;
 pub mod role_repository;

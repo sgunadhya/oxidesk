@@ -209,28 +209,11 @@ pub async fn list_webhook_deliveries(
         ));
     }
 
-    // Get deliveries from database
-    let deliveries = state
-        .db
-        .get_deliveries_for_webhook(&id, params.limit, params.offset, params.status.as_deref())
+    // Get deliveries from webhook service
+    let response = state
+        .webhook_service
+        .list_webhook_deliveries(&id, params.limit, params.offset, params.status.as_deref())
         .await?;
-
-    // Get total count
-    let total = state
-        .db
-        .count_deliveries_for_webhook(&id, params.status.as_deref())
-        .await?;
-
-    // Convert to response models
-    let delivery_responses: Vec<crate::models::DeliveryResponse> = deliveries
-        .into_iter()
-        .map(crate::models::DeliveryResponse::from)
-        .collect();
-
-    let response = DeliveryListResponse {
-        deliveries: delivery_responses,
-        total,
-    };
 
     Ok(Json(response))
 }

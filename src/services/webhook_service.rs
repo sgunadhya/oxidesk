@@ -187,6 +187,36 @@ impl WebhookService {
             total,
         })
     }
+
+    /// List deliveries for a webhook with pagination
+    pub async fn list_webhook_deliveries(
+        &self,
+        webhook_id: &str,
+        limit: i64,
+        offset: i64,
+        status_filter: Option<&str>,
+    ) -> ApiResult<crate::models::DeliveryListResponse> {
+        // Get deliveries from repository
+        let deliveries = self.webhook_repo
+            .get_deliveries_for_webhook(webhook_id, limit, offset, status_filter)
+            .await?;
+
+        // Get total count
+        let total = self.webhook_repo
+            .count_deliveries_for_webhook(webhook_id, status_filter)
+            .await?;
+
+        // Convert to response models
+        let delivery_responses: Vec<crate::models::DeliveryResponse> = deliveries
+            .into_iter()
+            .map(crate::models::DeliveryResponse::from)
+            .collect();
+
+        Ok(crate::models::DeliveryListResponse {
+            deliveries: delivery_responses,
+            total,
+        })
+    }
 }
 
 #[cfg(test)]

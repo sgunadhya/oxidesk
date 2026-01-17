@@ -1,4 +1,3 @@
-use crate::domain::ports::agent_repository::AgentRepository;
 use crate::{
     api::middleware::{AppState, AuthenticatedUser},
     models::CreateAgentRequest,
@@ -270,9 +269,9 @@ pub async fn show_dashboard(
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
 ) -> impl IntoResponse {
     // Get stats
-    let total_agents = state.db.count_agents().await.unwrap_or(0);
+    let total_agents = state.agent_service.count_agents().await.unwrap_or(0);
     let total_contacts = state.contact_service.count_contacts().await.unwrap_or(0);
-    let roles = state.db.list_roles().await.unwrap_or_default();
+    let roles = state.role_service.list_roles_raw().await.unwrap_or_default();
 
     let user_role_names: Vec<String> = auth_user.roles.iter().map(|r| r.name.clone()).collect();
 
@@ -320,7 +319,7 @@ pub async fn show_agents(
     axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
 ) -> impl IntoResponse {
     // Get all agents (with large limit for now, proper pagination TODO)
-    let agents = match state.db.list_agents(1000, 0).await {
+    let agents = match state.agent_service.list_agents_raw(1000, 0).await {
         Ok(agents) => agents,
         Err(_) => {
             return Html("<div class=\"alert alert-error\">Failed to load agents</div>")
@@ -331,7 +330,7 @@ pub async fn show_agents(
     // Build agent data with roles
     let mut agent_data = Vec::new();
     for (user, agent) in agents {
-        let roles = match state.db.get_user_roles(&user.id).await {
+        let roles = match state.role_service.get_user_roles(&user.id).await {
             Ok(r) => r,
             _ => vec![],
         };
@@ -348,7 +347,7 @@ pub async fn show_agents(
     }
 
     // Get all roles for the dropdown
-    let all_roles = match state.db.list_roles().await {
+    let all_roles = match state.role_service.list_roles_raw().await {
         Ok(roles) => roles,
         Err(_) => vec![],
     };
@@ -500,7 +499,7 @@ pub async fn show_roles(
     let mut role_data = Vec::new();
     for role in roles {
         // Get permissions for this role
-        let permissions = match state.db.get_role_permissions(&role.id).await {
+        let permissions = match state.role_service.get_role_permissions(&role.id).await {
             Ok(perms) => perms,
             _ => vec![],
         };
@@ -508,7 +507,7 @@ pub async fn show_roles(
         let permission_names: Vec<String> = permissions.iter().map(|p| p.name.clone()).collect();
 
         // Get user count
-        let user_count = match state.db.count_users_with_role(&role.id).await {
+        let user_count = match state.role_service.count_users_with_role(&role.id).await {
             Ok(count) => count,
             _ => 0,
         };
@@ -572,7 +571,7 @@ pub async fn show_create_agent_page(
     axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
 ) -> impl IntoResponse {
     // Get all roles for the dropdown
-    let all_roles = match state.db.list_roles().await {
+    let all_roles = match state.role_service.list_roles_raw().await {
         Ok(roles) => roles,
         Err(_) => vec![],
     };
@@ -742,7 +741,7 @@ pub async fn show_conversation(
     };
 
     // Fetch Agents for Dropdown
-    let agents_list = match state.db.list_agents(1000, 0).await {
+    let agents_list = match state.agent_service.list_agents_raw(1000, 0).await {
         Ok(list) => list,
         Err(_) => vec![],
     };

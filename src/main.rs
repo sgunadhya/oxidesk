@@ -1,6 +1,8 @@
 // Modules are imported from the library crate
 
 use oxidesk::domain::ports::agent_repository::AgentRepository;
+use oxidesk::domain::ports::api_key_repository::ApiKeyRepository;
+use oxidesk::domain::ports::notification_repository::NotificationRepository;
 use oxidesk::domain::ports::user_repository::UserRepository;
 use oxidesk::{
     api::{
@@ -95,8 +97,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Delivery service initialized with mock provider");
 
     // Initialize notification service
-    let notification_service = oxidesk::NotificationService::new();
-    tracing::info!("Notification service initialized (stub)");
+    let notification_repo: Arc<dyn NotificationRepository> = Arc::new(db.clone());
+    let notification_service = oxidesk::NotificationService::new(Some(notification_repo));
+    tracing::info!("Notification service initialized");
 
     // Initialize availability service
     let availability_service = oxidesk::AvailabilityService::new(
@@ -220,6 +223,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize Agent Service
     let agent_service = oxidesk::services::AgentService::new(
         std::sync::Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+        std::sync::Arc::new(db.clone()) as Arc<dyn ApiKeyRepository>,
         std::sync::Arc::new(db.clone()) as Arc<dyn UserRepository>,
         std::sync::Arc::new(db.clone()) as Arc<dyn RoleRepository>,
         session_service.clone(),
@@ -258,9 +262,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::sync::Arc::new(db.clone());
     let team_service = oxidesk::services::TeamService::new(team_repo.clone());
 
+    // Initialize Assignment Service
+    use oxidesk::domain::ports::assignment_repository::AssignmentRepository;
+    use oxidesk::domain::ports::availability_repository::AvailabilityRepository;
+    let assignment_repo: Arc<dyn AssignmentRepository> = Arc::new(db.clone());
+    let availability_repo_for_assignment: Arc<dyn AvailabilityRepository> = Arc::new(db.clone());
+    let assignment_service = {
+        let mut service = oxidesk::services::AssignmentService::new(
+            assignment_repo,
+            conversation_repo.clone(),
+            Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+            user_repo.clone(),
+            Arc::new(db.clone()) as Arc<dyn RoleRepository>,
+            team_repo.clone(),
+            availability_repo_for_assignment,
+            event_bus.clone(),
+            notification_service.clone(),
+            connection_manager.clone(),
+        );
+        service.set_sla_service(Arc::new(sla_service.clone()));
+        service
+    };
+    tracing::info!("Assignment service initialized");
+
     // Initialize OIDC service
     let oidc_repository = oxidesk::domain::ports::oidc_repository::OidcRepository::new(db.clone());
-    let oidc_service = oxidesk::services::OidcService::new(oidc_repository);
+    let oidc_service = oxidesk::services::OidcService::new(
+        oidc_repository,
+        user_repo.clone(),
+        Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+        Arc::new(db.clone()) as Arc<dyn RoleRepository>,
+    );
     tracing::info!("OIDC service initialized");
 
     // Initialize Services (wrapping repositories)
@@ -305,9 +337,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     tracing::info!("Password reset service initialized");
 
+    // Initialize AuthLoggerService
+    let auth_logger_service = oxidesk::services::AuthLoggerService::new(Arc::new(db.clone()));
+    tracing::info!("Auth logger service initialized");
+
     // Create application state
     let state = AppState {
-        db: db.clone(),
         session_duration_hours: config.session_duration_hours,
         event_bus: event_bus.clone(),
         delivery_service: delivery_service.clone(),
@@ -336,6 +371,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         password_reset_service,
         team_service,
         conversation_priority_service,
+        assignment_service: assignment_service.clone(),
+        auth_logger_service,
     };
 
     // Start automation listener background task
@@ -1334,7 +1371,7 @@ async fn web_auth_middleware(
     }
 
     // Get user
-    let user = match state.db.get_user_by_id(&session.user_id).await {
+    let user = match state.user_service.get_user_by_id(&session.user_id).await {
         Ok(Some(u)) => u,
         _ => return Err(axum::response::Redirect::to("/login")),
     };
@@ -1345,13 +1382,13 @@ async fn web_auth_middleware(
     }
 
     // Get agent
-    let agent = match state.db.get_agent_by_user_id(&user.id).await {
+    let agent = match state.agent_service.get_agent_by_user_id(&user.id).await {
         Ok(Some(a)) => a,
         _ => return Err(axum::response::Redirect::to("/login")),
     };
 
     // Get roles
-    let roles = match state.db.get_user_roles(&user.id).await {
+    let roles = match state.role_service.get_user_roles(&user.id).await {
         Ok(r) => r,
         _ => return Err(axum::response::Redirect::to("/login")),
     };

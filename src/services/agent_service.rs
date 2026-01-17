@@ -1,5 +1,6 @@
 use crate::api::middleware::{ApiError, ApiResult, AuthenticatedUser};
 use crate::domain::ports::agent_repository::AgentRepository;
+use crate::domain::ports::api_key_repository::ApiKeyRepository;
 use crate::domain::ports::role_repository::RoleRepository;
 use crate::domain::ports::user_repository::UserRepository;
 use crate::models::*;
@@ -15,6 +16,7 @@ const DEFAULT_AGENT_ROLE_ID: &str = "00000000-0000-0000-0000-000000000002";
 #[derive(Clone)]
 pub struct AgentService {
     agent_repo: Arc<dyn AgentRepository>,
+    api_key_repo: Arc<dyn ApiKeyRepository>,
     user_repo: Arc<dyn UserRepository>,
     role_repo: Arc<dyn RoleRepository>,
     session_service: crate::services::SessionService,
@@ -23,12 +25,14 @@ pub struct AgentService {
 impl AgentService {
     pub fn new(
         agent_repo: Arc<dyn AgentRepository>,
+        api_key_repo: Arc<dyn ApiKeyRepository>,
         user_repo: Arc<dyn UserRepository>,
         role_repo: Arc<dyn RoleRepository>,
         session_service: crate::services::SessionService,
     ) -> Self {
         Self {
             agent_repo,
+            api_key_repo,
             user_repo,
             role_repo,
             session_service,
@@ -411,5 +415,57 @@ impl AgentService {
         );
 
         Ok(())
+    }
+
+    /// Revoke API key for an agent
+    pub async fn revoke_api_key(&self, agent_id: &str) -> ApiResult<bool> {
+        self.api_key_repo.revoke_api_key(agent_id).await
+    }
+
+    /// Count all active API keys
+    pub async fn count_api_keys(&self) -> ApiResult<i64> {
+        self.api_key_repo.count_api_keys().await
+    }
+
+    /// Count all agents
+    pub async fn count_agents(&self) -> ApiResult<i64> {
+        self.agent_repo.count_agents().await
+    }
+
+    /// List agents (raw format for web pages)
+    pub async fn list_agents_raw(&self, limit: i64, offset: i64) -> ApiResult<Vec<(User, Agent)>> {
+        self.agent_repo.list_agents(limit, offset).await
+    }
+
+    /// Get agent by API key (for authentication)
+    pub async fn get_agent_by_api_key(&self, api_key: &str) -> ApiResult<Option<Agent>> {
+        self.api_key_repo.get_agent_by_api_key(api_key).await
+    }
+
+    /// Update API key last used timestamp
+    pub async fn update_api_key_last_used(&self, api_key: &str) -> ApiResult<()> {
+        self.api_key_repo.update_api_key_last_used(api_key).await
+    }
+
+    /// Create a new API key
+    pub async fn create_api_key(
+        &self,
+        agent_id: &str,
+        api_key: &str,
+        api_secret_hash: &str,
+        description: Option<String>,
+    ) -> ApiResult<()> {
+        self.api_key_repo.create_api_key(agent_id, api_key, api_secret_hash, description).await
+    }
+
+    /// List API keys with pagination and sorting
+    pub async fn list_api_keys(
+        &self,
+        limit: i64,
+        offset: i64,
+        sort_by: &str,
+        sort_order: &str,
+    ) -> ApiResult<Vec<(String, String, Option<String>, String, Option<String>)>> {
+        self.api_key_repo.list_api_keys(limit, offset, sort_by, sort_order).await
     }
 }

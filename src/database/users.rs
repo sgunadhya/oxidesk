@@ -331,4 +331,16 @@ impl UserRepository for Database {
 
         Ok(users)
     }
+
+    async fn count_admin_users(&self) -> ApiResult<i64> {
+        Database::count_admin_users(self).await
+    }
+
+    async fn delete_user(&self, user_id: &str) -> ApiResult<()> {
+        sqlx::query("DELETE FROM users WHERE id = ?")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
 }

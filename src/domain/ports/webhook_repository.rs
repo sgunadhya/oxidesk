@@ -43,4 +43,24 @@ impl WebhookRepository {
     pub async fn count_webhooks(&self) -> ApiResult<i64> {
         self.db.count_webhooks().await
     }
+
+    /// Get deliveries for a specific webhook with pagination
+    pub async fn get_deliveries_for_webhook(
+        &self,
+        webhook_id: &str,
+        limit: i64,
+        offset: i64,
+        status_filter: Option<&str>,
+    ) -> ApiResult<Vec<crate::models::WebhookDelivery>> {
+        self.db.get_deliveries_for_webhook(webhook_id, limit, offset, status_filter).await
+    }
+
+    /// Count deliveries for a specific webhook
+    pub async fn count_deliveries_for_webhook(
+        &self,
+        webhook_id: &str,
+        status_filter: Option<&str>,
+    ) -> ApiResult<i64> {
+        self.db.count_deliveries_for_webhook(webhook_id, status_filter).await
+    }
 }

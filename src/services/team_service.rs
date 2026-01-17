@@ -53,4 +53,16 @@ impl TeamService {
     pub async fn is_member(&self, team_id: &str, user_id: &str) -> ApiResult<bool> {
         self.team_repo.is_team_member(team_id, user_id).await
     }
+
+    pub async fn get_user_teams(&self, user_id: &str) -> ApiResult<Vec<Team>> {
+        self.team_repo.get_user_teams(user_id).await
+    }
+
+    pub async fn update_team_sla_policy(
+        &self,
+        team_id: &str,
+        sla_policy_id: Option<&str>,
+    ) -> ApiResult<()> {
+        self.team_repo.update_team_sla_policy(team_id, sla_policy_id).await
+    }
 }

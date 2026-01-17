@@ -72,7 +72,7 @@ pub async fn update_conversation_status(
         let is_assigned = conversation.assigned_user_id.as_ref() == Some(&auth_user.user.id) || {
             if let Some(team_id) = &conversation.assigned_team_id {
                 // Check if user is member of assigned team
-                let user_teams = state.db.get_user_teams(&auth_user.user.id).await?;
+                let user_teams = state.team_service.get_user_teams(&auth_user.user.id).await?;
                 user_teams.iter().any(|team| &team.id == team_id)
             } else {
                 false
@@ -132,7 +132,7 @@ pub async fn get_conversation(
         let is_assigned = conversation.assigned_user_id.as_ref() == Some(&auth_user.user.id) || {
             if let Some(team_id) = &conversation.assigned_team_id {
                 // Check if user is member of assigned team
-                let user_teams = state.db.get_user_teams(&auth_user.user.id).await?;
+                let user_teams = state.team_service.get_user_teams(&auth_user.user.id).await?;
                 user_teams.iter().any(|team| &team.id == team_id)
             } else {
                 false
@@ -248,7 +248,7 @@ pub async fn list_conversations(
         .await?;
 
     // Get user's teams
-    let user_teams = state.db.get_user_teams(&auth_user.user.id).await?;
+    let user_teams = state.team_service.get_user_teams(&auth_user.user.id).await?;
     let user_team_ids: Vec<String> = user_teams.iter().map(|t| t.id.clone()).collect();
 
     // Filter conversations to only show assigned ones
