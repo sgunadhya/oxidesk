@@ -25,4 +25,7 @@ pub trait RoleRepository: Send + Sync {
     // User-role assignment operations
     async fn remove_user_roles(&self, user_id: &str) -> DomainResult<()>;
     async fn assign_role_to_user(&self, user_role: &crate::models::UserRole) -> DomainResult<()>;
+
+    // Permission queries
+    async fn get_user_permissions(&self, user_id: &str) -> crate::api::middleware::error::ApiResult<Vec<crate::models::Permission>>;
 }

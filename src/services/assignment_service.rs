@@ -1,7 +1,11 @@
-use crate::domain::ports::agent_repository::AgentRepository;
+use crate::domain::ports::{
+    agent_repository::AgentRepository, assignment_repository::AssignmentRepository,
+    availability_repository::AvailabilityRepository,
+    conversation_repository::ConversationRepository, role_repository::RoleRepository,
+    team_repository::TeamRepository, user_repository::UserRepository,
+};
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
-    database::Database,
     events::{EventBus, SystemEvent},
     models::{
         AgentAvailability, AssignmentHistory, Conversation, ConversationStatus, Permission,
@@ -17,7 +21,13 @@ use std::sync::Arc;
 /// Service for handling conversation assignment logic
 #[derive(Clone)]
 pub struct AssignmentService {
-    db: Database,
+    assignment_repo: Arc<dyn AssignmentRepository>,
+    conversation_repo: Arc<dyn ConversationRepository>,
+    agent_repo: Arc<dyn AgentRepository>,
+    user_repo: Arc<dyn UserRepository>,
+    role_repo: Arc<dyn RoleRepository>,
+    team_repo: Arc<dyn TeamRepository>,
+    availability_repo: Arc<dyn AvailabilityRepository>,
     event_bus: Arc<dyn EventBus>,
     notification_service: NotificationService,
     connection_manager: Arc<dyn ConnectionManager>,
@@ -26,13 +36,25 @@ pub struct AssignmentService {
 
 impl AssignmentService {
     pub fn new(
-        db: Database,
+        assignment_repo: Arc<dyn AssignmentRepository>,
+        conversation_repo: Arc<dyn ConversationRepository>,
+        agent_repo: Arc<dyn AgentRepository>,
+        user_repo: Arc<dyn UserRepository>,
+        role_repo: Arc<dyn RoleRepository>,
+        team_repo: Arc<dyn TeamRepository>,
+        availability_repo: Arc<dyn AvailabilityRepository>,
         event_bus: Arc<dyn EventBus>,
         notification_service: NotificationService,
         connection_manager: Arc<dyn ConnectionManager>,
     ) -> Self {
         Self {
-            db,
+            assignment_repo,
+            conversation_repo,
+            agent_repo,
+            user_repo,
+            role_repo,
+            team_repo,
+            availability_repo,
             event_bus,
             notification_service,
             connection_manager,
@@ -66,7 +88,7 @@ impl AssignmentService {
 
         // 2. Verify conversation exists and check for idempotency
         let conversation = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -89,7 +111,7 @@ impl AssignmentService {
 
         for attempt in 0..=MAX_RETRIES {
             match self
-                .db
+                .conversation_repo
                 .assign_conversation_to_user(
                     conversation_id,
                     Some(agent_id.to_string()),
@@ -116,7 +138,7 @@ impl AssignmentService {
 
         // 4. Add as participant (ignore if already exists)
         let _ = self
-            .db
+            .conversation_repo
             .add_conversation_participant(conversation_id, agent_id, "assignee")
             .await;
 
@@ -127,7 +149,7 @@ impl AssignmentService {
             None,
             agent_id.to_string(),
         );
-        self.db.record_assignment(&history).await?;
+        self.assignment_repo.record_assignment(&history).await?;
 
         // 6. Publish event
         self.event_bus.publish(SystemEvent::ConversationAssigned {
@@ -145,7 +167,7 @@ impl AssignmentService {
             agent_id.to_string(), // Self-assignment: assigner = assignee
         );
 
-        if let Err(e) = self.db.create_notification(&notification).await {
+        if let Err(e) = self.assignment_repo.create_notification(&notification).await {
             tracing::error!("Failed to create assignment notification: {}", e);
             // Continue execution - notification failure shouldn't fail assignment
         }
@@ -166,7 +188,7 @@ impl AssignmentService {
         });
 
         // 9. Return updated conversation
-        self.db
+        self.conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -191,7 +213,7 @@ impl AssignmentService {
 
         // 2. Verify conversation exists and check for idempotency
         let conversation = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -200,7 +222,7 @@ impl AssignmentService {
 
         // 3. Verify target agent exists
         let _target_agent = self
-            .db
+            .agent_repo
             .get_agent_by_user_id(target_agent_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Agent {} not found", target_agent_id)))?;
@@ -221,7 +243,7 @@ impl AssignmentService {
 
         for attempt in 0..=MAX_RETRIES {
             match self
-                .db
+                .conversation_repo
                 .assign_conversation_to_user(
                     conversation_id,
                     Some(target_agent_id.to_string()),
@@ -248,7 +270,7 @@ impl AssignmentService {
 
         // 5. Add target agent as participant (ignore if already exists)
         let _ = self
-            .db
+            .conversation_repo
             .add_conversation_participant(conversation_id, target_agent_id, "assignee")
             .await;
 
@@ -259,7 +281,7 @@ impl AssignmentService {
             None,
             assigning_agent_id.to_string(),
         );
-        self.db.record_assignment(&history).await?;
+        self.assignment_repo.record_assignment(&history).await?;
 
         // 7. Publish event
         self.event_bus.publish(SystemEvent::ConversationAssigned {
@@ -277,7 +299,7 @@ impl AssignmentService {
             assigning_agent_id.to_string(),
         );
 
-        if let Err(e) = self.db.create_notification(&notification).await {
+        if let Err(e) = self.assignment_repo.create_notification(&notification).await {
             tracing::error!("Failed to create assignment notification: {}", e);
             // Continue execution - notification failure shouldn't fail assignment
         }
@@ -298,7 +320,7 @@ impl AssignmentService {
         });
 
         // 10. Return updated conversation
-        self.db
+        self.conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -323,7 +345,7 @@ impl AssignmentService {
 
         // 2. Verify conversation exists
         let _conversation = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -332,13 +354,13 @@ impl AssignmentService {
 
         // 3. Verify team exists
         let _team = self
-            .db
+            .team_repo
             .get_team_by_id(team_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Team {} not found", team_id)))?;
 
         // 4. Assign to database
-        self.db
+        self.conversation_repo
             .assign_conversation_to_team(
                 conversation_id,
                 Some(team_id.to_string()),
@@ -356,7 +378,7 @@ impl AssignmentService {
             Some(team_id.to_string()),
             assigning_agent_id.to_string(),
         );
-        self.db.record_assignment(&history).await?;
+        self.assignment_repo.record_assignment(&history).await?;
 
         // 7. Publish event
         self.event_bus.publish(SystemEvent::ConversationAssigned {
@@ -368,7 +390,7 @@ impl AssignmentService {
         });
 
         // 8. Return updated conversation
-        self.db
+        self.conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -380,7 +402,7 @@ impl AssignmentService {
     async fn apply_team_sla(&self, conversation_id: &str, team_id: &str) -> ApiResult<()> {
         // Get the team
         let team = self
-            .db
+            .team_repo
             .get_team_by_id(team_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Team not found: {}", team_id)))?;
@@ -391,7 +413,7 @@ impl AssignmentService {
             if let Some(sla_service) = &self.sla_service {
                 // Get conversation to get its created_at timestamp
                 let conversation = self
-                    .db
+                    .conversation_repo
                     .get_conversation_by_id(conversation_id)
                     .await?
                     .ok_or_else(|| {
@@ -430,7 +452,7 @@ impl AssignmentService {
     ) -> ApiResult<Conversation> {
         // 1. Get conversation
         let conversation = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -445,7 +467,7 @@ impl AssignmentService {
         }
 
         // 3. Unassign from database
-        self.db.unassign_conversation_user(conversation_id).await?;
+        self.conversation_repo.unassign_conversation_user(conversation_id).await?;
 
         // 4. Publish event
         self.event_bus.publish(SystemEvent::ConversationUnassigned {
@@ -457,7 +479,7 @@ impl AssignmentService {
         });
 
         // 5. Return updated conversation
-        self.db
+        self.conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -469,7 +491,7 @@ impl AssignmentService {
     pub async fn auto_unassign_on_away(&self, agent_id: &str) -> ApiResult<Vec<Conversation>> {
         // 1. Get all open/snoozed conversations assigned to agent before unassignment
         let (conversations, _) = self
-            .db
+            .conversation_repo
             .get_user_assigned_conversations(agent_id, 1000, 0)
             .await?;
 
@@ -485,7 +507,7 @@ impl AssignmentService {
             .collect();
 
         // 2. Batch unassign
-        let count = self.db.unassign_agent_open_conversations(agent_id).await?;
+        let count = self.conversation_repo.unassign_agent_open_conversations(agent_id).await?;
 
         // 3. Publish ConversationUnassigned event for each
         for conversation in &open_conversations {
@@ -510,12 +532,12 @@ impl AssignmentService {
 
     // Get user permissions from database
     pub async fn get_user_permissions(&self, user_id: &str) -> ApiResult<Vec<Permission>> {
-        self.db.get_user_permissions(user_id).await
+        self.role_repo.get_user_permissions(user_id).await
     }
 
     // Check if user is a team member
     pub async fn is_team_member(&self, team_id: &str, user_id: &str) -> ApiResult<bool> {
-        self.db.is_team_member(team_id, user_id).await
+        self.team_repo.is_team_member(team_id, user_id).await
     }
 
     // Get unassigned conversations
@@ -524,7 +546,7 @@ impl AssignmentService {
         limit: i64,
         offset: i64,
     ) -> ApiResult<(Vec<Conversation>, i64)> {
-        self.db.get_unassigned_conversations(limit, offset).await
+        self.conversation_repo.get_unassigned_conversations(limit, offset).await
     }
 
     // Get conversations assigned to a user
@@ -534,7 +556,7 @@ impl AssignmentService {
         limit: i64,
         offset: i64,
     ) -> ApiResult<(Vec<Conversation>, i64)> {
-        self.db
+        self.conversation_repo
             .get_user_assigned_conversations(user_id, limit, offset)
             .await
     }
@@ -546,7 +568,7 @@ impl AssignmentService {
         limit: i64,
         offset: i64,
     ) -> ApiResult<(Vec<Conversation>, i64)> {
-        self.db.get_team_conversations(team_id, limit, offset).await
+        self.conversation_repo.get_team_conversations(team_id, limit, offset).await
     }
 
     // Update agent availability
@@ -555,7 +577,7 @@ impl AssignmentService {
         user_id: &str,
         status: AgentAvailability,
     ) -> ApiResult<()> {
-        self.db.update_agent_availability(user_id, status).await
+        self.availability_repo.update_agent_availability_with_timestamp(user_id, status).await
     }
 
     // RBAC System: Check conversation access based on assignment
@@ -572,7 +594,7 @@ impl AssignmentService {
     ) -> ApiResult<bool> {
         // Get conversation assignment
         let conversation = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -602,7 +624,7 @@ impl AssignmentService {
     /// Get all team IDs that a user is a member of
     /// Used for team-based assignment filtering
     pub async fn get_user_teams(&self, user_id: &str) -> ApiResult<Vec<String>> {
-        let teams = self.db.get_user_teams(user_id).await?;
+        let teams = self.team_repo.get_user_teams(user_id).await?;
         Ok(teams.into_iter().map(|team| team.id).collect())
     }
 }

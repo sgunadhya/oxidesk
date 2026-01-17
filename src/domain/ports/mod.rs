@@ -1,5 +1,7 @@
 pub mod agent_repository;
+pub mod assignment_repository;
 pub mod attachment_repository;
+pub mod availability_repository;
 pub mod contact_repository;
 pub mod conversation_repository;
 pub mod conversation_tag_repository;
@@ -11,6 +13,7 @@ pub mod oidc_repository;
 pub mod password_reset_repository;
 pub mod role_repository;
 pub mod session_repository;
+pub mod sla_repository;
 pub mod tag_repository;
 pub mod team_repository;
 pub mod user_repository;

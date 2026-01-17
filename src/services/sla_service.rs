@@ -1,6 +1,9 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
-    database::Database,
+    domain::ports::{
+        conversation_repository::ConversationRepository, sla_repository::SlaRepository,
+        team_repository::TeamRepository,
+    },
     events::{EventBus, SystemEvent},
     models::*,
 };
@@ -9,15 +12,28 @@ use std::sync::Arc;
 use tracing::info;
 
 /// Service for managing SLA policies, applied SLAs, and SLA events
+#[derive(Clone)]
 pub struct SlaService {
-    db: Database,
+    sla_repo: Arc<dyn SlaRepository>,
+    conversation_repo: Arc<dyn ConversationRepository>,
+    team_repo: Arc<dyn TeamRepository>,
     event_bus: Arc<dyn EventBus>,
 }
 
 impl SlaService {
     /// Create a new SLA service
-    pub fn new(db: Database, event_bus: Arc<dyn EventBus>) -> Self {
-        Self { db, event_bus }
+    pub fn new(
+        sla_repo: Arc<dyn SlaRepository>,
+        conversation_repo: Arc<dyn ConversationRepository>,
+        team_repo: Arc<dyn TeamRepository>,
+        event_bus: Arc<dyn EventBus>,
+    ) -> Self {
+        Self {
+            sla_repo,
+            conversation_repo,
+            team_repo,
+            event_bus,
+        }
     }
 
     // ========================================
@@ -49,7 +65,7 @@ impl SlaService {
             next_response_time,
         );
 
-        self.db.create_sla_policy(&policy).await?;
+        self.sla_repo.create_sla_policy(&policy).await?;
 
         info!("Created SLA policy: {} ({})", policy.name, policy.id);
         Ok(policy)
@@ -57,17 +73,17 @@ impl SlaService {
 
     /// Get SLA policy by ID
     pub async fn get_policy(&self, policy_id: &str) -> ApiResult<Option<SlaPolicy>> {
-        self.db.get_sla_policy(policy_id).await
+        self.sla_repo.get_sla_policy(policy_id).await
     }
 
     /// Get SLA policy by name
     pub async fn get_policy_by_name(&self, name: &str) -> ApiResult<Option<SlaPolicy>> {
-        self.db.get_sla_policy_by_name(name).await
+        self.sla_repo.get_sla_policy_by_name(name).await
     }
 
     /// List all SLA policies
     pub async fn list_policies(&self, limit: i64, offset: i64) -> ApiResult<(Vec<SlaPolicy>, i64)> {
-        self.db.list_sla_policies(limit, offset).await
+        self.sla_repo.list_sla_policies(limit, offset).await
     }
 
     /// Update SLA policy
@@ -94,7 +110,7 @@ impl SlaService {
                 .map_err(|e| ApiError::BadRequest(format!("Invalid next_response_time: {}", e)))?;
         }
 
-        self.db
+        self.sla_repo
             .update_sla_policy(
                 policy_id,
                 name.as_deref(),
@@ -111,7 +127,7 @@ impl SlaService {
 
     /// Delete SLA policy
     pub async fn delete_policy(&self, policy_id: &str) -> ApiResult<()> {
-        self.db.delete_sla_policy(policy_id).await?;
+        self.sla_repo.delete_sla_policy(policy_id).await?;
         info!("Deleted SLA policy: {}", policy_id);
         Ok(())
     }
@@ -122,7 +138,7 @@ impl SlaService {
 
     /// Get applied SLA by ID
     pub async fn get_applied_sla(&self, applied_sla_id: &str) -> ApiResult<Option<AppliedSla>> {
-        self.db.get_applied_sla(applied_sla_id).await
+        self.sla_repo.get_applied_sla(applied_sla_id).await
     }
 
     /// Get applied SLA by conversation ID
@@ -130,7 +146,7 @@ impl SlaService {
         &self,
         conversation_id: &str,
     ) -> ApiResult<Option<AppliedSla>> {
-        self.db
+        self.sla_repo
             .get_applied_sla_by_conversation(conversation_id)
             .await
     }
@@ -142,7 +158,7 @@ impl SlaService {
         limit: i64,
         offset: i64,
     ) -> ApiResult<(Vec<AppliedSla>, i64)> {
-        self.db
+        self.sla_repo
             .list_applied_slas(status_filter, limit, offset)
             .await
     }
@@ -153,7 +169,7 @@ impl SlaService {
 
     /// Get SLA event by ID
     pub async fn get_event(&self, event_id: &str) -> ApiResult<Option<SlaEvent>> {
-        self.db.get_sla_event(event_id).await
+        self.sla_repo.get_sla_event(event_id).await
     }
 
     /// Get all SLA events for an applied SLA
@@ -161,7 +177,7 @@ impl SlaService {
         &self,
         applied_sla_id: &str,
     ) -> ApiResult<Vec<SlaEvent>> {
-        self.db.get_sla_events_by_applied_sla(applied_sla_id).await
+        self.sla_repo.get_sla_events_by_applied_sla(applied_sla_id).await
     }
 
     /// Get pending SLA event by type for an applied SLA
@@ -170,7 +186,7 @@ impl SlaService {
         applied_sla_id: &str,
         event_type: SlaEventType,
     ) -> ApiResult<Option<SlaEvent>> {
-        self.db
+        self.sla_repo
             .get_pending_sla_event(applied_sla_id, event_type)
             .await
     }
@@ -189,7 +205,7 @@ impl SlaService {
     ) -> ApiResult<AppliedSla> {
         // Validate conversation exists and get it
         let conversation = self
-            .db
+            .conversation_repo
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -204,7 +220,7 @@ impl SlaService {
 
         // Check for duplicate: conversation must not already have an applied SLA
         if let Some(_existing) = self
-            .db
+            .sla_repo
             .get_applied_sla_by_conversation(conversation_id)
             .await?
         {
@@ -215,7 +231,7 @@ impl SlaService {
 
         // Check if conversation is assigned to a team with business hours
         let business_hours = if let Some(team_id) = &conversation.assigned_team_id {
-            if let Some(team) = self.db.get_team_by_id(team_id).await? {
+            if let Some(team) = self.team_repo.get_team_by_id(team_id).await? {
                 if let Some(bh_json) = &team.business_hours {
                     // Parse business hours JSON
                     match crate::models::team::BusinessHours::parse(bh_json) {
@@ -268,7 +284,7 @@ impl SlaService {
             resolution_deadline.clone(),
         );
 
-        self.db.create_applied_sla(&applied_sla).await?;
+        self.sla_repo.create_applied_sla(&applied_sla).await?;
 
         // Create SLA events for first response and resolution
         let first_response_event = SlaEvent::new(
@@ -283,8 +299,8 @@ impl SlaService {
             resolution_deadline.clone(),
         );
 
-        self.db.create_sla_event(&first_response_event).await?;
-        self.db.create_sla_event(&resolution_event).await?;
+        self.sla_repo.create_sla_event(&first_response_event).await?;
+        self.sla_repo.create_sla_event(&resolution_event).await?;
 
         if business_hours.is_some() {
             info!(
@@ -310,7 +326,7 @@ impl SlaService {
     ) -> ApiResult<()> {
         // Get applied SLA for this conversation
         let applied_sla = match self
-            .db
+            .sla_repo
             .get_applied_sla_by_conversation(conversation_id)
             .await?
         {
@@ -323,11 +339,11 @@ impl SlaService {
 
         // Try to mark first response event as met (only if pending)
         if let Some(first_response_event) = self
-            .db
+            .sla_repo
             .get_pending_sla_event(&applied_sla.id, SlaEventType::FirstResponse)
             .await?
         {
-            self.db
+            self.sla_repo
                 .mark_sla_event_met(&first_response_event.id, message_timestamp)
                 .await?;
 
@@ -339,11 +355,11 @@ impl SlaService {
 
         // Try to mark next response event as met (only if pending)
         if let Some(next_response_event) = self
-            .db
+            .sla_repo
             .get_pending_sla_event(&applied_sla.id, SlaEventType::NextResponse)
             .await?
         {
-            self.db
+            self.sla_repo
                 .mark_sla_event_met(&next_response_event.id, message_timestamp)
                 .await?;
 
@@ -364,7 +380,7 @@ impl SlaService {
     ) -> ApiResult<()> {
         // Get applied SLA for this conversation
         let applied_sla = match self
-            .db
+            .sla_repo
             .get_applied_sla_by_conversation(conversation_id)
             .await?
         {
@@ -377,7 +393,7 @@ impl SlaService {
 
         // Get the resolution event (only if pending)
         let resolution_event = match self
-            .db
+            .sla_repo
             .get_pending_sla_event(&applied_sla.id, SlaEventType::Resolution)
             .await?
         {
@@ -390,7 +406,7 @@ impl SlaService {
         };
 
         // Mark the event as met
-        self.db
+        self.sla_repo
             .mark_sla_event_met(&resolution_event.id, resolution_timestamp)
             .await?;
 
@@ -414,7 +430,7 @@ impl SlaService {
     ) -> ApiResult<()> {
         // Get applied SLA for this conversation (must be applied before creating events)
         let applied_sla = self
-            .db
+            .sla_repo
             .get_applied_sla_by_conversation(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -443,7 +459,7 @@ impl SlaService {
             next_response_deadline.clone(),
         );
 
-        self.db.create_sla_event(&next_response_event).await?;
+        self.sla_repo.create_sla_event(&next_response_event).await?;
 
         info!(
             "Next response SLA event created for conversation {} (deadline: {})",
@@ -456,7 +472,7 @@ impl SlaService {
     /// Check for breached SLA events and update their status
     pub async fn check_breaches(&self) -> ApiResult<()> {
         // Get all pending events past their deadline
-        let breached_events = self.db.get_pending_events_past_deadline().await?;
+        let breached_events = self.sla_repo.get_pending_events_past_deadline().await?;
 
         if breached_events.is_empty() {
             return Ok(());
@@ -470,7 +486,7 @@ impl SlaService {
         for event in breached_events {
             // Get the applied SLA to get conversation_id
             let applied_sla = self
-                .db
+                .sla_repo
                 .get_applied_sla_by_id(&event.applied_sla_id)
                 .await?
                 .ok_or_else(|| {
@@ -509,7 +525,7 @@ impl SlaService {
 
     /// Mark an SLA event as breached
     async fn mark_event_breached(&self, event_id: &str, deadline_at: &str) -> ApiResult<()> {
-        self.db
+        self.sla_repo
             .mark_sla_event_breached(event_id, deadline_at)
             .await?;
         Ok(())
@@ -520,7 +536,7 @@ impl SlaService {
     async fn update_applied_sla_status(&self, applied_sla_id: &str) -> ApiResult<()> {
         // Get all events for this applied SLA
         let events = self
-            .db
+            .sla_repo
             .get_sla_events_by_applied_sla(applied_sla_id)
             .await?;
 
@@ -537,7 +553,7 @@ impl SlaService {
         };
 
         // Update the applied SLA status
-        self.db
+        self.sla_repo
             .update_applied_sla_status(applied_sla_id, new_status)
             .await?;
 
@@ -624,7 +640,7 @@ impl SlaService {
             datetime.month(),
             datetime.day()
         );
-        if self.db.is_holiday(&date_str).await? {
+        if self.sla_repo.is_holiday(&date_str).await? {
             return Ok(false); // Holidays are non-working days
         }
 
@@ -684,11 +700,3 @@ impl SlaService {
     }
 }
 
-impl Clone for SlaService {
-    fn clone(&self) -> Self {
-        Self {
-            db: self.db.clone(),
-            event_bus: Arc::clone(&self.event_bus),
-        }
-    }
-}

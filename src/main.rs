@@ -99,11 +99,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Notification service initialized (stub)");
 
     // Initialize availability service
-    let availability_service = oxidesk::AvailabilityService::new(db.clone(), event_bus.clone());
+    let availability_service = oxidesk::AvailabilityService::new(
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::availability_repository::AvailabilityRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        event_bus.clone(),
+    );
     tracing::info!("Availability service initialized");
 
     // Initialize SLA service
-    let sla_service = oxidesk::SlaService::new(db.clone(), event_bus.clone());
+    let sla_service = oxidesk::SlaService::new(
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
+        event_bus.clone(),
+    );
     tracing::info!("SLA service initialized");
 
     // Initialize automation service

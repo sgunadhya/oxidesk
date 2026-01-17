@@ -334,6 +334,10 @@ impl RoleRepository for Database {
 
         Ok(())
     }
+
+    async fn get_user_permissions(&self, user_id: &str) -> crate::api::middleware::error::ApiResult<Vec<crate::models::Permission>> {
+        Database::get_user_permissions(self, user_id).await
+    }
 }
 
 // Legacy Inherent Implementation

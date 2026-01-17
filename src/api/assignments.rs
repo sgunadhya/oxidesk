@@ -20,7 +20,13 @@ pub async fn assign_conversation(
     Json(req): Json<AssignConversationRequest>,
 ) -> ApiResult<Json<ConversationResponse>> {
     let mut assignment_service = AssignmentService::new(
-        state.db.clone(),
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::assignment_repository::AssignmentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::role_repository::RoleRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::team_repository::TeamRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::availability_repository::AvailabilityRepository>,
         state.event_bus.clone(),
         state.notification_service.clone(),
         state.connection_manager.clone(),
@@ -71,7 +77,13 @@ pub async fn unassign_conversation(
     Path(conversation_id): Path<String>,
 ) -> ApiResult<Json<ConversationResponse>> {
     let assignment_service = AssignmentService::new(
-        state.db.clone(),
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::assignment_repository::AssignmentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::role_repository::RoleRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::team_repository::TeamRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::availability_repository::AvailabilityRepository>,
         state.event_bus.clone(),
         state.notification_service.clone(),
         state.connection_manager.clone(),
@@ -99,7 +111,13 @@ pub async fn update_agent_availability(
     }
 
     let assignment_service = AssignmentService::new(
-        state.db.clone(),
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::assignment_repository::AssignmentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::role_repository::RoleRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::team_repository::TeamRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::availability_repository::AvailabilityRepository>,
         state.event_bus.clone(),
         state.notification_service.clone(),
         state.connection_manager.clone(),
@@ -147,7 +165,13 @@ pub async fn get_unassigned_conversations(
     Query(params): Query<PaginationQuery>,
 ) -> ApiResult<Json<ConversationListResponse>> {
     let assignment_service = AssignmentService::new(
-        state.db.clone(),
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::assignment_repository::AssignmentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::role_repository::RoleRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::team_repository::TeamRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::availability_repository::AvailabilityRepository>,
         state.event_bus.clone(),
         state.notification_service.clone(),
         state.connection_manager.clone(),
@@ -191,7 +215,13 @@ pub async fn get_assigned_conversations(
     Query(params): Query<PaginationQuery>,
 ) -> ApiResult<Json<ConversationListResponse>> {
     let assignment_service = AssignmentService::new(
-        state.db.clone(),
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::assignment_repository::AssignmentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::role_repository::RoleRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::team_repository::TeamRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::availability_repository::AvailabilityRepository>,
         state.event_bus.clone(),
         state.notification_service.clone(),
         state.connection_manager.clone(),
@@ -223,7 +253,13 @@ pub async fn get_team_conversations(
     Query(params): Query<PaginationQuery>,
 ) -> ApiResult<Json<ConversationListResponse>> {
     let assignment_service = AssignmentService::new(
-        state.db.clone(),
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::assignment_repository::AssignmentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::role_repository::RoleRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::team_repository::TeamRepository>,
+        std::sync::Arc::new(state.db.clone()) as std::sync::Arc<dyn crate::domain::ports::availability_repository::AvailabilityRepository>,
         state.event_bus.clone(),
         state.notification_service.clone(),
         state.connection_manager.clone(),
