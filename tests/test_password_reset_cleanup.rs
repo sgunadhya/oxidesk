@@ -5,7 +5,7 @@ mod helpers;
 use helpers::*;
 use oxidesk::{
     models::{Agent, User, UserType},
-    services::{hash_password, password_reset_service, validate_and_normalize_email},
+    services::{hash_password, PasswordResetService, validate_and_normalize_email},
 };
 
 #[tokio::test]
@@ -29,7 +29,7 @@ async fn test_expired_token_deleted_on_validation_failure() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -56,7 +56,7 @@ async fn test_expired_token_deleted_on_validation_failure() {
     );
 
     // Try to use expired token (should trigger lazy cleanup)
-    let result = password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token_value, "NewPass123!").await;
     assert!(result.is_err(), "Expired token should be rejected");
 
     // Verify token was deleted (lazy cleanup)
@@ -90,7 +90,7 @@ async fn test_valid_token_not_deleted_on_validation() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -108,7 +108,7 @@ async fn test_valid_token_not_deleted_on_validation() {
     );
 
     // Use valid token (should not trigger cleanup)
-    let result = password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token_value, "NewPass123!").await;
     assert!(result.is_ok(), "Valid token should work");
 
     // Verify token still exists (marked as used, but not deleted)
@@ -145,7 +145,7 @@ async fn test_multiple_expired_tokens_cleaned_up_individually() {
     // Create multiple tokens and expire them
     let mut expired_tokens = Vec::new();
     for _ in 0..3 {
-        password_reset_service::request_password_reset(db, &email)
+        PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
             .await
             .unwrap();
         let tokens = db
@@ -178,7 +178,7 @@ async fn test_multiple_expired_tokens_cleaned_up_individually() {
 
     // Try to use each expired token (each should trigger cleanup for that specific token)
     for (i, (token_value, _)) in expired_tokens.iter().enumerate() {
-        let result = password_reset_service::reset_password(db, token_value, "NewPass123!").await;
+        let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token_value, "NewPass123!").await;
         assert!(result.is_err(), "Expired token {} should fail", i + 1);
 
         // This specific token should be deleted
@@ -214,7 +214,7 @@ async fn test_lazy_cleanup_only_on_expired_not_used() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -224,7 +224,7 @@ async fn test_lazy_cleanup_only_on_expired_not_used() {
     let token_value = tokens[0].token.clone();
 
     // Use the token successfully
-    password_reset_service::reset_password(db, &token_value, "NewPass123!")
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token_value, "NewPass123!")
         .await
         .unwrap();
 
@@ -240,7 +240,7 @@ async fn test_lazy_cleanup_only_on_expired_not_used() {
     );
 
     // Try to use the token again (should fail because it's used, not because it's expired)
-    let result = password_reset_service::reset_password(db, &token_value, "AnotherPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token_value, "AnotherPass123!").await;
     assert!(result.is_err(), "Used token should fail");
 
     // Token should still exist (lazy cleanup only deletes expired tokens, not used ones)
@@ -285,10 +285,10 @@ async fn test_cleanup_does_not_affect_other_users_tokens() {
     db.create_agent(&agent2).await.unwrap();
 
     // Create tokens for both users
-    password_reset_service::request_password_reset(db, &email1)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email1)
         .await
         .unwrap();
-    password_reset_service::request_password_reset(db, &email2)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email2)
         .await
         .unwrap();
 
@@ -315,7 +315,7 @@ async fn test_cleanup_does_not_affect_other_users_tokens() {
         .unwrap();
 
     // Try to use user1's expired token (should trigger cleanup)
-    let result1 = password_reset_service::reset_password(db, &token1_value, "NewPass123!").await;
+    let result1 = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token1_value, "NewPass123!").await;
     assert!(result1.is_err(), "User1's expired token should fail");
 
     // User1's token should be deleted
@@ -360,7 +360,7 @@ async fn test_no_background_cleanup_job() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -390,7 +390,7 @@ async fn test_no_background_cleanup_job() {
     );
 
     // Only when we try to use it should it be deleted
-    let _ = password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
+    let _ = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token_value, "NewPass123!").await;
 
     let token_after_use = db.get_password_reset_token(&token_value).await.unwrap();
     assert!(

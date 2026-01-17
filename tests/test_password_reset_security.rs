@@ -5,7 +5,7 @@ mod helpers;
 use helpers::*;
 use oxidesk::{
     models::{Agent, User, UserType},
-    services::{hash_password, password_reset_service, validate_and_normalize_email},
+    services::{hash_password, PasswordResetService, validate_and_normalize_email},
 };
 use std::time::Instant;
 
@@ -30,13 +30,13 @@ async fn test_email_enumeration_prevention_same_message() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset for existing email
-    let result1 = password_reset_service::request_password_reset(db, &existing_email).await;
+    let result1 = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &existing_email).await;
     assert!(result1.is_ok());
     let response1 = result1.unwrap();
 
     // Request password reset for non-existent email
     let result2 =
-        password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
+        PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( "nonexistent@example.com").await;
     assert!(result2.is_ok());
     let response2 = result2.unwrap();
 
@@ -77,14 +77,14 @@ async fn test_email_enumeration_prevention_consistent_timing() {
 
     // Measure time for existing email
     let start1 = Instant::now();
-    password_reset_service::request_password_reset(db, &existing_email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &existing_email)
         .await
         .unwrap();
     let duration1 = start1.elapsed();
 
     // Measure time for non-existent email
     let start2 = Instant::now();
-    password_reset_service::request_password_reset(db, "nonexistent@example.com")
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( "nonexistent@example.com")
         .await
         .unwrap();
     let duration2 = start2.elapsed();
@@ -107,7 +107,7 @@ async fn test_no_token_created_for_nonexistent_email() {
     let db = test_db.db();
 
     // Request password reset for non-existent email
-    let result = password_reset_service::request_password_reset(db, "ghost@example.com").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( "ghost@example.com").await;
     assert!(result.is_ok());
 
     // Verify no tokens were created (since user doesn't exist)
@@ -148,7 +148,7 @@ async fn test_email_enumeration_prevention_case_insensitive() {
 
     let mut responses = Vec::new();
     for email_variant in &variations {
-        let result = password_reset_service::request_password_reset(db, email_variant).await;
+        let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( email_variant).await;
         assert!(result.is_ok());
         responses.push(result.unwrap().message);
     }
@@ -180,7 +180,7 @@ async fn test_no_error_details_leaked_for_invalid_emails() {
     ];
 
     for email in &invalid_emails {
-        let result = password_reset_service::request_password_reset(db, email).await;
+        let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( email).await;
 
         // Should always succeed with generic message
         assert!(
@@ -222,14 +222,14 @@ async fn test_http_200_for_both_existing_and_nonexistent() {
     db.create_agent(&agent).await.unwrap();
 
     // Both requests should succeed (HTTP 200 equivalent - Ok result)
-    let result1 = password_reset_service::request_password_reset(db, &existing_email).await;
+    let result1 = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &existing_email).await;
     assert!(
         result1.is_ok(),
         "Existing email should return Ok (HTTP 200)"
     );
 
     let result2 =
-        password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
+        PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( "nonexistent@example.com").await;
     assert!(
         result2.is_ok(),
         "Non-existent email should also return Ok (HTTP 200)"

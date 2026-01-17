@@ -71,7 +71,7 @@ pub async fn list_users(
             UserType::Agent => {
                 // Get agent details
                 if let Some(agent) = state.agent_service.get_agent_by_user_id(&user.id).await? {
-                    let roles = state.db.get_user_roles(&user.id).await?;
+                    let roles = state.role_service.get_user_roles(&user.id).await?;
 
                     let role_responses: Vec<RoleResponse> = roles
                         .iter()
@@ -152,7 +152,7 @@ pub async fn get_user(
                 .await?
                 .ok_or_else(|| ApiError::NotFound("Agent details not found".to_string()))?;
 
-            let roles = state.db.get_user_roles(&user.id).await?;
+            let roles = state.role_service.get_user_roles(&user.id).await?;
 
             let role_responses: Vec<RoleResponse> = roles
                 .iter()
@@ -225,12 +225,12 @@ pub async fn delete_user(
     match user.user_type {
         UserType::Agent => {
             // Check if this agent has Admin role
-            let roles = state.db.get_user_roles(&user.id).await?;
+            let roles = state.role_service.get_user_roles(&user.id).await?;
             let is_admin = roles.iter().any(|r| r.name == "Admin");
 
             if is_admin {
                 // Check if this is the last admin (FR-017)
-                let admin_count = state.db.count_admin_users().await?;
+                let admin_count = state.user_service.count_admin_users().await?;
 
                 if admin_count <= 1 {
                     return Err(ApiError::BadRequest(
@@ -240,10 +240,7 @@ pub async fn delete_user(
             }
 
             // Delete user (cascade will delete agent and user_roles)
-            sqlx::query("DELETE FROM users WHERE id = ?")
-                .bind(&id)
-                .execute(state.db.pool())
-                .await?;
+            state.user_service.delete_user(&id).await?;
         }
         UserType::Contact => {
             // Delete user (cascade will delete contact and contact_channels)

@@ -37,7 +37,9 @@ async fn test_apply_sla_requires_permission() {
     // For now, we'll test the service layer directly
     // The API layer permission check will be added in T026
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -64,7 +66,9 @@ async fn test_apply_sla_validates_conversation_exists() {
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -102,7 +106,9 @@ async fn test_apply_sla_validates_policy_exists() {
     .await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -143,7 +149,9 @@ async fn test_apply_sla_creates_applied_sla_and_events() {
     .await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -247,7 +255,9 @@ async fn test_deadline_calculation_with_business_hours() {
     let base_timestamp = "2024-01-08T15:00:00Z"; // Monday 10:00 AM EST (UTC-5)
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -308,7 +318,9 @@ async fn test_deadline_skips_weekend() {
     let base_timestamp = "2024-01-12T21:30:00Z"; // Friday 4:30 PM EST
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -376,7 +388,9 @@ async fn test_deadline_skips_evenings() {
     let base_timestamp = "2024-01-08T21:30:00Z"; // Monday 4:30 PM EST
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -432,7 +446,9 @@ async fn test_deadline_calculation_without_business_hours() {
     let base_timestamp = "2024-01-12T21:30:00Z"; // Friday 4:30 PM EST
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -501,7 +517,9 @@ async fn test_business_hours_timezone_handling() {
     let base_timestamp = "2024-01-08T15:00:00Z"; // Monday 10:00 AM EST
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -540,7 +558,9 @@ async fn test_duplicate_sla_application_rejected() {
     .await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -580,7 +600,9 @@ async fn test_duplicate_sla_error_message() {
     .await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -636,7 +658,9 @@ async fn test_apply_sla_to_different_conversations_succeeds() {
     .await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -680,7 +704,9 @@ async fn test_apply_same_policy_twice_to_conversation_rejected() {
     .await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -723,7 +749,9 @@ async fn test_apply_different_policy_to_conversation_rejected() {
     .await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -781,7 +809,9 @@ async fn test_delete_sla_policy_cascades_to_applied_slas() {
     .await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -835,7 +865,9 @@ async fn test_delete_applied_sla_cascades_to_sla_events() {
     .await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -887,7 +919,9 @@ async fn test_cascade_delete_with_multiple_conversations() {
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -948,7 +982,9 @@ async fn test_delete_policy_with_no_applied_slas() {
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -983,7 +1019,9 @@ async fn test_cascade_delete_is_transactional() {
     .await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -1027,7 +1065,9 @@ async fn test_sla_events_orphaned_check() {
     let policy = create_test_sla_policy(&db, "Standard", "2h", "24h", "4h").await;
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -1125,7 +1165,9 @@ async fn test_full_sla_application_workflow() {
 
     // Apply SLA
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -1186,7 +1228,9 @@ async fn test_business_hours_edge_cases() {
     let db = test_db.db();
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 
@@ -1325,7 +1369,9 @@ async fn test_final_integration_verification() {
     .unwrap();
 
     let sla_service = oxidesk::SlaService::new(
-        db.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::sla_repository::SlaRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
         std::sync::Arc::new(oxidesk::LocalEventBus::new(100)),
     );
 

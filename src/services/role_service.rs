@@ -157,4 +157,54 @@ impl RoleService {
 
         Ok(responses)
     }
+
+    /// Get user roles
+    pub async fn get_user_roles(&self, user_id: &str) -> ApiResult<Vec<crate::models::Role>> {
+        let roles = self.domain_service.get_user_roles(user_id).await?;
+
+        // Convert domain roles to API roles
+        Ok(roles.into_iter().map(|r| crate::models::Role {
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            permissions: r.permissions,
+            is_protected: r.is_protected,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }).collect())
+    }
+
+    /// Count users with a specific role
+    pub async fn count_users_with_role(&self, role_id: &str) -> ApiResult<i64> {
+        self.domain_service.count_users_with_role(role_id).await.map_err(|e| e.into())
+    }
+
+    /// Get raw list of roles (for web pages)
+    pub async fn list_roles_raw(&self) -> ApiResult<Vec<crate::models::Role>> {
+        let roles = self.domain_service.list_roles().await?;
+
+        Ok(roles.into_iter().map(|r| crate::models::Role {
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            permissions: r.permissions,
+            is_protected: r.is_protected,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+        }).collect())
+    }
+
+    /// Get role permissions (for web pages)
+    pub async fn get_role_permissions(&self, role_id: &str) -> ApiResult<Vec<crate::models::Permission>> {
+        // For now, we'll get permissions from the role itself
+        let role = self.domain_service.get_role(role_id).await?;
+
+        // Get all permissions and filter by role's permission list
+        let all_permissions = self.domain_service.list_permissions().await?;
+        let role_permission_names: std::collections::HashSet<_> = role.permissions.iter().collect();
+
+        Ok(all_permissions.into_iter()
+            .filter(|p| role_permission_names.contains(&p.name))
+            .collect())
+    }
 }

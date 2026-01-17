@@ -66,6 +66,14 @@ impl UserService {
     pub async fn restore_user(&self, user_id: &str) -> ApiResult<()> {
         self.user_repo.restore_user(user_id).await
     }
+
+    pub async fn count_admin_users(&self) -> ApiResult<i64> {
+        self.user_repo.count_admin_users().await
+    }
+
+    pub async fn delete_user(&self, user_id: &str) -> ApiResult<()> {
+        self.user_repo.delete_user(user_id).await
+    }
 }
 
 // Keep legacy functions for now, but they will need refactoring or moving if they use DB directly

@@ -760,3 +760,111 @@ impl Database {
         Ok(())
     }
 }
+
+// Implement SlaRepository trait for Database
+#[async_trait::async_trait]
+impl crate::domain::ports::sla_repository::SlaRepository for Database {
+    async fn create_sla_policy(&self, policy: &crate::models::SlaPolicy) -> ApiResult<()> {
+        self.create_sla_policy(policy).await
+    }
+
+    async fn get_sla_policy(&self, policy_id: &str) -> ApiResult<Option<crate::models::SlaPolicy>> {
+        self.get_sla_policy(policy_id).await
+    }
+
+    async fn get_sla_policy_by_name(&self, name: &str) -> ApiResult<Option<crate::models::SlaPolicy>> {
+        self.get_sla_policy_by_name(name).await
+    }
+
+    async fn list_sla_policies(&self, limit: i64, offset: i64) -> ApiResult<(Vec<crate::models::SlaPolicy>, i64)> {
+        self.list_sla_policies(limit, offset).await
+    }
+
+    async fn update_sla_policy(
+        &self,
+        policy_id: &str,
+        name: Option<&str>,
+        description: Option<Option<&str>>,
+        first_response_time: Option<&str>,
+        resolution_time: Option<&str>,
+        next_response_time: Option<&str>,
+    ) -> ApiResult<()> {
+        self.update_sla_policy(policy_id, name, description, first_response_time, resolution_time, next_response_time).await
+    }
+
+    async fn delete_sla_policy(&self, policy_id: &str) -> ApiResult<()> {
+        self.delete_sla_policy(policy_id).await
+    }
+
+    async fn create_applied_sla(&self, applied_sla: &crate::models::AppliedSla) -> ApiResult<()> {
+        self.create_applied_sla(applied_sla).await
+    }
+
+    async fn get_applied_sla(&self, applied_sla_id: &str) -> ApiResult<Option<crate::models::AppliedSla>> {
+        self.get_applied_sla(applied_sla_id).await
+    }
+
+    async fn get_applied_sla_by_id(&self, applied_sla_id: &str) -> ApiResult<Option<crate::models::AppliedSla>> {
+        self.get_applied_sla_by_id(applied_sla_id).await
+    }
+
+    async fn get_applied_sla_by_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> ApiResult<Option<crate::models::AppliedSla>> {
+        self.get_applied_sla_by_conversation(conversation_id).await
+    }
+
+    async fn list_applied_slas(
+        &self,
+        status_filter: Option<crate::models::AppliedSlaStatus>,
+        limit: i64,
+        offset: i64,
+    ) -> ApiResult<(Vec<crate::models::AppliedSla>, i64)> {
+        self.list_applied_slas(status_filter, limit, offset).await
+    }
+
+    async fn update_applied_sla_status(
+        &self,
+        applied_sla_id: &str,
+        status: crate::models::AppliedSlaStatus,
+    ) -> ApiResult<()> {
+        self.update_applied_sla_status(applied_sla_id, status).await
+    }
+
+    async fn create_sla_event(&self, event: &crate::models::SlaEvent) -> ApiResult<()> {
+        self.create_sla_event(event).await
+    }
+
+    async fn get_sla_event(&self, event_id: &str) -> ApiResult<Option<crate::models::SlaEvent>> {
+        self.get_sla_event(event_id).await
+    }
+
+    async fn get_sla_events_by_applied_sla(&self, applied_sla_id: &str) -> ApiResult<Vec<crate::models::SlaEvent>> {
+        self.get_sla_events_by_applied_sla(applied_sla_id).await
+    }
+
+    async fn get_pending_sla_event(
+        &self,
+        applied_sla_id: &str,
+        event_type: crate::models::SlaEventType,
+    ) -> ApiResult<Option<crate::models::SlaEvent>> {
+        self.get_pending_sla_event(applied_sla_id, event_type).await
+    }
+
+    async fn get_pending_events_past_deadline(&self) -> ApiResult<Vec<crate::models::SlaEvent>> {
+        self.get_pending_events_past_deadline().await
+    }
+
+    async fn mark_sla_event_met(&self, event_id: &str, met_at: &str) -> ApiResult<()> {
+        self.mark_sla_event_met(event_id, met_at).await
+    }
+
+    async fn mark_sla_event_breached(&self, event_id: &str, breached_at: &str) -> ApiResult<()> {
+        self.mark_sla_event_breached(event_id, breached_at).await
+    }
+
+    async fn is_holiday(&self, date: &str) -> ApiResult<bool> {
+        self.is_holiday(date).await
+    }
+}

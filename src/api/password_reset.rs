@@ -1,7 +1,6 @@
 use crate::{
     api::middleware::{ApiResult, AppState},
     models::*,
-    services::password_reset_service,
 };
 /// Password Reset API Handlers
 /// Feature: 017-password-reset
@@ -18,7 +17,7 @@ pub async fn request_password_reset(
     Json(request): Json<RequestPasswordResetRequest>,
 ) -> ApiResult<Json<RequestPasswordResetResponse>> {
     let response =
-        password_reset_service::request_password_reset(&state.db, &request.email).await?;
+        state.password_reset_service.request_password_reset(&request.email).await?;
     Ok(Json(response))
 }
 
@@ -37,7 +36,7 @@ pub async fn reset_password(
     Json(request): Json<ResetPasswordRequest>,
 ) -> ApiResult<Json<ResetPasswordResponse>> {
     let response =
-        password_reset_service::reset_password(&state.db, &request.token, &request.new_password)
+        state.password_reset_service.reset_password(&request.token, &request.new_password)
             .await?;
 
     Ok(Json(response))

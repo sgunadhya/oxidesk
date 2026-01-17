@@ -309,6 +309,35 @@ impl RoleRepository for Database {
 
         Ok(roles)
     }
+
+    async fn remove_user_roles(&self, user_id: &str) -> DomainResult<()> {
+        sqlx::query("DELETE FROM user_roles WHERE user_id = ?")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| DomainError::Internal(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn assign_role_to_user(&self, user_role: &crate::models::UserRole) -> DomainResult<()> {
+        sqlx::query(
+            "INSERT INTO user_roles (user_id, role_id, created_at)
+             VALUES (?, ?, ?)",
+        )
+        .bind(&user_role.user_id)
+        .bind(&user_role.role_id)
+        .bind(&user_role.created_at)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| DomainError::Internal(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn get_user_permissions(&self, user_id: &str) -> crate::api::middleware::error::ApiResult<Vec<crate::models::Permission>> {
+        Database::get_user_permissions(self, user_id).await
+    }
 }
 
 // Legacy Inherent Implementation

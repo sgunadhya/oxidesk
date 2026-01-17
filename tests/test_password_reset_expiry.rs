@@ -6,7 +6,7 @@ use helpers::*;
 use oxidesk::{
     api::middleware::error::ApiError,
     models::{Agent, User, UserType},
-    services::{hash_password, password_reset_service, validate_and_normalize_email},
+    services::{hash_password, PasswordResetService, validate_and_normalize_email},
 };
 
 #[tokio::test]
@@ -30,7 +30,7 @@ async fn test_expired_token_rejected() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -50,7 +50,7 @@ async fn test_expired_token_rejected() {
         .unwrap();
 
     // Try to use expired token
-    let result = password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token_value, "NewPass123!").await;
 
     // Should fail with BadRequest
     assert!(result.is_err());
@@ -87,7 +87,7 @@ async fn test_password_unchanged_after_expired_token_rejection() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -107,7 +107,7 @@ async fn test_password_unchanged_after_expired_token_rejection() {
         .unwrap();
 
     // Try to use expired token
-    let result = password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token_value, "NewPass123!").await;
     assert!(result.is_err());
 
     // Verify password remains unchanged
@@ -141,7 +141,7 @@ async fn test_token_at_exact_expiry_boundary() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -161,7 +161,7 @@ async fn test_token_at_exact_expiry_boundary() {
         .unwrap();
 
     // Try to use token at exact expiry
-    let result = password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token_value, "NewPass123!").await;
 
     // Should be rejected (expired tokens are rejected if expires_at <= now)
     assert!(
@@ -193,7 +193,7 @@ async fn test_token_just_before_expiry_works() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -213,7 +213,7 @@ async fn test_token_just_before_expiry_works() {
         .unwrap();
 
     // Token should still work
-    let result = password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token_value, "NewPass123!").await;
     assert!(result.is_ok(), "Token just before expiry should work");
 
     teardown_test_db(test_db).await;
@@ -241,7 +241,7 @@ async fn test_default_expiry_is_1_hour() {
 
     // Request password reset
     let before_request = chrono::Utc::now();
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let after_request = chrono::Utc::now();
@@ -293,7 +293,7 @@ async fn test_multiple_expired_tokens_all_rejected() {
     // Create multiple tokens and expire them all
     let mut expired_tokens = Vec::new();
     for _ in 0..3 {
-        password_reset_service::request_password_reset(db, &email)
+        PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
             .await
             .unwrap();
         let tokens = db
@@ -316,7 +316,7 @@ async fn test_multiple_expired_tokens_all_rejected() {
 
     // Try to use each expired token - all should fail
     for (i, token) in expired_tokens.iter().enumerate() {
-        let result = password_reset_service::reset_password(db, token, "NewPass123!").await;
+        let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, "NewPass123!").await;
         assert!(
             result.is_err(),
             "Expired token {} should be rejected",
@@ -348,7 +348,7 @@ async fn test_expired_token_error_message_same_as_invalid() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and expire token
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -368,11 +368,10 @@ async fn test_expired_token_error_message_same_as_invalid() {
 
     // Try to use expired token
     let expired_result =
-        password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
+        PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( &token_value, "NewPass123!").await;
 
     // Try to use non-existent token
-    let invalid_result = password_reset_service::reset_password(
-        db,
+    let invalid_result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password(
         "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
         "NewPass123!",
     )
