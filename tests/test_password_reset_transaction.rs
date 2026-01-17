@@ -7,7 +7,7 @@ use uuid::Uuid;
 use helpers::*;
 use oxidesk::{
     models::{Agent, Session, User, UserType},
-    services::{hash_password, password_reset_service, validate_and_normalize_email},
+    services::{hash_password, PasswordResetService, validate_and_normalize_email},
 };
 
 #[tokio::test]
@@ -33,7 +33,7 @@ async fn test_invalid_token_does_not_change_password() {
 
     // Try to reset with invalid token
     let invalid_token = "invalidtokenformat123456789012";
-    let result = password_reset_service::reset_password(db, invalid_token, "NewPass123!").await;
+    let result = PasswordResetService::new(db.clone()).reset_password(invalid_token, "NewPass123!").await;
 
     // Should fail
     assert!(result.is_err());
@@ -69,7 +69,7 @@ async fn test_weak_password_does_not_mark_token_as_used() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(db.clone()).request_password_reset(&email)
         .await
         .unwrap();
     let tokens = db
@@ -79,7 +79,7 @@ async fn test_weak_password_does_not_mark_token_as_used() {
     let token = &tokens[0].token;
 
     // Try to reset with weak password
-    let result = password_reset_service::reset_password(db, token, "weak").await;
+    let result = PasswordResetService::new(db.clone()).reset_password(token, "weak").await;
 
     // Should fail
     assert!(result.is_err());
@@ -92,7 +92,7 @@ async fn test_weak_password_does_not_mark_token_as_used() {
     );
 
     // Token should still be usable
-    let result2 = password_reset_service::reset_password(db, token, "StrongPass123!").await;
+    let result2 = PasswordResetService::new(db.clone()).reset_password(token, "StrongPass123!").await;
     assert!(
         result2.is_ok(),
         "Token should still be usable after failed attempt"
@@ -128,7 +128,7 @@ async fn test_failed_reset_does_not_destroy_sessions() {
     db.create_session(&session2).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(db.clone()).request_password_reset(&email)
         .await
         .unwrap();
     let tokens = db
@@ -138,7 +138,7 @@ async fn test_failed_reset_does_not_destroy_sessions() {
     let token = &tokens[0].token;
 
     // Try to reset with weak password (should fail)
-    let result = password_reset_service::reset_password(db, token, "weak").await;
+    let result = PasswordResetService::new(db.clone()).reset_password(token, "weak").await;
     assert!(result.is_err());
 
     // Sessions should remain intact
@@ -178,7 +178,7 @@ async fn test_nonexistent_token_does_not_affect_database() {
 
     // Try to reset with non-existent token
     let nonexistent_token = "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6";
-    let result = password_reset_service::reset_password(db, nonexistent_token, "NewPass123!").await;
+    let result = PasswordResetService::new(db.clone()).reset_password(nonexistent_token, "NewPass123!").await;
 
     // Should fail
     assert!(result.is_err());
@@ -216,7 +216,7 @@ async fn test_expired_token_does_not_change_password() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(db.clone()).request_password_reset(&email)
         .await
         .unwrap();
     let tokens = db
@@ -240,7 +240,7 @@ async fn test_expired_token_does_not_change_password() {
         .unwrap();
 
     // Try to reset with expired token
-    let result = password_reset_service::reset_password(db, &token_value, "NewPass123!").await;
+    let result = PasswordResetService::new(db.clone()).reset_password(&token_value, "NewPass123!").await;
 
     // Should fail
     assert!(result.is_err());
@@ -276,7 +276,7 @@ async fn test_used_token_does_not_change_password_again() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset and get token
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(db.clone()).request_password_reset(&email)
         .await
         .unwrap();
     let tokens = db
@@ -286,7 +286,7 @@ async fn test_used_token_does_not_change_password_again() {
     let token = &tokens[0].token;
 
     // Use token once
-    password_reset_service::reset_password(db, token, "FirstNewPass123!")
+    PasswordResetService::new(db.clone()).reset_password(token, "FirstNewPass123!")
         .await
         .unwrap();
 
@@ -295,7 +295,7 @@ async fn test_used_token_does_not_change_password_again() {
     let first_new_hash = agent_after_first.password_hash.clone();
 
     // Try to use same token again
-    let result = password_reset_service::reset_password(db, token, "SecondNewPass123!").await;
+    let result = PasswordResetService::new(db.clone()).reset_password(token, "SecondNewPass123!").await;
 
     // Should fail
     assert!(result.is_err());

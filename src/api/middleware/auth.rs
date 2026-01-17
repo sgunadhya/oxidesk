@@ -1,8 +1,5 @@
 use crate::domain::ports::agent_repository::AgentRepository;
-use crate::{
-    api::middleware::error::ApiError, database::Database, models::*,
-    services::connection_manager::ConnectionManager,
-};
+use crate::{api::middleware::error::ApiError, database::Database, models::*, services, services::connection_manager::ConnectionManager};
 use axum::{
     extract::{Request, State},
     middleware::Next,
@@ -15,29 +12,30 @@ pub struct AppState {
     pub db: Database,
     pub session_duration_hours: i64,
     pub event_bus: Arc<dyn crate::events::EventBus>,
-    pub delivery_service: crate::services::DeliveryService,
-    pub notification_service: crate::services::NotificationService,
-    pub availability_service: crate::services::AvailabilityService,
-    pub sla_service: crate::services::SlaService,
-    pub automation_service: Arc<crate::services::AutomationService>,
-    pub conversation_tag_service: crate::services::ConversationTagService,
+    pub delivery_service: services::DeliveryService,
+    pub notification_service: services::NotificationService,
+    pub availability_service: services::AvailabilityService,
+    pub sla_service: services::SlaService,
+    pub automation_service: Arc<services::AutomationService>,
+    pub conversation_tag_service: services::ConversationTagService,
     pub connection_manager: Arc<dyn ConnectionManager>,
-    pub rate_limiter: crate::services::AuthRateLimiter,
-    pub webhook_service: crate::services::WebhookService,
-    pub tag_service: crate::services::TagService,
-    pub agent_service: crate::services::AgentService,
-    pub user_service: crate::services::UserService,
-    pub contact_service: crate::services::ContactService,
-    pub session_service: crate::services::SessionService,
-    pub oidc_service: crate::services::OidcService,
-    pub email_service: crate::services::EmailService,
-    pub attachment_service: crate::services::AttachmentService,
-    pub conversation_service: crate::services::ConversationService,
-    pub message_service: crate::services::MessageService,
-    pub macro_service: crate::services::MacroService,
-    pub role_service: crate::services::RoleService,
-    pub inbox_service: crate::services::InboxService,
-    pub auth_service: crate::services::AuthService,
+    pub rate_limiter: services::AuthRateLimiter,
+    pub webhook_service: services::WebhookService,
+    pub tag_service: services::TagService,
+    pub agent_service: services::AgentService,
+    pub user_service: services::UserService,
+    pub contact_service: services::ContactService,
+    pub session_service: services::SessionService,
+    pub oidc_service: services::OidcService,
+    pub email_service: services::EmailService,
+    pub attachment_service: services::AttachmentService,
+    pub conversation_service: services::ConversationService,
+    pub message_service: services::MessageService,
+    pub macro_service: services::MacroService,
+    pub role_service: services::RoleService,
+    pub inbox_service: services::InboxService,
+    pub auth_service: services::AuthService,
+    pub password_reset_service: services::PasswordResetService,
 }
 
 /// Extract and validate session token from Authorization header
@@ -215,7 +213,7 @@ pub struct AuthenticatedUser {
 impl AuthenticatedUser {
     pub async fn has_permission(&self, permission: &str) -> bool {
         // Use PermissionService to check permission across all roles
-        crate::services::PermissionService::has_permission(&self.roles, permission)
+        services::PermissionService::has_permission(&self.roles, permission)
     }
 
     pub fn is_admin(&self) -> bool {

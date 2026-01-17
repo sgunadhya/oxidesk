@@ -5,7 +5,7 @@ mod helpers;
 use helpers::*;
 use oxidesk::{
     models::{Agent, User, UserType},
-    services::{hash_password, password_reset_service, validate_and_normalize_email},
+    services::{hash_password, PasswordResetService, validate_and_normalize_email},
 };
 
 #[tokio::test]
@@ -24,7 +24,7 @@ async fn test_request_password_reset_registered_email_success() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    let result = password_reset_service::request_password_reset(db, &email).await;
+    let result = PasswordResetService::new(db.clone()).request_password_reset(&email).await;
 
     // Should succeed and return generic message
     if let Err(ref e) = result {
@@ -56,7 +56,7 @@ async fn test_request_password_reset_nonexistent_email_same_response() {
 
     // Request password reset for email that doesn't exist
     let result =
-        password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
+        PasswordResetService::new(db.clone()).request_password_reset("nonexistent@example.com").await;
 
     // Should succeed with same generic message (email enumeration prevention)
     assert!(result.is_ok());
@@ -85,7 +85,7 @@ async fn test_request_password_reset_token_format() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(db.clone()).request_password_reset(&email)
         .await
         .unwrap();
 
@@ -122,7 +122,7 @@ async fn test_request_password_reset_token_expiry() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(db.clone()).request_password_reset(&email)
         .await
         .unwrap();
 
@@ -158,7 +158,7 @@ async fn test_request_password_reset_invalidates_previous_tokens() {
     db.create_agent(&agent).await.unwrap();
 
     // Request password reset twice
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(db.clone()).request_password_reset(&email)
         .await
         .unwrap();
     let tokens_after_first = db
@@ -167,7 +167,7 @@ async fn test_request_password_reset_invalidates_previous_tokens() {
         .unwrap();
     let first_token = tokens_after_first[0].token.clone();
 
-    password_reset_service::request_password_reset(db, &email)
+    PasswordResetService::new(db.clone()).request_password_reset(&email)
         .await
         .unwrap();
 
@@ -204,7 +204,7 @@ async fn test_request_password_reset_email_normalization() {
     db.create_agent(&agent).await.unwrap();
 
     // Request with uppercase and spaces (should be normalized)
-    let result = password_reset_service::request_password_reset(db, "  EMMA@EXAMPLE.COM  ").await;
+    let result = PasswordResetService::new(db.clone()).request_password_reset("  EMMA@EXAMPLE.COM  ").await;
 
     // Should succeed (email normalized internally)
     assert!(result.is_ok());

@@ -259,6 +259,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session_service.clone(),
     );
 
+    // Initialize PasswordResetService
+    let password_reset_service = oxidesk::services::PasswordResetService::new(db.clone());
+
     // Create application state
     let state = AppState {
         db: db.clone(),
@@ -287,6 +290,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         role_service,
         inbox_service,
         auth_service,
+        password_reset_service,
     };
 
     // Start automation listener background task

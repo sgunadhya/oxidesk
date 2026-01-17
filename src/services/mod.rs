@@ -71,6 +71,7 @@ pub use macro_service::*;
 pub use message_service::*;
 pub use notification_service::*;
 pub use oidc_service::*;
+pub use password_reset_service::*;
 pub use password_service::*;
 pub use permission_service::*;
 pub use rate_limiter::*;

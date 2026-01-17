@@ -6,7 +6,7 @@ use helpers::*;
 use oxidesk::{
     api::middleware::error::ApiError,
     models::{Agent, User, UserType},
-    services::{hash_password, password_reset_service, validate_and_normalize_email},
+    services::{hash_password, PasswordResetService, validate_and_normalize_email},
 };
 
 // Consolidate all rate limit tests into a single sequential test
@@ -35,12 +35,12 @@ async fn test_rate_limiting_scenarios() {
 
         // Make 5 requests (should all succeed)
         for i in 1..=5 {
-            let result = password_reset_service::request_password_reset(db, &email).await;
+            let result = PasswordResetService::new(db.clone()).request_password_reset(&email).await;
             assert!(result.is_ok(), "Request {} should succeed", i);
         }
 
         // 6th request should fail with TooManyRequests
-        let result = password_reset_service::request_password_reset(db, &email).await;
+        let result = PasswordResetService::new(db.clone()).request_password_reset(&email).await;
         assert!(result.is_err());
 
         match result.unwrap_err() {
@@ -85,17 +85,17 @@ async fn test_rate_limiting_scenarios() {
 
         // Make 5 requests for user1
         for _ in 0..5 {
-            password_reset_service::request_password_reset(db, &email1)
+            PasswordResetService::new(db.clone()).request_password_reset(&email1)
                 .await
                 .unwrap();
         }
 
         // 6th request for user1 should fail
-        let result1 = password_reset_service::request_password_reset(db, &email1).await;
+        let result1 = PasswordResetService::new(db.clone()).request_password_reset(&email1).await;
         assert!(result1.is_err(), "User1 should be rate limited");
 
         // But user2 should still be able to make requests (rate limiting is per-email)
-        let result2 = password_reset_service::request_password_reset(db, &email2).await;
+        let result2 = PasswordResetService::new(db.clone()).request_password_reset(&email2).await;
         assert!(result2.is_ok(), "User2 should not be rate limited");
 
         teardown_test_db(test_db).await;
@@ -122,13 +122,13 @@ async fn test_rate_limiting_scenarios() {
 
         // Make 5 requests
         for _ in 0..5 {
-            password_reset_service::request_password_reset(db, &email)
+            PasswordResetService::new(db.clone()).request_password_reset(&email)
                 .await
                 .unwrap();
         }
 
         // 6th request should fail
-        let result = password_reset_service::request_password_reset(db, &email).await;
+        let result = PasswordResetService::new(db.clone()).request_password_reset(&email).await;
         assert!(result.is_err());
 
         // Check that we're counting requests in a 3600 second (1 hour) window
@@ -166,7 +166,7 @@ async fn test_rate_limiting_scenarios() {
 
         // Make 3 requests (should all succeed)
         for i in 1..=3 {
-            let result = password_reset_service::request_password_reset(db, &email).await;
+            let result = PasswordResetService::new(db.clone()).request_password_reset(&email).await;
             assert!(
                 result.is_ok(),
                 "Request {} should succeed with custom limit of 3",
@@ -175,7 +175,7 @@ async fn test_rate_limiting_scenarios() {
         }
 
         // 4th request should fail
-        let result = password_reset_service::request_password_reset(db, &email).await;
+        let result = PasswordResetService::new(db.clone()).request_password_reset(&email).await;
         assert!(
             result.is_err(),
             "4th request should fail with custom limit of 3"
@@ -196,7 +196,7 @@ async fn test_rate_limiting_scenarios() {
         // Should always succeed with generic message (no rate limiting for non-existent users)
         for i in 1..=10 {
             let result =
-                password_reset_service::request_password_reset(db, "nonexistent@example.com").await;
+                PasswordResetService::new(db.clone()).request_password_reset("nonexistent@example.com").await;
             assert!(
                 result.is_ok(),
                 "Request {} should succeed for non-existent email (no rate limiting)",
