@@ -1,4 +1,5 @@
 use crate::api::middleware::error::ApiResult;
+use crate::database::Database;
 use crate::domain::ports::message_repository::MessageRepository;
 use crate::models::{Message, MessageStatus};
 use async_trait::async_trait;
@@ -69,7 +70,7 @@ pub struct DeliveryQueueMessage {
 /// Delivery service managing async message delivery
 /// Uses tokio mpsc channel for queue and background processing
 pub struct DeliveryService {
-    message_repo: Arc<dyn MessageRepository>,
+    db: Database,
     provider: Arc<dyn MessageDeliveryProvider>,
     sender: mpsc::Sender<DeliveryQueueMessage>,
 }
@@ -77,17 +78,17 @@ pub struct DeliveryService {
 impl DeliveryService {
     /// Create a new delivery service with a provider
     /// Spawns background worker to process deliveries
-    pub fn new(message_repo: Arc<dyn MessageRepository>, provider: Arc<dyn MessageDeliveryProvider>) -> Self {
+    pub fn new(db: Database, provider: Arc<dyn MessageDeliveryProvider>) -> Self {
         let (sender, receiver) = mpsc::channel::<DeliveryQueueMessage>(100);
 
         let service = Self {
-            message_repo: message_repo.clone(),
+            db: db.clone(),
             provider: provider.clone(),
             sender,
         };
 
         // Spawn background worker
-        tokio::spawn(Self::delivery_worker(message_repo, provider, receiver));
+        tokio::spawn(Self::delivery_worker(db, provider, receiver));
 
         service
     }
@@ -109,7 +110,7 @@ impl DeliveryService {
 
     /// Background worker processing delivery queue
     async fn delivery_worker(
-        message_repo: Arc<dyn MessageRepository>,
+        db: Database,
         provider: Arc<dyn MessageDeliveryProvider>,
         mut receiver: mpsc::Receiver<DeliveryQueueMessage>,
     ) {
@@ -119,7 +120,7 @@ impl DeliveryService {
         );
 
         while let Some(queue_msg) = receiver.recv().await {
-            if let Err(e) = Self::process_delivery(&message_repo, &provider, &queue_msg.message_id).await {
+            if let Err(e) = Self::process_delivery(&db, &provider, &queue_msg.message_id).await {
                 tracing::error!(
                     "Failed to process delivery for message {}: {:?}",
                     queue_msg.message_id,
@@ -133,12 +134,12 @@ impl DeliveryService {
 
     /// Process a single message delivery
     async fn process_delivery(
-        message_repo: &Arc<dyn MessageRepository>,
+        db: &Database,
         provider: &Arc<dyn MessageDeliveryProvider>,
         message_id: &str,
     ) -> ApiResult<()> {
         // Fetch message from database
-        let message = message_repo.get_message_by_id(message_id).await?.ok_or_else(|| {
+        let message = db.get_message_by_id(message_id).await?.ok_or_else(|| {
             tracing::error!("Message not found for delivery: {}", message_id);
             crate::api::middleware::error::ApiError::NotFound("Message not found".to_string())
         })?;
@@ -162,7 +163,7 @@ impl DeliveryService {
                     .format(&time::format_description::well_known::Rfc3339)
                     .unwrap();
 
-                message_repo.update_message_status(message_id, MessageStatus::Sent, Some(&now))
+                db.update_message_status(message_id, MessageStatus::Sent, Some(&now))
                     .await?;
 
                 tracing::info!(
@@ -179,7 +180,7 @@ impl DeliveryService {
                 // Check retry count
                 if message.retry_count >= 3 {
                     // Max retries exceeded, mark as failed
-                    message_repo.update_message_status(message_id, MessageStatus::Failed, None)
+                    db.update_message_status(message_id, MessageStatus::Failed, None)
                         .await?;
                     tracing::warn!("Message {} marked as failed after max retries", message_id);
                 } else {
@@ -215,7 +216,7 @@ impl DeliveryService {
 impl Clone for DeliveryService {
     fn clone(&self) -> Self {
         Self {
-            message_repo: self.message_repo.clone(),
+            db: self.db.clone(),
             provider: self.provider.clone(),
             sender: self.sender.clone(),
         }

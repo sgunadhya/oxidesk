@@ -3,21 +3,17 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use super::connection_manager::{ConnectionManager, NotificationEvent};
-use crate::api::middleware::error::ApiResult;
 use crate::database::Database;
-use crate::domain::ports::notification_repository::NotificationRepository;
 use crate::domain::ports::user_repository::UserRepository;
 use crate::models::UserNotification;
 
 /// Notification service for handling user notifications
 #[derive(Clone)]
-pub struct NotificationService {
-    notification_repo: Option<Arc<dyn NotificationRepository>>,
-}
+pub struct NotificationService;
 
 impl NotificationService {
-    pub fn new(notification_repo: Option<Arc<dyn NotificationRepository>>) -> Self {
-        Self { notification_repo }
+    pub fn new() -> Self {
+        Self
     }
 
     /// Stub method for assignment notifications - will be fully implemented in Feature 011
@@ -221,58 +217,11 @@ impl NotificationService {
 
         Ok(count)
     }
-
-    /// Get unread notification count for a user
-    pub async fn get_unread_count(&self, user_id: &str) -> ApiResult<i32> {
-        self.notification_repo
-            .as_ref()
-            .ok_or_else(|| crate::api::middleware::error::ApiError::Internal("NotificationRepository not initialized".to_string()))?
-            .get_unread_count(user_id)
-            .await
-    }
-
-    /// Mark a notification as read
-    pub async fn mark_notification_as_read(&self, notification_id: &str) -> ApiResult<()> {
-        self.notification_repo
-            .as_ref()
-            .ok_or_else(|| crate::api::middleware::error::ApiError::Internal("NotificationRepository not initialized".to_string()))?
-            .mark_notification_as_read(notification_id)
-            .await
-    }
-
-    /// List notifications for a user with pagination
-    pub async fn list_notifications(&self, user_id: &str, limit: i32, offset: i32) -> ApiResult<Vec<UserNotification>> {
-        self.notification_repo
-            .as_ref()
-            .ok_or_else(|| crate::api::middleware::error::ApiError::Internal("NotificationRepository not initialized".to_string()))?
-            .list_notifications(user_id, limit, offset)
-            .await
-    }
-
-    /// Get a notification by ID
-    pub async fn get_notification_by_id(&self, id: &str) -> ApiResult<Option<UserNotification>> {
-        self.notification_repo
-            .as_ref()
-            .ok_or_else(|| crate::api::middleware::error::ApiError::Internal("NotificationRepository not initialized".to_string()))?
-            .get_notification_by_id(id)
-            .await
-    }
-
-    /// Mark all notifications as read for a user
-    pub async fn mark_all_notifications_as_read(&self, user_id: &str) -> ApiResult<i32> {
-        self.notification_repo
-            .as_ref()
-            .ok_or_else(|| crate::api::middleware::error::ApiError::Internal("NotificationRepository not initialized".to_string()))?
-            .mark_all_notifications_as_read(user_id)
-            .await
-    }
 }
 
 impl Default for NotificationService {
     fn default() -> Self {
-        Self {
-            notification_repo: None,
-        }
+        Self
     }
 }
 

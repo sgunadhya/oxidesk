@@ -1,8 +1,7 @@
 use crate::domain::ports::agent_repository::AgentRepository;
-use crate::domain::ports::availability_repository::AvailabilityRepository;
-use crate::domain::ports::conversation_repository::ConversationRepository;
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
+    database::Database,
     events::{EventBus, SystemEvent},
     models::{ActivityEventType, AgentActivityLog, AgentAvailability},
 };
@@ -10,25 +9,13 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AvailabilityService {
-    agent_repo: Arc<dyn AgentRepository>,
-    availability_repo: Arc<dyn AvailabilityRepository>,
-    conversation_repo: Arc<dyn ConversationRepository>,
+    db: Database,
     event_bus: Arc<dyn EventBus>,
 }
 
 impl AvailabilityService {
-    pub fn new(
-        agent_repo: Arc<dyn AgentRepository>,
-        availability_repo: Arc<dyn AvailabilityRepository>,
-        conversation_repo: Arc<dyn ConversationRepository>,
-        event_bus: Arc<dyn EventBus>,
-    ) -> Self {
-        Self {
-            agent_repo,
-            availability_repo,
-            conversation_repo,
-            event_bus,
-        }
+    pub fn new(db: Database, event_bus: Arc<dyn EventBus>) -> Self {
+        Self { db, event_bus }
     }
 
     /// Manually set agent availability status
@@ -46,7 +33,7 @@ impl AvailabilityService {
 
         // Get current agent to check old status
         let agent = self
-            .agent_repo
+            .db
             .get_agent_by_user_id(&agent_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
@@ -54,13 +41,13 @@ impl AvailabilityService {
         let old_status = agent.availability_status;
 
         // Update status
-        self.availability_repo
+        self.db
             .update_agent_availability_with_timestamp(&agent.id, status)
             .await?;
 
         // Update activity timestamp when going online
         if status == AgentAvailability::Online {
-            self.availability_repo.update_agent_activity(&agent.id).await?;
+            self.db.update_agent_activity(&agent.id).await?;
         }
 
         // Log activity
@@ -96,13 +83,13 @@ impl AvailabilityService {
 
     /// Record agent activity (updates last_activity_at)
     pub async fn record_activity(&self, agent_id: &str) -> ApiResult<()> {
-        self.availability_repo.update_agent_activity(agent_id).await
+        self.db.update_agent_activity(agent_id).await
     }
 
     /// Handle agent login - set online, update timestamps
     pub async fn handle_login(&self, user_id: &str) -> ApiResult<()> {
         let agent = self
-            .agent_repo
+            .db
             .get_agent_by_user_id(user_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
@@ -110,13 +97,13 @@ impl AvailabilityService {
         let old_status = agent.availability_status;
 
         // Set online
-        self.availability_repo
+        self.db
             .update_agent_availability_with_timestamp(&agent.id, AgentAvailability::Online)
             .await?;
 
         // Update login and activity timestamps
-        self.availability_repo.update_agent_last_login(&agent.id).await?;
-        self.availability_repo.update_agent_activity(&agent.id).await?;
+        self.db.update_agent_last_login(&agent.id).await?;
+        self.db.update_agent_activity(&agent.id).await?;
 
         // Log activity
         self.log_activity(&agent.id, ActivityEventType::AgentLogin, None, None)
@@ -151,7 +138,7 @@ impl AvailabilityService {
     /// Handle agent logout - set offline, log event
     pub async fn handle_logout(&self, user_id: &str) -> ApiResult<()> {
         let agent = self
-            .agent_repo
+            .db
             .get_agent_by_user_id(user_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
@@ -159,7 +146,7 @@ impl AvailabilityService {
         let old_status = agent.availability_status;
 
         // Set offline
-        self.availability_repo
+        self.db
             .update_agent_availability_with_timestamp(&agent.id, AgentAvailability::Offline)
             .await?;
 
@@ -194,13 +181,13 @@ impl AvailabilityService {
     /// Check for online agents who exceeded inactivity timeout
     pub async fn check_inactivity_timeouts(&self) -> ApiResult<Vec<String>> {
         let threshold = self.load_inactivity_timeout().await?;
-        let agents = self.availability_repo.get_inactive_online_agents(threshold).await?;
+        let agents = self.db.get_inactive_online_agents(threshold).await?;
 
         let mut affected = Vec::new();
 
         for agent in agents {
             // Transition to away
-            self.availability_repo
+            self.db
                 .update_agent_availability_with_timestamp(&agent.id, AgentAvailability::Away)
                 .await?;
 
@@ -235,13 +222,13 @@ impl AvailabilityService {
     /// Check for away agents who exceeded max idle threshold
     pub async fn check_max_idle_thresholds(&self) -> ApiResult<Vec<String>> {
         let threshold = self.load_max_idle_threshold().await?;
-        let agents = self.availability_repo.get_idle_away_agents(threshold).await?;
+        let agents = self.db.get_idle_away_agents(threshold).await?;
 
         let mut affected = Vec::new();
 
         for agent in agents {
             // Transition to away_and_reassigning
-            self.availability_repo
+            self.db
                 .update_agent_availability_with_timestamp(
                     &agent.id,
                     AgentAvailability::AwayAndReassigning,
@@ -250,7 +237,7 @@ impl AvailabilityService {
 
             // Unassign all open conversations (this method already handles open/snoozed filtering)
             let unassigned_count = self
-                .conversation_repo
+                .db
                 .unassign_agent_open_conversations(&agent.user_id)
                 .await?;
 
@@ -264,7 +251,7 @@ impl AvailabilityService {
             // via the assignment_history trigger or service layer
 
             // Transition to offline
-            self.availability_repo
+            self.db
                 .update_agent_availability_with_timestamp(&agent.id, AgentAvailability::Offline)
                 .await?;
 
@@ -305,7 +292,7 @@ impl AvailabilityService {
         agent_id: &str,
     ) -> ApiResult<crate::models::AvailabilityResponse> {
         let agent = self
-            .agent_repo
+            .db
             .get_agent_by_user_id(agent_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Agent not found".to_string()))?;
@@ -326,7 +313,7 @@ impl AvailabilityService {
         offset: i64,
     ) -> ApiResult<crate::models::ActivityLogResponse> {
         let (logs, total) = self
-            .availability_repo
+            .db
             .get_agent_activity_logs(agent_id, limit, offset)
             .await?;
 
@@ -363,7 +350,7 @@ impl AvailabilityService {
             None, // metadata
         );
 
-        self.availability_repo.create_activity_log(&log).await
+        self.db.create_activity_log(&log).await
     }
 
     /// Load inactivity timeout from config or env
@@ -377,7 +364,7 @@ impl AvailabilityService {
 
         // Try database config
         if let Some(value) = self
-            .availability_repo
+            .db
             .get_config_value("availability.inactivity_timeout_seconds")
             .await?
         {
@@ -401,7 +388,7 @@ impl AvailabilityService {
 
         // Try database config
         if let Some(value) = self
-            .availability_repo
+            .db
             .get_config_value("availability.max_idle_threshold_seconds")
             .await?
         {

@@ -21,11 +21,12 @@ pub async fn login(
     // Check rate limit
     if let Err(wait_duration) = state.rate_limiter.check(&request.email).await {
         // Log rate limit exceeded event
-        let _ = state.auth_logger_service.log_rate_limit_exceeded(
+        let _ = AuthLogger::log_rate_limit_exceeded(
+            &state.db,
             request.email.clone(),
             AuthMethod::Password,
             ip_address,
-            user_agent.unwrap_or_else(|| "unknown".to_string()),
+            user_agent,
             wait_duration.as_secs(),
         )
         .await;
@@ -51,13 +52,14 @@ pub async fn login(
             state.rate_limiter.reset(&request.email).await;
 
             // Log successful login
-            let _ = state.auth_logger_service.log_login_success(
+            let _ = AuthLogger::log_login_success(
+                &state.db,
                 result.user.id.clone(),
                 request.email.clone(),
                 AuthMethod::Password,
                 None, // no provider for password auth
                 ip_address.clone(),
-                user_agent.clone().unwrap_or_else(|| "unknown".to_string()),
+                user_agent.clone(),
             )
             .await;
 
@@ -73,12 +75,13 @@ pub async fn login(
                 _ => format!("{:?}", e),
             };
 
-            let _ = state.auth_logger_service.log_login_failure(
+            let _ = AuthLogger::log_login_failure(
+                &state.db,
                 request.email.clone(),
                 AuthMethod::Password,
                 None,
                 ip_address,
-                user_agent.unwrap_or_else(|| "unknown".to_string()),
+                user_agent,
                 error_reason,
             )
             .await;
@@ -130,13 +133,14 @@ pub async fn logout(
     let user_agent = auth_logger::extract_user_agent(&headers);
 
     // Log logout event
-    let _ = state.auth_logger_service.log_logout(
+    let _ = AuthLogger::log_logout(
+        &state.db,
         auth_user.user.id.clone(),
         auth_user.user.email.clone(),
         auth_user.session.auth_method.clone(),
         auth_user.session.provider_name.clone(),
         ip_address,
-        user_agent.unwrap_or_else(|| "unknown".to_string()),
+        user_agent,
     )
     .await;
 
@@ -185,7 +189,7 @@ pub async fn get_my_auth_events(
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
 ) -> ApiResult<Json<AuthEventListResponse>> {
     // Default pagination: 50 events
-    let events = state.auth_logger_service.get_user_events( &auth_user.user.id, 50, 0).await?;
+    let events = AuthLogger::get_user_events(&state.db, &auth_user.user.id, 50, 0).await?;
 
     let event_responses: Vec<AuthEventResponse> =
         events.into_iter().map(AuthEventResponse::from).collect();
@@ -209,7 +213,7 @@ pub async fn get_recent_auth_events(
     }
 
     // Default pagination: 100 recent events
-    let events = state.auth_logger_service.get_recent_events( 100, 0).await?;
+    let events = AuthLogger::get_recent_events(&state.db, 100, 0).await?;
 
     let event_responses: Vec<AuthEventResponse> =
         events.into_iter().map(AuthEventResponse::from).collect();
@@ -333,6 +337,7 @@ pub async fn oidc_callback(
     let callback_result = match state
         .oidc_service
         .handle_callback(
+            &state.db,
             &state.session_service,
             &provider,
             code,
@@ -345,13 +350,14 @@ pub async fn oidc_callback(
     {
         Ok(result) => {
             // Log successful OIDC login
-            let _ = state.auth_logger_service.log_login_success(
+            let _ = AuthLogger::log_login_success(
+                &state.db,
                 result.user.id.clone(),
                 result.user.email.clone(),
                 AuthMethod::Oidc,
                 Some(provider.name.clone()),
-                ip_address.clone(),
-                user_agent.clone().unwrap_or_else(|| "unknown".to_string()),
+                ip_address,
+                user_agent,
             )
             .await;
 
@@ -359,12 +365,13 @@ pub async fn oidc_callback(
         }
         Err(e) => {
             // Log failed OIDC login
-            let _ = state.auth_logger_service.log_login_failure(
+            let _ = AuthLogger::log_login_failure(
+                &state.db,
                 "unknown".to_string(), // email not available on failure
                 AuthMethod::Oidc,
                 Some(provider.name),
                 ip_address,
-                user_agent.unwrap_or_else(|| "unknown".to_string()),
+                user_agent,
                 format!("{:?}", e),
             )
             .await;

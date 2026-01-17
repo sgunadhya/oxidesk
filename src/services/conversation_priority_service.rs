@@ -1,20 +1,19 @@
 // Feature 020: Conversation Priority Management
 use crate::api::middleware::{ApiError, ApiResult};
-use crate::domain::ports::conversation_repository::ConversationRepository;
+use crate::database::Database;
 use crate::events::{EventBus, SystemEvent};
 use crate::models::Conversation;
 use std::sync::Arc;
 
 /// Service for managing conversation priorities
-#[derive(Clone)]
 pub struct ConversationPriorityService {
-    conversation_repo: Arc<dyn ConversationRepository>,
+    db: Database,
     event_bus: Option<Arc<dyn EventBus>>,
 }
 
 impl ConversationPriorityService {
-    pub fn new(conversation_repo: Arc<dyn ConversationRepository>, event_bus: Option<Arc<dyn EventBus>>) -> Self {
-        Self { conversation_repo, event_bus }
+    pub fn new(db: Database, event_bus: Option<Arc<dyn EventBus>>) -> Self {
+        Self { db, event_bus }
     }
 
     /// Update conversation priority
@@ -53,7 +52,7 @@ impl ConversationPriorityService {
     ) -> ApiResult<Conversation> {
         // Get current conversation to check existing priority
         let current = self
-            .conversation_repo
+            .db
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {
@@ -67,17 +66,17 @@ impl ConversationPriorityService {
 
         // Update priority in database
         if let Some(priority) = &new_priority {
-            self.conversation_repo
+            self.db
                 .set_conversation_priority(conversation_id, priority)
                 .await?;
         } else {
             // Remove priority (set to null)
-            self.conversation_repo.clear_conversation_priority(conversation_id).await?;
+            self.db.clear_conversation_priority(conversation_id).await?;
         }
 
         // Get updated conversation
         let updated = self
-            .conversation_repo
+            .db
             .get_conversation_by_id(conversation_id)
             .await?
             .ok_or_else(|| {

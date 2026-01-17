@@ -30,10 +30,7 @@ async fn test_update_priority_from_none_to_low() {
     );
 
     // Update priority to Low
-    let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        None,
-    );
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let updated = priority_service
         .update_conversation_priority(&conversation.id, Some(Priority::Low), "user-123")
         .await
@@ -63,10 +60,7 @@ async fn test_update_priority_from_low_to_high() {
         .expect("Failed to set initial priority");
 
     // Update priority to High
-    let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        None,
-    );
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let updated = priority_service
         .update_conversation_priority(&conversation.id, Some(Priority::High), "user-123")
         .await
@@ -96,10 +90,7 @@ async fn test_remove_priority() {
         .expect("Failed to set initial priority");
 
     // Remove priority
-    let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        None,
-    );
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let updated = priority_service
         .update_conversation_priority(&conversation.id, None, "user-123")
         .await
@@ -144,10 +135,7 @@ async fn test_same_priority_idempotence() {
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     // Update to the same priority
-    let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        None,
-    );
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let updated = priority_service
         .update_conversation_priority(&conversation.id, Some(Priority::Medium), "user-123")
         .await
@@ -175,10 +163,7 @@ async fn test_priority_update_triggers_automation_event() {
     .await;
 
     // Update priority with event bus
-    let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        Some(event_bus.clone()),
-    );
+    let priority_service = ConversationPriorityService::new(db.clone(), Some(event_bus.clone()));
     let _updated = priority_service
         .update_conversation_priority(&conversation.id, Some(Priority::High), "user-123")
         .await
@@ -230,10 +215,7 @@ async fn test_same_priority_no_automation_trigger() {
         .expect("Failed to set initial priority");
 
     // Update to same priority (idempotent)
-    let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        Some(event_bus.clone()),
-    );
+    let priority_service = ConversationPriorityService::new(db.clone(), Some(event_bus.clone()));
     let _updated = priority_service
         .update_conversation_priority(&conversation.id, Some(Priority::Medium), "user-123")
         .await
@@ -269,10 +251,7 @@ async fn test_priority_removal_triggers_automation_event() {
         .expect("Failed to set initial priority");
 
     // Remove priority
-    let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        Some(event_bus.clone()),
-    );
+    let priority_service = ConversationPriorityService::new(db.clone(), Some(event_bus.clone()));
     let _updated = priority_service
         .update_conversation_priority(&conversation.id, None, "user-123")
         .await
@@ -317,10 +296,7 @@ async fn test_priority_update_on_resolved_conversation() {
     .await;
 
     // Should be able to update priority even on resolved conversation
-    let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        None,
-    );
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let updated = priority_service
         .update_conversation_priority(&conversation.id, Some(Priority::High), "user-123")
         .await
@@ -335,10 +311,7 @@ async fn test_priority_update_nonexistent_conversation() {
     let test_db = setup_test_db().await;
     let db = &test_db.db;
 
-    let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        None,
-    );
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
     let result = priority_service
         .update_conversation_priority("nonexistent-id", Some(Priority::High), "user-123")
         .await;
@@ -364,10 +337,7 @@ async fn test_all_valid_priority_values() {
     let contact = create_test_contact(db, "test@example.com").await;
 
     let valid_priorities = vec![Priority::Low, Priority::Medium, Priority::High];
-    let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
-        None,
-    );
+    let priority_service = ConversationPriorityService::new(db.clone(), None);
 
     for priority in valid_priorities {
         let conversation = create_test_conversation(
