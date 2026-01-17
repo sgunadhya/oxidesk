@@ -30,6 +30,7 @@ async fn test_create_agent_service_flow() {
     let agent_service =
         AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::role_repository::RoleRepository>,
         session_service,

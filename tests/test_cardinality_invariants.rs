@@ -119,6 +119,7 @@ async fn test_agent_must_have_at_least_one_role_on_update() {
     let agent_service =
         AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::role_repository::RoleRepository>,
         session_service,
@@ -579,6 +580,7 @@ async fn test_entity_deletion_bypasses_cardinality_validation() {
     let agent_service =
         AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::role_repository::RoleRepository>,
         session_service,
