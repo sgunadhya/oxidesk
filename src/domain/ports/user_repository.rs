@@ -22,4 +22,6 @@ pub trait UserRepository: Send + Sync {
     ) -> ApiResult<(Vec<User>, i64)>;
     async fn get_users_by_usernames(&self, usernames: &[String]) -> ApiResult<Vec<User>>;
     async fn get_users_by_ids(&self, ids: &[String]) -> ApiResult<Vec<User>>;
+    async fn count_admin_users(&self) -> ApiResult<i64>;
+    async fn delete_user(&self, user_id: &str) -> ApiResult<()>;
 }

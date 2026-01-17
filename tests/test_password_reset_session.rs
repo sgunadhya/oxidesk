@@ -48,7 +48,7 @@ async fn test_password_reset_destroys_all_user_sessions() {
     );
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -58,7 +58,7 @@ async fn test_password_reset_destroys_all_user_sessions() {
     let token = &tokens[0].token;
 
     // Reset password (should destroy all sessions)
-    PasswordResetService::new(db.clone()).reset_password(token, "NewPass123!")
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, "NewPass123!")
         .await
         .unwrap();
 
@@ -114,7 +114,7 @@ async fn test_password_reset_only_destroys_user_sessions() {
     db.create_session(&session1_user2).await.unwrap();
 
     // Reset password for user1
-    PasswordResetService::new(db.clone()).request_password_reset(&email1)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email1)
         .await
         .unwrap();
     let tokens = db
@@ -122,7 +122,7 @@ async fn test_password_reset_only_destroys_user_sessions() {
         .await
         .unwrap();
     let token = &tokens[0].token;
-    PasswordResetService::new(db.clone()).reset_password(token, "NewPass123!")
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, "NewPass123!")
         .await
         .unwrap();
 
@@ -172,7 +172,7 @@ async fn test_password_reset_session_destruction_count() {
     }
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -182,7 +182,7 @@ async fn test_password_reset_session_destruction_count() {
     let token = &tokens[0].token;
 
     // Reset password and check session destruction count
-    let result = PasswordResetService::new(db.clone()).reset_password(token, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, "NewPass123!").await;
     assert!(result.is_ok());
 
     // Note: The service logs the count internally, but we verify by checking the database
@@ -221,7 +221,7 @@ async fn test_password_reset_works_with_no_existing_sessions() {
     assert_eq!(sessions_before.len(), 0, "Should have no sessions");
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -231,7 +231,7 @@ async fn test_password_reset_works_with_no_existing_sessions() {
     let token = &tokens[0].token;
 
     // Reset password should still succeed (destroying 0 sessions)
-    let result = PasswordResetService::new(db.clone()).reset_password(token, "NewPass123!").await;
+    let result = PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, "NewPass123!").await;
     assert!(
         result.is_ok(),
         "Password reset should succeed even with no sessions"
@@ -265,7 +265,7 @@ async fn test_sessions_destroyed_synchronously() {
     db.create_session(&session).await.unwrap();
 
     // Request password reset and get token
-    PasswordResetService::new(db.clone()).request_password_reset(&email)
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).request_password_reset( &email)
         .await
         .unwrap();
     let tokens = db
@@ -275,7 +275,7 @@ async fn test_sessions_destroyed_synchronously() {
     let token = &tokens[0].token;
 
     // Reset password
-    PasswordResetService::new(db.clone()).reset_password(token, "NewPass123!")
+    PasswordResetService::new(oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone()), std::sync::Arc::new(db.clone())).reset_password( token, "NewPass123!")
         .await
         .unwrap();
 

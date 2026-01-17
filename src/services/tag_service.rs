@@ -1,18 +1,18 @@
 use crate::{
     api::middleware::error::{ApiError, ApiResult},
-    database::Database,
+    domain::ports::tag_repository::TagRepository,
     models::*,
 };
 
 /// Service for tag management operations (admin)
 #[derive(Clone)]
 pub struct TagService {
-    db: Database,
+    tag_repo: TagRepository,
 }
 
 impl TagService {
-    pub fn new(db: Database) -> Self {
-        Self { db }
+    pub fn new(tag_repo: TagRepository) -> Self {
+        Self { tag_repo }
     }
 
     /// Helper: Check if user has permission
@@ -45,7 +45,7 @@ impl TagService {
         }
 
         // 3. Check if tag with same name already exists
-        if let Some(_) = self.db.get_tag_by_name(&request.name).await? {
+        if let Some(_) = self.tag_repo.get_tag_by_name(&request.name).await? {
             return Err(ApiError::BadRequest(format!(
                 "Tag with name '{}' already exists",
                 request.name
@@ -65,7 +65,7 @@ impl TagService {
         let tag = Tag::new(request.name, request.description, request.color);
 
         // 6. Save to database
-        self.db.create_tag(&tag).await?;
+        self.tag_repo.create_tag(&tag).await?;
 
         Ok(tag)
     }
@@ -85,7 +85,7 @@ impl TagService {
         }
 
         // 2. Get tags from database
-        self.db.list_tags(limit, offset).await
+        self.tag_repo.list_tags(limit, offset).await
     }
 
     /// Get tag by ID (requires tags:read permission)
@@ -98,7 +98,7 @@ impl TagService {
         }
 
         // 2. Get tag from database
-        self.db
+        self.tag_repo
             .get_tag_by_id(tag_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Tag {} not found", tag_id)))
@@ -120,7 +120,7 @@ impl TagService {
 
         // 2. Verify tag exists
         let _tag = self
-            .db
+            .tag_repo
             .get_tag_by_id(tag_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Tag {} not found", tag_id)))?;
@@ -135,12 +135,12 @@ impl TagService {
         }
 
         // 4. Update tag
-        self.db
+        self.tag_repo
             .update_tag(tag_id, request.description, request.color)
             .await?;
 
         // 5. Return updated tag
-        self.db
+        self.tag_repo
             .get_tag_by_id(tag_id)
             .await?
             .ok_or_else(|| ApiError::Internal("Tag disappeared after update".to_string()))
@@ -157,19 +157,19 @@ impl TagService {
 
         // 2. Verify tag exists
         let _tag = self
-            .db
+            .tag_repo
             .get_tag_by_id(tag_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Tag {} not found", tag_id)))?;
 
         // 3. Delete tag (cascades to conversation_tags)
-        self.db.delete_tag(tag_id).await?;
+        self.tag_repo.delete_tag(tag_id).await?;
 
         Ok(())
     }
 
     /// Get user permissions (helper for service layer)
     pub async fn get_user_permissions(&self, user_id: &str) -> ApiResult<Vec<Permission>> {
-        self.db.get_user_permissions(user_id).await
+        self.tag_repo.get_user_permissions(user_id).await
     }
 }

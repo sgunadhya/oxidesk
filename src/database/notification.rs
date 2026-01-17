@@ -148,3 +148,27 @@ impl Database {
         Ok(result.rows_affected() as i32)
     }
 }
+
+// Implement NotificationRepository trait for Database
+#[async_trait::async_trait]
+impl crate::domain::ports::notification_repository::NotificationRepository for Database {
+    async fn get_unread_count(&self, user_id: &str) -> ApiResult<i32> {
+        self.get_unread_count(user_id).await
+    }
+
+    async fn mark_notification_as_read(&self, notification_id: &str) -> ApiResult<()> {
+        self.mark_notification_as_read(notification_id).await
+    }
+
+    async fn list_notifications(&self, user_id: &str, limit: i32, offset: i32) -> ApiResult<Vec<UserNotification>> {
+        self.list_notifications(user_id, limit, offset).await
+    }
+
+    async fn get_notification_by_id(&self, id: &str) -> ApiResult<Option<UserNotification>> {
+        self.get_notification_by_id(id).await
+    }
+
+    async fn mark_all_notifications_as_read(&self, user_id: &str) -> ApiResult<i32> {
+        self.mark_all_notifications_as_read(user_id).await
+    }
+}

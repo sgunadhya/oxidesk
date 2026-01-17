@@ -97,8 +97,10 @@ async fn test_password_change_destroys_all_user_sessions() {
 
     let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
-        db.clone(),
-        std::sync::Arc::new(db.clone()),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::role_repository::RoleRepository>,
         session_service,
     );
     let result = agent_service
@@ -201,8 +203,10 @@ async fn test_password_change_requires_reauthentication() {
 
     let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
-        db.clone(),
-        std::sync::Arc::new(db.clone()),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::role_repository::RoleRepository>,
         session_service,
     );
     agent_service
@@ -304,8 +308,10 @@ async fn test_password_change_does_not_affect_other_users() {
 
     let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
-        db.clone(),
-        std::sync::Arc::new(db.clone()),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::role_repository::RoleRepository>,
         session_service,
     );
     agent_service
@@ -401,8 +407,10 @@ async fn test_password_change_with_no_active_sessions() {
 
     let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
-        db.clone(),
-        std::sync::Arc::new(db.clone()),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::role_repository::RoleRepository>,
         session_service,
     );
     let result = agent_service
@@ -481,8 +489,10 @@ async fn test_password_change_permission_required() {
 
     let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
-        db.clone(),
-        std::sync::Arc::new(db.clone()),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::role_repository::RoleRepository>,
         session_service,
     );
     let result = agent_service

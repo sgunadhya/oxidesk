@@ -418,7 +418,10 @@ async fn test_delivery_service_integration() {
 
     // Create delivery service with mock provider
     let provider = Arc::new(MockDeliveryProvider::new());
-    let delivery_service = DeliveryService::new(db.clone(), provider);
+    let delivery_service = DeliveryService::new(
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::message_repository::MessageRepository>,
+        provider,
+    );
 
     // Create message service WITH delivery
     // Create message service WITH delivery
@@ -580,7 +583,10 @@ async fn test_e2e_outgoing_message_flow() {
 
     // Setup delivery service with mock provider
     let provider = Arc::new(MockDeliveryProvider::new());
-    let delivery_service = DeliveryService::new(db.clone(), provider);
+    let delivery_service = DeliveryService::new(
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::message_repository::MessageRepository>,
+        provider,
+    );
 
     // Create message service with delivery
     // Create message service with delivery
@@ -631,7 +637,10 @@ async fn test_e2e_delivery_retry_flow() {
 
     // Create failing provider
     let failing_provider = Arc::new(MockDeliveryProvider::new_failing());
-    let _delivery_service = DeliveryService::new(db.clone(), failing_provider);
+    let _delivery_service = DeliveryService::new(
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::message_repository::MessageRepository>,
+        failing_provider,
+    );
 
     // Create test message
     let message = Message::new_outgoing(

@@ -384,9 +384,7 @@ pub async fn get_macro_logs(
     }
 
     // Get logs (with default pagination)
-    let logs = state
-        .db
-        .get_macro_application_logs(&macro_id, 50, 0)
+    let logs = state.macro_service.get_macro_logs(&macro_id, 50, 0)
         .await?;
 
     // Convert to response
