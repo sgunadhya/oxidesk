@@ -2,15 +2,43 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
+    automation_rules::AutomationRulesRepository,
+    domain::ports::{
+        agent_repository::AgentRepository, automation_repository::AutomationRepository,
+        conversation_repository::ConversationRepository,
+        conversation_tag_repository::ConversationTagRepository, tag_repository::TagRepository,
+        team_repository::TeamRepository, user_repository::UserRepository,
+    },
     models::{
         ActionType, AutomationRule, ComparisonOperator, ConversationStatus, Priority, RuleAction,
         RuleCondition, RuleType,
     },
-    services::automation_service::{AutomationConfig, AutomationService},
+    services::{
+        action_executor::ActionExecutor,
+        automation_service::{AutomationConfig, AutomationService},
+    },
 };
 use serde_json::json;
 use std::collections::HashMap;
-use oxidesk::automation_rules::AutomationRulesRepository;
+use std::sync::Arc;
+
+/// Helper function to create AutomationService with all required repositories
+fn create_automation_service(db: &oxidesk::Database, config: AutomationConfig) -> AutomationService {
+    let tag_repo = TagRepository::new(db.clone());
+    let action_executor = ActionExecutor::new(
+        Arc::new(db.clone()) as Arc<dyn ConversationRepository>,
+        Arc::new(db.clone()) as Arc<dyn UserRepository>,
+        Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+        Arc::new(db.clone()) as Arc<dyn TeamRepository>,
+        tag_repo,
+        Arc::new(db.clone()) as Arc<dyn ConversationTagRepository>,
+    );
+    AutomationService::new(
+        Arc::new(db.clone()) as Arc<dyn AutomationRepository>,
+        action_executor,
+        config,
+    )
+}
 
 /// Edge Case 1: Multiple rules matching same event (verify priority order)
 /// Higher priority (lower number) should execute last and "win"
@@ -72,12 +100,12 @@ async fn test_multiple_rules_priority_order() {
     let mut rule3 = rule3;
     rule3.priority = 200; // Lower priority (higher number)
 
-    db.create_automation_rule(&rule1).await.unwrap();
-    db.create_automation_rule(&rule2).await.unwrap();
-    db.create_automation_rule(&rule3).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule1).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule2).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule3).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -177,9 +205,9 @@ async fn test_circular_rule_cascade_depth_limit() {
         },
     );
 
-    db.create_automation_rule(&rule1).await.unwrap();
-    db.create_automation_rule(&rule2).await.unwrap();
-    db.create_automation_rule(&rule3).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule1).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule2).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule3).await.unwrap();
 
     // Use config with cascade depth limit of 2
     let config = AutomationConfig {
@@ -187,7 +215,7 @@ async fn test_circular_rule_cascade_depth_limit() {
         condition_timeout_secs: 5,
         action_timeout_secs: 5,
     };
-    let service = AutomationService::new(std::sync::Arc::new(db.clone()), config);
+    let service = create_automation_service(db, config);
 
     // Test: Trigger with tag "A"
     let contact = create_test_contact(db, "user@example.com").await;
@@ -243,10 +271,10 @@ async fn test_condition_evaluation_error_graceful_failure() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -306,10 +334,10 @@ async fn test_action_execution_error_no_crash() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -364,10 +392,10 @@ async fn test_rule_modification_during_evaluation() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -380,7 +408,7 @@ async fn test_rule_modification_during_evaluation() {
     .await;
 
     // Simulate concurrent modification: disable the rule right before evaluation
-    db.disable_automation_rule(&rule.id).await.unwrap();
+    AutomationRulesRepository::disable_automation_rule(db, &rule.id).await.unwrap();
 
     // This should handle gracefully - the rule snapshot was loaded before modification
     let result = service
@@ -415,10 +443,10 @@ async fn test_rule_deletion_during_evaluation() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -431,7 +459,7 @@ async fn test_rule_deletion_during_evaluation() {
     .await;
 
     // Simulate concurrent deletion: delete the rule
-    db.delete_automation_rule(&rule.id).await.unwrap();
+    AutomationRulesRepository::delete_automation_rule(db, &rule.id).await.unwrap();
 
     // This should handle gracefully
     let result = service
@@ -474,7 +502,7 @@ async fn test_condition_timeout_handling() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     // Use very short timeout to force timeout
     // Note: timeout_secs cannot be 0, so we use 1 second (shortest practical value)
@@ -483,7 +511,7 @@ async fn test_condition_timeout_handling() {
         condition_timeout_secs: 1, // Short timeout
         action_timeout_secs: 5,
     };
-    let service = AutomationService::new(std::sync::Arc::new(db.clone()), config);
+    let service = create_automation_service(db, config);
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -528,7 +556,7 @@ async fn test_action_timeout_handling() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     // Use very short action timeout
     // Note: timeout_secs cannot be 0, so we use 1 second (shortest practical value)
@@ -537,7 +565,7 @@ async fn test_action_timeout_handling() {
         condition_timeout_secs: 5,
         action_timeout_secs: 1, // Short timeout
     };
-    let service = AutomationService::new(std::sync::Arc::new(db.clone()), config);
+    let service = create_automation_service(db, config);
 
     // Test: Trigger event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -615,16 +643,16 @@ async fn test_cascading_actions() {
         },
     );
 
-    db.create_automation_rule(&rule_a).await.unwrap();
-    db.create_automation_rule(&rule_b).await.unwrap();
-    db.create_automation_rule(&rule_c).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule_a).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule_b).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule_c).await.unwrap();
 
     let config = AutomationConfig {
         cascade_max_depth: 5,
         condition_timeout_secs: 5,
         action_timeout_secs: 5,
     };
-    let service = AutomationService::new(std::sync::Arc::new(db.clone()), config);
+    let service = create_automation_service(db, config);
 
     // Test: Trigger initial event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -677,10 +705,10 @@ async fn test_event_with_no_matching_rules() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Test: Trigger different event
     let contact = create_test_contact(db, "user@example.com").await;
@@ -733,10 +761,10 @@ async fn test_simultaneous_events_concurrent_processing() {
         },
     );
 
-    db.create_automation_rule(&rule).await.unwrap();
+    AutomationRulesRepository::create_automation_rule(db, &rule).await.unwrap();
 
     let service =
-        AutomationService::new(std::sync::Arc::new(db.clone()), AutomationConfig::default());
+        create_automation_service(db, AutomationConfig::default());
 
     // Test: Create multiple conversations and trigger events
     // Process them sequentially to avoid Send trait issues

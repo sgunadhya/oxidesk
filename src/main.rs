@@ -119,20 +119,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     tracing::info!("SLA service initialized");
 
+    // Initialize Tag Repository (needed by ActionExecutor)
+    let tag_repo = oxidesk::domain::ports::tag_repository::TagRepository::new(db.clone());
+
     // Initialize automation service
+    use oxidesk::domain::ports::automation_repository::AutomationRepository;
+    use oxidesk::domain::ports::conversation_tag_repository::ConversationTagRepository;
+    let action_executor = oxidesk::services::action_executor::ActionExecutor::new(
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
+        tag_repo.clone(),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn ConversationTagRepository>,
+    );
     let automation_service = std::sync::Arc::new(oxidesk::AutomationService::new(
-        std::sync::Arc::new(db.clone()),
+        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn AutomationRepository>,
+        action_executor,
         AutomationConfig::default(),
     ));
     // Initialize webhook service
     let webhook_repo = oxidesk::domain::ports::webhook_repository::WebhookRepository::new(db.clone());
     let webhook_service = oxidesk::WebhookService::new(webhook_repo);
 
-    // Initialize Tag Repository
-    let tag_repo = oxidesk::domain::ports::tag_repository::TagRepository::new(db.clone());
-
     // Initialize Conversation Tag Service
-    use oxidesk::domain::ports::conversation_tag_repository::ConversationTagRepository;
     let conversation_tag_service = ConversationTagService::new(
         Arc::new(db.clone()) as Arc<dyn ConversationTagRepository>,
         tag_repo.clone(),
@@ -381,8 +391,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let automation_db = db.clone();
     tokio::spawn(async move {
         // Initialize automation service inside the task
+        use oxidesk::domain::ports::automation_repository::AutomationRepository;
+        use oxidesk::domain::ports::conversation_tag_repository::ConversationTagRepository;
+        let tag_repo_bg = oxidesk::domain::ports::tag_repository::TagRepository::new(automation_db.clone());
+        let action_executor_bg = oxidesk::services::action_executor::ActionExecutor::new(
+            std::sync::Arc::new(automation_db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+            std::sync::Arc::new(automation_db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
+            std::sync::Arc::new(automation_db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+            std::sync::Arc::new(automation_db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository>,
+            tag_repo_bg,
+            std::sync::Arc::new(automation_db.clone()) as std::sync::Arc<dyn ConversationTagRepository>,
+        );
         let automation_rule_service = std::sync::Arc::new(oxidesk::AutomationService::new(
-            std::sync::Arc::new(automation_db.clone()),
+            std::sync::Arc::new(automation_db.clone()) as std::sync::Arc<dyn AutomationRepository>,
+            action_executor_bg,
             oxidesk::services::automation_service::AutomationConfig::default(),
         ));
         tracing::info!("Automation service initialized in background task");

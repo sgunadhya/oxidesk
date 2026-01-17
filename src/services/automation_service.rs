@@ -1,5 +1,4 @@
-use crate::database::automation_rules::AutomationRulesRepository;
-use crate::database::Database;
+use crate::domain::ports::automation_repository::AutomationRepository;
 use crate::models::{
     ActionResult, AutomationRule, ConditionResult, Conversation, RuleEvaluationLog,
 };
@@ -27,18 +26,22 @@ impl Default for AutomationConfig {
 
 #[derive(Clone)]
 pub struct AutomationService {
-    db: Arc<Database>,
+    automation_repo: Arc<dyn AutomationRepository>,
     condition_evaluator: ConditionEvaluator,
     action_executor: ActionExecutor,
     config: AutomationConfig,
 }
 
 impl AutomationService {
-    pub fn new(db: Arc<Database>, config: AutomationConfig) -> Self {
+    pub fn new(
+        automation_repo: Arc<dyn AutomationRepository>,
+        action_executor: ActionExecutor,
+        config: AutomationConfig,
+    ) -> Self {
         Self {
+            automation_repo,
             condition_evaluator: ConditionEvaluator::new(),
-            action_executor: ActionExecutor::new(db.clone()),
-            db,
+            action_executor,
             config,
         }
     }
@@ -82,7 +85,7 @@ impl AutomationService {
 
         // Get enabled rules that subscribe to this event type
         let rules = self
-            .db
+            .automation_repo
             .get_enabled_rules_for_event(event_type)
             .await
             .map_err(|e| format!("Failed to fetch rules: {}", e))?;
@@ -208,7 +211,7 @@ impl AutomationService {
             cascade_depth,
         };
 
-        self.db
+        self.automation_repo
             .create_rule_evaluation_log(&log)
             .await
             .map_err(|e| format!("Failed to create evaluation log: {}", e))?;
@@ -225,10 +228,10 @@ impl AutomationService {
         Ok(())
     }
 
-    // Proxy methods for AutomationRulesRepository
+    // Proxy methods for AutomationRepository
 
     pub async fn create_automation_rule(&self, rule: &AutomationRule) -> Result<(), String> {
-        self.db
+        self.automation_repo
             .create_automation_rule(rule)
             .await
             .map_err(|e| e.to_string())
@@ -238,7 +241,7 @@ impl AutomationService {
         &self,
         id: &str,
     ) -> Result<Option<AutomationRule>, String> {
-        self.db
+        self.automation_repo
             .get_automation_rule_by_id(id)
             .await
             .map_err(|e| e.to_string())
@@ -248,35 +251,35 @@ impl AutomationService {
         &self,
         enabled_only: bool,
     ) -> Result<Vec<AutomationRule>, String> {
-        self.db
+        self.automation_repo
             .get_automation_rules(enabled_only)
             .await
             .map_err(|e| e.to_string())
     }
 
     pub async fn update_automation_rule(&self, rule: &AutomationRule) -> Result<(), String> {
-        self.db
+        self.automation_repo
             .update_automation_rule(rule)
             .await
             .map_err(|e| e.to_string())
     }
 
     pub async fn delete_automation_rule(&self, id: &str) -> Result<(), String> {
-        self.db
+        self.automation_repo
             .delete_automation_rule(id)
             .await
             .map_err(|e| e.to_string())
     }
 
     pub async fn enable_automation_rule(&self, id: &str) -> Result<(), String> {
-        self.db
+        self.automation_repo
             .enable_automation_rule(id)
             .await
             .map_err(|e| e.to_string())
     }
 
     pub async fn disable_automation_rule(&self, id: &str) -> Result<(), String> {
-        self.db
+        self.automation_repo
             .disable_automation_rule(id)
             .await
             .map_err(|e| e.to_string())
@@ -290,7 +293,7 @@ impl AutomationService {
         limit: Option<i32>,
         offset: Option<i32>,
     ) -> Result<Vec<RuleEvaluationLog>, String> {
-        self.db
+        self.automation_repo
             .get_rule_evaluation_logs(rule_id, conversation_id, event_type, limit, offset)
             .await
             .map_err(|e| e.to_string())

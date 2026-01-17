@@ -2,11 +2,30 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
+    domain::ports::{
+        agent_repository::AgentRepository, conversation_repository::ConversationRepository,
+        conversation_tag_repository::ConversationTagRepository, tag_repository::TagRepository,
+        team_repository::TeamRepository, user_repository::UserRepository,
+    },
     models::{ActionType, ConversationStatus, Priority, RuleAction},
     services::action_executor::ActionExecutor,
 };
 use serde_json::json;
 use std::collections::HashMap;
+use std::sync::Arc;
+
+/// Helper function to create ActionExecutor with all required repositories
+fn create_action_executor(db: &oxidesk::Database) -> ActionExecutor {
+    let tag_repo = TagRepository::new(db.clone());
+    ActionExecutor::new(
+        Arc::new(db.clone()) as Arc<dyn ConversationRepository>,
+        Arc::new(db.clone()) as Arc<dyn UserRepository>,
+        Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+        Arc::new(db.clone()) as Arc<dyn TeamRepository>,
+        tag_repo,
+        Arc::new(db.clone()) as Arc<dyn ConversationTagRepository>,
+    )
+}
 
 #[tokio::test]
 async fn test_execute_set_priority_action() {
@@ -30,7 +49,7 @@ async fn test_execute_set_priority_action() {
     };
 
     // Execute action
-    let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
+    let executor = create_action_executor(db);
     let result = executor
         .execute(&action, &conversation.id, "automation-system")
         .await;
@@ -71,7 +90,7 @@ async fn test_execute_assign_to_user_action() {
     };
 
     // Execute action
-    let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
+    let executor = create_action_executor(db);
     let result = executor
         .execute(&action, &conversation.id, "automation-system")
         .await;
@@ -126,7 +145,7 @@ async fn test_execute_assign_to_team_action() {
     };
 
     // Execute action
-    let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
+    let executor = create_action_executor(db);
     let result = executor
         .execute(&action, &conversation.id, "automation-system")
         .await;
@@ -182,7 +201,7 @@ async fn test_execute_add_tag_action() {
     };
 
     // Execute action
-    let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
+    let executor = create_action_executor(db);
     let result = executor
         .execute(&action, &conversation.id, agent.user_id.as_str())
         .await;
@@ -245,7 +264,7 @@ async fn test_execute_remove_tag_action() {
     };
 
     // Execute action
-    let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
+    let executor = create_action_executor(db);
     let result = executor
         .execute(&action, &conversation.id, agent.user_id.as_str())
         .await;
@@ -281,7 +300,7 @@ async fn test_execute_change_status_action() {
     };
 
     // Execute action
-    let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
+    let executor = create_action_executor(db);
     let result = executor
         .execute(&action, &conversation.id, "automation-system")
         .await;
@@ -322,7 +341,7 @@ async fn test_execute_action_with_invalid_parameters() {
     };
 
     // Execute action
-    let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
+    let executor = create_action_executor(db);
     let result = executor
         .execute(&action, &conversation.id, "automation-system")
         .await;
@@ -357,7 +376,7 @@ async fn test_execute_action_user_not_found() {
     };
 
     // Execute action
-    let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
+    let executor = create_action_executor(db);
     let result = executor
         .execute(&action, &conversation.id, "automation-system")
         .await;
@@ -379,7 +398,7 @@ async fn test_execute_action_conversation_not_found() {
     };
 
     // Execute action on non-existent conversation
-    let executor = ActionExecutor::new(std::sync::Arc::new(db.clone()));
+    let executor = create_action_executor(db);
     let result = executor
         .execute(&action, "non-existent-conversation", "automation-system")
         .await;

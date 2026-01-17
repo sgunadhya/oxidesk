@@ -2,6 +2,7 @@ pub mod agent_repository;
 pub mod api_key_repository;
 pub mod assignment_repository;
 pub mod attachment_repository;
+pub mod automation_repository;
 pub mod availability_repository;
 pub mod contact_repository;
 pub mod conversation_repository;
