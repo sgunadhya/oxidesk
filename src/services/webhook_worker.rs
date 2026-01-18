@@ -1,5 +1,5 @@
 use crate::{
-    database::Database,
+    domain::ports::webhook_repository::WebhookRepository,
     events::{EventBus, SystemEvent},
     models::Webhook,
     services::job_queue::TaskQueue,
@@ -13,16 +13,16 @@ use tracing::{error, info, warn};
 /// Worker that subscribes to EventBus and queues webhook deliveries
 #[derive(Clone)]
 pub struct WebhookWorker {
-    db: Database,
+    webhook_repo: WebhookRepository,
     event_bus: Arc<dyn EventBus>,
     task_queue: Arc<dyn TaskQueue>,
 }
 
 impl WebhookWorker {
     /// Create a new webhook worker
-    pub fn new(db: Database, event_bus: Arc<dyn EventBus>, task_queue: Arc<dyn TaskQueue>) -> Self {
+    pub fn new(webhook_repo: WebhookRepository, event_bus: Arc<dyn EventBus>, task_queue: Arc<dyn TaskQueue>) -> Self {
         Self {
-            db,
+            webhook_repo,
             event_bus,
             task_queue,
         }
@@ -68,7 +68,7 @@ impl WebhookWorker {
 
         // Get all active webhooks subscribed to this event type
         let webhooks = self
-            .db
+            .webhook_repo
             .get_active_webhooks_for_event(&event_type)
             .await
             .map_err(|e| format!("Failed to fetch webhooks: {}", e))?;
@@ -353,6 +353,8 @@ impl WebhookWorker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::Database;
+    use crate::domain::ports::webhook_repository::WebhookRepository;
     use crate::models::conversation::ConversationStatus;
     use crate::services::SqliteTaskQueue;
     use std::sync::Arc;
@@ -363,7 +365,8 @@ mod tests {
         db.run_migrations().await.unwrap(); // Ensure tables are created for SqliteTaskQueue
         let event_bus = Arc::new(crate::events::LocalEventBus::default());
         let task_queue = Arc::new(SqliteTaskQueue::new(db.clone()));
-        let worker = WebhookWorker::new(db, event_bus, task_queue);
+        let webhook_repo = WebhookRepository::new(db);
+        let worker = WebhookWorker::new(webhook_repo, event_bus, task_queue);
 
         let event = SystemEvent::ConversationCreated {
             conversation_id: "conv-123".to_string(),
@@ -389,7 +392,8 @@ mod tests {
         db.run_migrations().await.unwrap();
         let event_bus = Arc::new(crate::events::LocalEventBus::default());
         let task_queue = Arc::new(SqliteTaskQueue::new(db.clone()));
-        let worker = WebhookWorker::new(db, event_bus, task_queue);
+        let webhook_repo = WebhookRepository::new(db);
+        let worker = WebhookWorker::new(webhook_repo, event_bus, task_queue);
 
         let event = SystemEvent::MessageSent {
             message_id: "msg-123".to_string(),

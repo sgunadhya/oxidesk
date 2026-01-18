@@ -217,10 +217,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
     tracing::info!("Session service initialized");
 
+    // Initialize repositories for JobProcessor
+    let oidc_repo_for_jobs = oxidesk::domain::ports::oidc_repository::OidcRepository::new(db.clone());
+    let webhook_repo_for_jobs = oxidesk::domain::ports::webhook_repository::WebhookRepository::new(db.clone());
+
     // Start JobProcessor
     let job_processor = oxidesk::services::JobProcessor::new(
         task_queue.clone(),
-        db.clone(),
+        oidc_repo_for_jobs,
+        webhook_repo_for_jobs,
         rate_limiter.clone(),
         availability_service.clone(),
         sla_service.clone(),
@@ -903,11 +908,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Start webhook worker background task
-    let webhook_db = db.clone();
+    let webhook_repo_for_worker = oxidesk::domain::ports::webhook_repository::WebhookRepository::new(db.clone());
     let webhook_event_bus = event_bus.clone();
     // Pass task_queue to WebhookWorker
     let webhook_worker =
-        oxidesk::WebhookWorker::new(webhook_db, webhook_event_bus, task_queue.clone());
+        oxidesk::WebhookWorker::new(webhook_repo_for_worker, webhook_event_bus, task_queue.clone());
     webhook_worker.start();
     tracing::info!("Webhook worker started");
 

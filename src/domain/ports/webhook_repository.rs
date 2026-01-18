@@ -63,4 +63,14 @@ impl WebhookRepository {
     ) -> ApiResult<i64> {
         self.db.count_deliveries_for_webhook(webhook_id, status_filter).await
     }
+
+    /// Get active webhooks subscribed to a specific event type
+    pub async fn get_active_webhooks_for_event(&self, event_type: &str) -> ApiResult<Vec<Webhook>> {
+        self.db.get_active_webhooks_for_event(event_type).await
+    }
+
+    /// Create a webhook delivery record
+    pub async fn create_webhook_delivery(&self, delivery: &crate::models::WebhookDelivery) -> ApiResult<()> {
+        self.db.create_webhook_delivery(delivery).await
+    }
 }

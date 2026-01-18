@@ -4,15 +4,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info};
 
+use crate::domain::ports::oidc_repository::OidcRepository;
+use crate::domain::ports::webhook_repository::WebhookRepository;
 use crate::services::job_queue::{Job, TaskQueue};
-use crate::{
-    database::Database,
-    services::{AuthRateLimiter, AvailabilityService, SlaService},
-};
+use crate::services::{AuthRateLimiter, AvailabilityService, SlaService};
 
 pub struct JobProcessor {
     queue: Arc<dyn TaskQueue>,
-    db: Database,
+    oidc_repo: OidcRepository,
+    webhook_repo: WebhookRepository,
     rate_limiter: AuthRateLimiter,
     availability_service: AvailabilityService,
     sla_service: SlaService,
@@ -23,7 +23,8 @@ pub struct JobProcessor {
 impl JobProcessor {
     pub fn new(
         queue: Arc<dyn TaskQueue>,
-        db: Database,
+        oidc_repo: OidcRepository,
+        webhook_repo: WebhookRepository,
         rate_limiter: AuthRateLimiter,
         availability_service: AvailabilityService,
         sla_service: SlaService,
@@ -36,7 +37,8 @@ impl JobProcessor {
 
         Self {
             queue,
-            db,
+            oidc_repo,
+            webhook_repo,
             rate_limiter,
             availability_service,
             sla_service,
@@ -148,7 +150,7 @@ impl JobProcessor {
     }
 
     async fn handle_cleanup_oidc_states(&self) -> Result<(), String> {
-        match self.db.cleanup_expired_oidc_states().await {
+        match self.oidc_repo.cleanup_expired_states().await {
             Ok(count) => {
                 if count > 0 {
                     info!("Cleaned up {} expired OIDC states", count);
@@ -272,7 +274,7 @@ impl JobProcessor {
         }
 
         // Save delivery record (best effort)
-        if let Err(e) = self.db.create_webhook_delivery(&delivery).await {
+        if let Err(e) = self.webhook_repo.create_webhook_delivery(&delivery).await {
             error!("Failed to log webhook delivery: {}", e);
         }
 
