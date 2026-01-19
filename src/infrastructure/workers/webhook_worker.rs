@@ -67,6 +67,7 @@ impl WebhookWorker {
     }
 
     /// Handle a single system event
+    #[tracing::instrument(skip(self, event))]
     async fn handle_event(&self, event: SystemEvent) -> Result<(), String> {
         // Determine event type and construct payload
         let (event_type, payload) = self.construct_payload(&event)?;
@@ -317,6 +318,7 @@ impl WebhookWorker {
     }
 
     /// Queue a webhook delivery for processing
+    #[tracing::instrument(skip(self, payload))]
     async fn queue_delivery(
         &self,
         webhook: &Webhook,

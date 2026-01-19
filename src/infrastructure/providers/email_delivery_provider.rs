@@ -94,6 +94,7 @@ impl EmailDeliveryProvider {
 
 #[async_trait::async_trait]
 impl MessageDeliveryProvider for EmailDeliveryProvider {
+    #[tracing::instrument(skip(self))]
     async fn deliver(&self, message: &Message) -> Result<(), String> {
         // Load conversation to get reference number and subject
         let conversation = self

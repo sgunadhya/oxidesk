@@ -1,8 +1,8 @@
-use crate::infrastructure::http::middleware::error::{ApiError, ApiResult};
-use crate::infrastructure::persistence::Database;
 use crate::domain::entities::{
     AssignmentHistory, Conversation, ConversationStatus, CreateConversation, Priority,
 };
+use crate::infrastructure::http::middleware::error::{ApiError, ApiResult};
+use crate::infrastructure::persistence::Database;
 
 use sqlx::Row;
 use time;
@@ -11,6 +11,7 @@ use uuid;
 
 impl Database {
     // Conversation operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_conversation(
         &self,
         create: &CreateConversation,
@@ -82,6 +83,7 @@ impl Database {
         Ok(conversation)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_conversation_by_id(&self, id: &str) -> ApiResult<Option<Conversation>> {
         let row = sqlx::query(
             "SELECT id, reference_number, status, inbox_id, contact_id, subject,
@@ -170,6 +172,7 @@ impl Database {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_conversation_fields(
         &self,
         id: &str,
@@ -242,6 +245,7 @@ impl Database {
     }
 
     /// List conversations with pagination and optional filters
+    #[tracing::instrument(skip(self))]
     pub async fn list_conversations(
         &self,
         limit: i64,
@@ -420,6 +424,7 @@ impl Database {
     }
 
     /// Update conversation status (for automation rules - bypasses state machine)
+    #[tracing::instrument(skip(self))]
     pub async fn update_conversation_status(
         &self,
         conversation_id: &str,
@@ -1004,11 +1009,17 @@ impl ConversationRepository for Database {
 // Implement AssignmentRepository trait for Database
 #[async_trait::async_trait]
 impl crate::domain::ports::assignment_repository::AssignmentRepository for Database {
-    async fn record_assignment(&self, history: &crate::domain::entities::AssignmentHistory) -> ApiResult<()> {
+    async fn record_assignment(
+        &self,
+        history: &crate::domain::entities::AssignmentHistory,
+    ) -> ApiResult<()> {
         self.record_assignment(history).await
     }
 
-    async fn create_notification(&self, notification: &crate::domain::entities::UserNotification) -> ApiResult<()> {
+    async fn create_notification(
+        &self,
+        notification: &crate::domain::entities::UserNotification,
+    ) -> ApiResult<()> {
         self.create_notification(notification).await
     }
 }

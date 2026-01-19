@@ -67,13 +67,14 @@ impl JobProcessor {
                     self.time_service.sleep(Duration::from_secs(1)).await;
                 }
                 Err(e) => {
-                    error!("Error processing job: {}", e);
+                    error!("Fatal error in job worker loop: {}", e);
                     self.time_service.sleep(Duration::from_secs(5)).await;
                 }
             }
         }
     }
 
+    #[tracing::instrument(skip(self), fields(job_id, job_type))]
     pub async fn process_next(&self) -> Result<Option<()>, String> {
         let job = self
             .queue
@@ -82,10 +83,18 @@ impl JobProcessor {
             .map_err(|e| e.to_string())?;
 
         if let Some(job) = job {
+            tracing::Span::current().record("job_id", &job.id);
+            tracing::Span::current().record("job_type", &job.job_type);
+
             info!("Processing job {} (type: {})", job.id, job.job_type);
+            metrics::counter!("job_executions_total", "type" => job.job_type.clone()).increment(1);
+            let start = std::time::Instant::now();
 
             // Execute the job logic
             let result = self.execute_job(&job).await;
+            let duration = start.elapsed();
+            metrics::histogram!("job_duration_seconds", "type" => job.job_type.clone())
+                .record(duration.as_secs_f64());
 
             // Handle result
             match result {
@@ -96,7 +105,15 @@ impl JobProcessor {
                     }
                 }
                 Err(e) => {
-                    error!("Job {} failed: {}", job.id, e);
+                    metrics::counter!("job_errors_total", "type" => job.job_type.clone())
+                        .increment(1);
+                    error!(
+                        "Job {} (type: {}) failed: {}. Payload: {}",
+                        job.id,
+                        job.job_type,
+                        e,
+                        serde_json::to_string(&job.payload).unwrap_or_default()
+                    );
                     if let Err(retry_err) = self.queue.fail_job(&job.id, &e).await {
                         error!("Failed to mark job {} as failed: {}", job.id, retry_err);
                     }
@@ -109,6 +126,7 @@ impl JobProcessor {
         }
     }
 
+    #[tracing::instrument(skip(self, job), fields(job_id = %job.id, job_type = %job.job_type))]
     async fn execute_job(&self, job: &Job) -> Result<(), String> {
         match job.job_type.as_str() {
             "test_job" => {

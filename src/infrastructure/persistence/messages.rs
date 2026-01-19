@@ -1,6 +1,6 @@
+use crate::domain::entities::{Message, MessageStatus, MessageType};
 use crate::infrastructure::http::middleware::error::ApiResult;
 use crate::infrastructure::persistence::Database;
-use crate::domain::entities::{Message, MessageStatus, MessageType};
 use sqlx::Row;
 use time;
 
@@ -8,6 +8,7 @@ use crate::domain::ports::message_repository::MessageRepository;
 
 #[async_trait::async_trait]
 impl MessageRepository for Database {
+    #[tracing::instrument(skip(self))]
     async fn create_message(&self, message: &Message) -> ApiResult<()> {
         sqlx::query(
             "INSERT INTO messages (id, conversation_id, type, status, content, author_id, is_immutable, retry_count, created_at, sent_at, updated_at)
@@ -30,6 +31,7 @@ impl MessageRepository for Database {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_message_by_id(&self, message_id: &str) -> ApiResult<Option<Message>> {
         let row = sqlx::query(
             "SELECT id, conversation_id, type, status, content, author_id, is_immutable, retry_count, created_at, sent_at, updated_at
@@ -62,6 +64,7 @@ impl MessageRepository for Database {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn list_messages(
         &self,
         conversation_id: &str,
@@ -112,6 +115,7 @@ impl MessageRepository for Database {
         Ok((messages, total_count))
     }
 
+    #[tracing::instrument(skip(self))]
     async fn update_message_status(
         &self,
         message_id: &str,
@@ -128,25 +132,25 @@ impl MessageRepository for Database {
                  SET status = ?, sent_at = ?, updated_at = ?, is_immutable = ?
                  WHERE id = ?",
             )
-                .bind(status.as_str())
-                .bind(sent_at_value)
-                .bind(&now)
-                .bind(status.is_immutable())
-                .bind(message_id)
-                .execute(&self.pool)
-                .await?;
+            .bind(status.as_str())
+            .bind(sent_at_value)
+            .bind(&now)
+            .bind(status.is_immutable())
+            .bind(message_id)
+            .execute(&self.pool)
+            .await?;
         } else {
             sqlx::query(
                 "UPDATE messages
                  SET status = ?, updated_at = ?, is_immutable = ?
                  WHERE id = ?",
             )
-                .bind(status.as_str())
-                .bind(&now)
-                .bind(status.is_immutable())
-                .bind(message_id)
-                .execute(&self.pool)
-                .await?;
+            .bind(status.as_str())
+            .bind(&now)
+            .bind(status.is_immutable())
+            .bind(message_id)
+            .execute(&self.pool)
+            .await?;
         }
 
         Ok(())
@@ -159,32 +163,31 @@ impl MessageRepository for Database {
         last_message_at: &str,
         last_reply_at: Option<&str>,
     ) -> ApiResult<()> {
-
         if let Some(reply_at) = last_reply_at {
             sqlx::query(
                 "UPDATE conversations
                  SET last_message_id = ?, last_message_at = ?, last_reply_at = ?, updated_at = ?
                  WHERE id = ?",
             )
-                .bind(message_id)
-                .bind(last_message_at)
-                .bind(reply_at)
-                .bind(last_message_at)
-                .bind(conversation_id)
-                .execute(&self.pool)
-                .await?;
+            .bind(message_id)
+            .bind(last_message_at)
+            .bind(reply_at)
+            .bind(last_message_at)
+            .bind(conversation_id)
+            .execute(&self.pool)
+            .await?;
         } else {
             sqlx::query(
                 "UPDATE conversations
                  SET last_message_id = ?, last_message_at = ?, updated_at = ?
                  WHERE id = ?",
             )
-                .bind(message_id)
-                .bind(last_message_at)
-                .bind(last_message_at)
-                .bind(conversation_id)
-                .execute(&self.pool)
-                .await?;
+            .bind(message_id)
+            .bind(last_message_at)
+            .bind(last_message_at)
+            .bind(conversation_id)
+            .execute(&self.pool)
+            .await?;
         }
 
         Ok(())

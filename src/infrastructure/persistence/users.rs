@@ -1,6 +1,6 @@
+use crate::domain::entities::{User, UserType};
 use crate::infrastructure::http::middleware::error::{ApiError, ApiResult};
 use crate::infrastructure::persistence::Database;
-use crate::domain::entities::{User, UserType};
 use sqlx::Row;
 
 use crate::domain::ports::user_repository::UserRepository;
@@ -37,11 +37,11 @@ impl Database {
 
 #[async_trait]
 impl UserRepository for Database {
-    // User operations
     async fn create_user(&self, user: &User) -> ApiResult<()> {
         self.create_user_internal(&self.pool, user).await
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_user_by_email_and_type(
         &self,
         email: &str,
@@ -81,6 +81,7 @@ impl UserRepository for Database {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_user_by_id(&self, id: &str) -> ApiResult<Option<User>> {
         let row = sqlx::query(
             "SELECT id, email, user_type, created_at, updated_at, deleted_at, deleted_by
@@ -110,6 +111,7 @@ impl UserRepository for Database {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn update_user_email(&self, id: &str, email: &str, updated_at: &str) -> ApiResult<()> {
         sqlx::query("UPDATE users SET email = ?, updated_at = ? WHERE id = ?")
             .bind(email)
@@ -121,9 +123,9 @@ impl UserRepository for Database {
         Ok(())
     }
 
-    // Soft Delete operations
     /// Soft delete a user (agent or contact)
     /// Sets deleted_at timestamp and records who performed the deletion
+    #[tracing::instrument(skip(self))]
     async fn soft_delete_user(&self, user_id: &str, deleted_by: &str) -> ApiResult<()> {
         let now = chrono::Utc::now().to_rfc3339();
 

@@ -1,4 +1,9 @@
-use sqlx::{any::AnyPoolOptions, AnyPool};
+use sqlx::{
+    any::{AnyConnectOptions, AnyPoolOptions},
+    AnyPool, ConnectOptions,
+};
+use std::str::FromStr;
+use tracing::log::LevelFilter;
 
 pub mod agents;
 pub mod api_key;
@@ -45,14 +50,32 @@ impl Database {
         // Ensure drivers are installed for AnyPool
         sqlx::any::install_default_drivers();
 
+        let mut connect_options = AnyConnectOptions::from_str(database_url)?;
+
+        // Configure logging
+        connect_options = connect_options
+            .log_statements(LevelFilter::Info)
+            .log_slow_statements(LevelFilter::Warn, std::time::Duration::from_secs(1));
+
+        tracing::info!("Database connection options configured with LevelFilter::Info");
+
         let pool = AnyPoolOptions::new()
             .max_connections(20)
             .min_connections(5)
-            .connect(database_url)
+            .connect_with(connect_options)
             .await?;
 
-        // Enable foreign keys for SQLite
+        // Enable optimizations for SQLite
         if database_url.starts_with("sqlite") {
+            sqlx::query("PRAGMA journal_mode = WAL")
+                .execute(&pool)
+                .await?;
+            sqlx::query("PRAGMA busy_timeout = 5000")
+                .execute(&pool)
+                .await?;
+            sqlx::query("PRAGMA synchronous = NORMAL")
+                .execute(&pool)
+                .await?;
             sqlx::query("PRAGMA foreign_keys = ON")
                 .execute(&pool)
                 .await?;

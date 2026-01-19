@@ -78,7 +78,7 @@ impl From<sqlx::Error> for ApiError {
                     ApiError::Internal(format!("Database error: {}", message))
                 }
             }
-            _ => ApiError::Internal("Internal server error".to_string()),
+            _ => ApiError::Internal(format!("Internal server error: {}", err)),
         }
     }
 }
