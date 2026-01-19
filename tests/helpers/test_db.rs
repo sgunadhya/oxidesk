@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use oxidesk::database::Database;
+use oxidesk::infrastructure::persistence::Database;
 use std::fs;
 use std::path::PathBuf;
 

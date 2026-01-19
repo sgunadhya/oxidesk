@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 use chrono::{DateTime, Duration, Utc};
 use oxidesk::{
-    database::Database,
-    models::{AppliedSla, SlaEvent, SlaEventStatus, SlaEventType, SlaPolicy},
+    infrastructure::persistence::Database,
+    domain::entities::{AppliedSla, SlaEvent, SlaEventStatus, SlaEventType, SlaPolicy},
 };
 
 /// Create a test SLA policy with custom times

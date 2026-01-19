@@ -6,8 +6,10 @@ use uuid::Uuid;
 
 use helpers::*;
 use oxidesk::{
-    models::{Agent, Session, User, UserType},
-    services::{hash_password, PasswordResetService, validate_and_normalize_email},
+    domain::entities::{Agent, Session, User, UserType},
+    application::services::auth::hash_password,
+    shared::utils::email_validator::validate_and_normalize_email,
+    application::services::PasswordResetService,
 };
 
 #[tokio::test]

@@ -1,4 +1,4 @@
-use oxidesk::services::validate_password_complexity;
+use oxidesk::application::services::auth::validate_password_complexity;
 
 #[test]
 fn test_password_minimum_length() {

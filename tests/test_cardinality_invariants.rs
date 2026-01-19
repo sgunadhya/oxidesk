@@ -8,8 +8,9 @@
 // - Role Permission Requirement: Roles must have at least one permission
 
 use oxidesk::{
-    database::Database, domain::ports::role_repository::RoleRepository,
-    domain::ports::user_repository::UserRepository, models::*, services::*,
+    infrastructure::persistence::Database, domain::ports::role_repository::RoleRepository,
+    domain::ports::user_repository::UserRepository, domain::entities::*, application::services::*,
+    application::services::auth::*, shared::utils::email_validator::*,
 };
 use std::sync::Arc;
 
@@ -115,7 +116,7 @@ async fn test_agent_must_have_at_least_one_role_on_update() {
         role_id: None, // Will use default role
     };
 
-    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::application::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service =
         AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
@@ -461,7 +462,7 @@ async fn test_role_must_have_at_least_one_permission_on_create() {
     };
 
     let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
-    let result = role_service.create_role(&admin, request).await;
+    let result = role_service.create_role(request.name, request.description, request.permissions).await;
 
     // FR-014: Verify rejection with specific error message
     assert!(result.is_err(), "Should reject role with no permissions");
@@ -495,7 +496,7 @@ async fn test_role_must_have_at_least_one_permission_on_update() {
 
     let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
     let role = role_service
-        .create_role(&admin, create_request)
+        .create_role(create_request.name, create_request.description, create_request.permissions)
         .await
         .expect("Failed to create role");
 
@@ -507,7 +508,7 @@ async fn test_role_must_have_at_least_one_permission_on_update() {
     };
 
     let result = role_service
-        .update_role(&admin, &role.id, update_request)
+        .update_role(&role.id, update_request.name, update_request.description, update_request.permissions)
         .await;
 
     // FR-014: Verify rejection with specific error message
@@ -547,7 +548,7 @@ async fn test_role_with_valid_permissions_succeeds() {
     };
 
     let role_service = RoleService::new(Arc::new(db.clone()) as Arc<dyn RoleRepository>);
-    let result = role_service.create_role(&admin, request).await;
+    let result = role_service.create_role(request.name, request.description, request.permissions).await;
 
     assert!(result.is_ok(), "Should accept role with valid permissions");
 }
@@ -576,7 +577,7 @@ async fn test_entity_deletion_bypasses_cardinality_validation() {
         role_id: None,
     };
 
-    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::application::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service =
         AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,

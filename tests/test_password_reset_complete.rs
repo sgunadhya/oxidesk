@@ -4,10 +4,11 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    api::middleware::error::ApiError,
-    models::{Agent, User, UserType},
-    services::auth::verify_password,
-    services::{hash_password, PasswordResetService, validate_and_normalize_email},
+    infrastructure::http::middleware::error::ApiError,
+    domain::entities::{Agent, User, UserType},
+    application::services::auth::{hash_password, verify_password},
+    shared::utils::email_validator::validate_and_normalize_email,
+    application::services::PasswordResetService,
 };
 
 #[tokio::test]

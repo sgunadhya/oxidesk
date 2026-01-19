@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::{EmailProcessingLog, InboxEmailConfig, UpdateInboxEmailConfigRequest};
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::{EmailProcessingLog, InboxEmailConfig, UpdateInboxEmailConfigRequest};
 
 #[async_trait::async_trait]
 pub trait EmailRepository: Send + Sync {

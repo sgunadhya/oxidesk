@@ -4,9 +4,9 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{CreateAgentRequest, UserType},
-    services::verify_password,
-    services::AgentService,
+    domain::entities::{CreateAgentRequest, UserType},
+    application::services::auth::verify_password,
+    application::services::AgentService,
 };
 
 #[tokio::test]
@@ -26,7 +26,7 @@ async fn test_create_agent_service_flow() {
     };
 
     // 3. Call create_agent
-    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::application::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service =
         AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,

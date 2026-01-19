@@ -5,10 +5,12 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    api::middleware::auth::AuthenticatedUser,
-    api::middleware::error::ApiError,
-    models::{Agent, ChangePasswordRequest, Session, User, UserType},
-    services::{agent_service, hash_password, validate_and_normalize_email},
+    infrastructure::http::middleware::auth::AuthenticatedUser,
+    infrastructure::http::middleware::error::ApiError,
+    domain::entities::{Agent, ChangePasswordRequest, Session, User, UserType},
+    application::services::agent_service,
+    application::services::auth::hash_password,
+    shared::utils::email_validator::validate_and_normalize_email,
 };
 use uuid::Uuid;
 
@@ -35,7 +37,7 @@ async fn test_password_change_destroys_all_user_sessions() {
     let admin_role = db.get_role_by_name("Admin").await.unwrap().unwrap();
 
     // Assign Admin role to admin user
-    let user_role = oxidesk::models::UserRole::new(admin_user.id.clone(), admin_role.id.clone());
+    let user_role = oxidesk::domain::entities::UserRole::new(admin_user.id.clone(), admin_role.id.clone());
     db.assign_role_to_user(&user_role).await.unwrap();
 
     // Create admin session for authenticated user
@@ -95,7 +97,7 @@ async fn test_password_change_destroys_all_user_sessions() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::application::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
@@ -140,7 +142,7 @@ async fn test_password_change_requires_reauthentication() {
 
     // Get and assign Admin role
     let admin_role = db.get_role_by_name("Admin").await.unwrap().unwrap();
-    let user_role = oxidesk::models::UserRole::new(admin_user.id.clone(), admin_role.id.clone());
+    let user_role = oxidesk::domain::entities::UserRole::new(admin_user.id.clone(), admin_role.id.clone());
     db.assign_role_to_user(&user_role).await.unwrap();
 
     let admin_session = Session::new(admin_user.id.clone(), Uuid::new_v4().to_string(), 9);
@@ -201,7 +203,7 @@ async fn test_password_change_requires_reauthentication() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::application::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
@@ -245,7 +247,7 @@ async fn test_password_change_does_not_affect_other_users() {
 
     // Get and assign Admin role
     let admin_role = db.get_role_by_name("Admin").await.unwrap().unwrap();
-    let user_role = oxidesk::models::UserRole::new(admin_user.id.clone(), admin_role.id.clone());
+    let user_role = oxidesk::domain::entities::UserRole::new(admin_user.id.clone(), admin_role.id.clone());
     db.assign_role_to_user(&user_role).await.unwrap();
 
     let admin_session = Session::new(admin_user.id.clone(), Uuid::new_v4().to_string(), 9);
@@ -306,7 +308,7 @@ async fn test_password_change_does_not_affect_other_users() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::application::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
@@ -359,7 +361,7 @@ async fn test_password_change_with_no_active_sessions() {
 
     // Get and assign Admin role
     let admin_role = db.get_role_by_name("Admin").await.unwrap().unwrap();
-    let user_role = oxidesk::models::UserRole::new(admin_user.id.clone(), admin_role.id.clone());
+    let user_role = oxidesk::domain::entities::UserRole::new(admin_user.id.clone(), admin_role.id.clone());
     db.assign_role_to_user(&user_role).await.unwrap();
 
     let admin_session = Session::new(admin_user.id.clone(), Uuid::new_v4().to_string(), 9);
@@ -405,7 +407,7 @@ async fn test_password_change_with_no_active_sessions() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::application::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,
@@ -445,7 +447,7 @@ async fn test_password_change_permission_required() {
 
     // Get the regular Agent role (not Admin)
     let agent_role = db.get_role_by_name("Agent").await.unwrap().unwrap();
-    let user_role = oxidesk::models::UserRole::new(agent_user.id.clone(), agent_role.id.clone());
+    let user_role = oxidesk::domain::entities::UserRole::new(agent_user.id.clone(), agent_role.id.clone());
     db.assign_role_to_user(&user_role).await.unwrap();
 
     let agent_session = Session::new(agent_user.id.clone(), Uuid::new_v4().to_string(), 9);
@@ -487,7 +489,7 @@ async fn test_password_change_permission_required() {
         new_password: "NewPass123!".to_string(),
     };
 
-    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::application::services::SessionService::new(std::sync::Arc::new(db.clone()));
     let agent_service = agent_service::AgentService::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::api_key_repository::ApiKeyRepository>,

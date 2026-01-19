@@ -3,9 +3,9 @@
 /// Repository pattern for OIDC provider and state operations.
 /// Encapsulates all database access for OIDC functionality.
 use crate::{
-    api::middleware::error::ApiResult,
-    database::Database,
-    models::{OidcProvider, OidcState},
+    infrastructure::http::middleware::error::ApiResult,
+    infrastructure::persistence::Database,
+    domain::entities::{OidcProvider, OidcState},
 };
 
 /// Repository for OIDC provider and state operations

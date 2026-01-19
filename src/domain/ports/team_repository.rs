@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::{Team, TeamMemberRole, User};
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::{Team, TeamMemberRole, User};
 
 #[async_trait::async_trait]
 pub trait TeamRepository: Send + Sync {

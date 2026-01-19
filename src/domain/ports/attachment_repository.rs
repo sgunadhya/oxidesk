@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::MessageAttachment;
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::MessageAttachment;
 
 #[async_trait::async_trait]
 pub trait AttachmentRepository: Send + Sync {

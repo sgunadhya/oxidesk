@@ -1,4 +1,4 @@
-use oxidesk::automation_rules::AutomationRulesRepository;
+use oxidesk::infrastructure::persistence::automation_rules::AutomationRulesRepository;
 mod helpers;
 
 use helpers::*;
@@ -9,14 +9,12 @@ use oxidesk::{
         conversation_tag_repository::ConversationTagRepository, tag_repository::TagRepository,
         team_repository::TeamRepository, user_repository::UserRepository,
     },
-    models::{
+    domain::entities::{
         ActionType, AutomationRule, ComparisonOperator, ConversationStatus, Priority, RuleAction,
         RuleCondition, RuleType,
     },
-    services::{
-        action_executor::ActionExecutor,
-        automation_service::{AutomationConfig, AutomationService},
-    },
+    domain::services::action_executor::ActionExecutor,
+    application::services::automation_service::{AutomationConfig, AutomationService},
 };
 use serde_json::json;
 use std::collections::HashMap;

@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::{Conversation, Tag};
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::{Conversation, Tag};
 
 /// Repository for conversation tag operations
 #[async_trait::async_trait]

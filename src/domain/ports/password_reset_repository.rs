@@ -1,7 +1,7 @@
 use crate::{
-    api::middleware::error::ApiResult,
-    database::Database,
-    models::PasswordResetToken,
+    infrastructure::http::middleware::error::ApiResult,
+    infrastructure::persistence::Database,
+    domain::entities::PasswordResetToken,
 };
 
 #[derive(Clone)]

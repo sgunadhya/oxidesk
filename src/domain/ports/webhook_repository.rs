@@ -1,7 +1,7 @@
 use crate::{
-    api::middleware::error::ApiResult,
-    database::Database,
-    models::Webhook,
+    infrastructure::http::middleware::error::ApiResult,
+    infrastructure::persistence::Database,
+    domain::entities::Webhook,
 };
 
 #[derive(Clone)]
@@ -51,7 +51,7 @@ impl WebhookRepository {
         limit: i64,
         offset: i64,
         status_filter: Option<&str>,
-    ) -> ApiResult<Vec<crate::models::WebhookDelivery>> {
+    ) -> ApiResult<Vec<crate::domain::entities::WebhookDelivery>> {
         self.db.get_deliveries_for_webhook(webhook_id, limit, offset, status_filter).await
     }
 
@@ -70,7 +70,7 @@ impl WebhookRepository {
     }
 
     /// Create a webhook delivery record
-    pub async fn create_webhook_delivery(&self, delivery: &crate::models::WebhookDelivery) -> ApiResult<()> {
+    pub async fn create_webhook_delivery(&self, delivery: &crate::domain::entities::WebhookDelivery) -> ApiResult<()> {
         self.db.create_webhook_delivery(delivery).await
     }
 }

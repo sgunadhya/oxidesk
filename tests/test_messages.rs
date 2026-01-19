@@ -1,12 +1,12 @@
 mod helpers;
 
 use helpers::test_db::setup_test_db;
-use oxidesk::database::Database;
+use oxidesk::infrastructure::persistence::Database;
 use oxidesk::domain::ports::conversation_repository::ConversationRepository;
 use oxidesk::domain::ports::email_repository::EmailRepository;
 use oxidesk::domain::ports::message_repository::MessageRepository;
 use oxidesk::domain::ports::user_repository::UserRepository;
-use oxidesk::models::{
+use oxidesk::domain::entities::{
     Conversation, ConversationStatus, IncomingMessageRequest, Message, MessageStatus, MessageType,
     SendMessageRequest, User, UserType,
 };
@@ -394,7 +394,7 @@ async fn test_max_retries_reached() {
 #[tokio::test]
 async fn test_exponential_backoff() {
     // Import the delivery service test
-    use oxidesk::services::DeliveryService;
+    use oxidesk::application::services::DeliveryService;
 
     // Test backoff calculation
     assert_eq!(DeliveryService::calculate_retry_delay(0), 60); // 60 * 2^0 = 60 seconds
@@ -410,7 +410,7 @@ async fn test_exponential_backoff() {
 // Test that MessageService with delivery actually queues messages
 #[tokio::test]
 async fn test_delivery_service_integration() {
-    use oxidesk::services::{DeliveryService, MessageService, MockDeliveryProvider};
+    use oxidesk::application::services::{DeliveryService, MessageService, MockDeliveryProvider};
     use std::sync::Arc;
 
     let test_db = setup_test_db().await;
@@ -540,7 +540,7 @@ async fn test_content_at_max_length_accepted() {
 // T081: End-to-end incoming message flow
 #[tokio::test]
 async fn test_e2e_incoming_message_flow() {
-    use oxidesk::services::MessageService;
+    use oxidesk::application::services::MessageService;
 
     let test_db = setup_test_db().await;
     let db = test_db.db();
@@ -575,7 +575,7 @@ async fn test_e2e_incoming_message_flow() {
 // T082: End-to-end outgoing message flow
 #[tokio::test]
 async fn test_e2e_outgoing_message_flow() {
-    use oxidesk::services::{DeliveryService, MessageService, MockDeliveryProvider};
+    use oxidesk::application::services::{DeliveryService, MessageService, MockDeliveryProvider};
     use std::sync::Arc;
 
     let test_db = setup_test_db().await;
@@ -629,7 +629,7 @@ async fn test_e2e_outgoing_message_flow() {
 // T083: Delivery retry flow
 #[tokio::test]
 async fn test_e2e_delivery_retry_flow() {
-    use oxidesk::services::{DeliveryService, MockDeliveryProvider};
+    use oxidesk::application::services::{DeliveryService, MockDeliveryProvider};
     use std::sync::Arc;
 
     let test_db = setup_test_db().await;

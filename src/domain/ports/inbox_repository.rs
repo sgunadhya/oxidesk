@@ -1,5 +1,5 @@
-use crate::api::middleware::ApiResult;
-use crate::models::Inbox;
+use crate::infrastructure::http::middleware::ApiResult;
+use crate::domain::entities::Inbox;
 use async_trait::async_trait;
 
 #[async_trait]

@@ -4,10 +4,10 @@ mod helpers;
 use chrono::{Duration, Utc};
 use helpers::*;
 use oxidesk::{
-    database::Database,
-    events::EventBus,
-    models::{AgentAvailability, User, UserType},
-    services::AvailabilityService,
+    infrastructure::persistence::Database,
+    shared::events::EventBus,
+    domain::entities::{AgentAvailability, User, UserType},
+    application::services::AvailabilityService,
 };
 use sqlx::Row;
 

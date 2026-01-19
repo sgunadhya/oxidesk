@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::Message;
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::Message;
 
 #[async_trait::async_trait]
 pub trait MessageRepository: Send + Sync {
@@ -17,7 +17,7 @@ pub trait MessageRepository: Send + Sync {
     async fn update_message_status(
         &self,
         message_id: &str,
-        status: crate::models::MessageStatus,
+        status: crate::domain::entities::MessageStatus,
         sent_at: Option<&str>,
     ) -> ApiResult<()>;
 
@@ -34,10 +34,10 @@ pub trait MessageRepository: Send + Sync {
     // Notifications (related to messaging)
     async fn create_notification(
         &self,
-        notification: &crate::models::UserNotification,
+        notification: &crate::domain::entities::UserNotification,
     ) -> ApiResult<()>;
     async fn get_users_by_usernames(
         &self,
         usernames: &[String],
-    ) -> ApiResult<Vec<crate::models::User>>;
+    ) -> ApiResult<Vec<crate::domain::entities::User>>;
 }

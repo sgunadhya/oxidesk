@@ -1,4 +1,4 @@
-use oxidesk::models::conversation::ConversationStatus;
+use oxidesk::domain::entities::conversation::ConversationStatus;
 
 mod helpers;
 use helpers::*;

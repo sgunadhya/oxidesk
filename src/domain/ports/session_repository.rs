@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::Session;
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::Session;
 
 #[async_trait::async_trait]
 pub trait SessionRepository: Send + Sync {

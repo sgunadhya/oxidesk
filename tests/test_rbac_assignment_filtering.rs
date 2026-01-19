@@ -7,7 +7,7 @@ use helpers::rbac_helpers::{
     create_test_role, create_test_team, ensure_test_inbox,
 };
 use helpers::*;
-use oxidesk::services::PermissionService;
+use oxidesk::application::services::PermissionService;
 
 #[tokio::test]
 async fn test_assigned_conversation_access_granted() {

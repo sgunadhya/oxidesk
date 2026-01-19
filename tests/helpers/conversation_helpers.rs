@@ -1,13 +1,13 @@
 #![allow(dead_code)]
-use oxidesk::api::middleware::AuthenticatedUser;
-use oxidesk::database::Database;
+use oxidesk::infrastructure::http::middleware::AuthenticatedUser;
+use oxidesk::infrastructure::persistence::Database;
 use oxidesk::domain::ports::agent_repository::AgentRepository;
 use oxidesk::domain::ports::contact_repository::ContactRepository;
 use oxidesk::domain::ports::user_repository::UserRepository;
-use oxidesk::models::conversation::{Conversation, ConversationStatus};
-use oxidesk::models::{Agent, Role};
-use oxidesk::models::{Contact, User, UserType};
-use oxidesk::services::validate_and_normalize_email;
+use oxidesk::domain::entities::conversation::{Conversation, ConversationStatus};
+use oxidesk::domain::entities::{Agent, Role};
+use oxidesk::domain::entities::{Contact, User, UserType};
+use oxidesk::shared::utils::email_validator::validate_and_normalize_email;
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -219,7 +219,7 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         first_name: "Test Agent".to_string(),
         last_name: None,
         password_hash: "hash".to_string(),
-        availability_status: oxidesk::models::AgentAvailability::Online,
+        availability_status: oxidesk::domain::entities::AgentAvailability::Online,
         last_login_at: None,
         last_activity_at: None,
         away_since: None,
@@ -255,7 +255,7 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
         .expect("Failed to assign role");
 
     // Create test session
-    let session = oxidesk::models::Session {
+    let session = oxidesk::domain::entities::Session {
         id: Uuid::new_v4().to_string(),
         user_id: user.id.clone(),
         token: "test-token".to_string(),
@@ -266,7 +266,7 @@ pub async fn create_test_auth_user(db: &Database) -> AuthenticatedUser {
             .to_rfc3339(),
         created_at: chrono::Utc::now().to_rfc3339(),
         last_accessed_at: chrono::Utc::now().to_rfc3339(),
-        auth_method: oxidesk::models::AuthMethod::Password,
+        auth_method: oxidesk::domain::entities::AuthMethod::Password,
         provider_name: None,
     };
 

@@ -2,7 +2,7 @@ mod helpers;
 
 use chrono::Datelike;
 use helpers::*;
-use oxidesk::models::*;
+use oxidesk::domain::entities::*;
 
 // ========================================
 // Phase 3: User Story 1 - Permission Enforcement & Validation

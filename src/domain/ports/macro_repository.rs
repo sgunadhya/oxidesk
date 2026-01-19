@@ -1,7 +1,7 @@
-use crate::api::middleware::error::ApiResult;
-use crate::database::Database;
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::infrastructure::persistence::Database;
 use crate::domain::ports::user_repository::UserRepository;
-use crate::models::{Macro, MacroAccess, MacroAction, MacroApplicationLog};
+use crate::domain::entities::{Macro, MacroAccess, MacroAction, MacroApplicationLog};
 
 /// Repository for macro operations
 #[derive(Clone)]
@@ -109,19 +109,19 @@ impl MacroRepository {
     pub async fn get_conversation_by_id(
         &self,
         conversation_id: &str,
-    ) -> ApiResult<Option<crate::models::Conversation>> {
+    ) -> ApiResult<Option<crate::domain::entities::Conversation>> {
         self.db.get_conversation_by_id(conversation_id).await
     }
 
-    pub async fn get_user_by_id(&self, user_id: &str) -> ApiResult<Option<crate::models::User>> {
+    pub async fn get_user_by_id(&self, user_id: &str) -> ApiResult<Option<crate::domain::entities::User>> {
         self.db.get_user_by_id(user_id).await
     }
 
-    pub async fn get_team_by_id(&self, team_id: &str) -> ApiResult<Option<crate::models::Team>> {
+    pub async fn get_team_by_id(&self, team_id: &str) -> ApiResult<Option<crate::domain::entities::Team>> {
         self.db.get_team_by_id(team_id).await
     }
 
-    pub async fn get_user_teams(&self, user_id: &str) -> ApiResult<Vec<crate::models::Team>> {
+    pub async fn get_user_teams(&self, user_id: &str) -> ApiResult<Vec<crate::domain::entities::Team>> {
         self.db.get_user_teams(user_id).await
     }
 }

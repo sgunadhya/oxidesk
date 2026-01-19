@@ -11,7 +11,7 @@ use oxidesk::domain::ports::user_repository::UserRepository;
 mod helpers;
 
 use helpers::test_db::setup_test_db;
-use oxidesk::{database::Database, models::*, services::sla_service::SlaService};
+use oxidesk::{infrastructure::persistence::Database, domain::entities::*, application::services::SlaService};
 use std::sync::Arc;
 
 // ===== Test Helpers =====
@@ -20,7 +20,7 @@ async fn create_test_admin(db: &Database) -> (User, Agent) {
     let user = User::new("admin@test.com".to_string(), UserType::Agent);
     db.create_user(&user).await.unwrap();
 
-    let password_hash = oxidesk::services::hash_password("TestPass123!").unwrap();
+    let password_hash = oxidesk::application::services::auth::hash_password("TestPass123!").unwrap();
     let agent = Agent::new(
         user.id.clone(),
         "Test".to_string(),

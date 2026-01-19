@@ -1,5 +1,5 @@
-use oxidesk::models::conversation::ConversationStatus;
-use oxidesk::services::state_machine::validate_transition;
+use oxidesk::domain::entities::conversation::ConversationStatus;
+use oxidesk::domain::services::state_machine::validate_transition;
 
 #[test]
 fn test_all_valid_transitions_pass() {

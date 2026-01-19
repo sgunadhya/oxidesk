@@ -7,8 +7,8 @@ use oxidesk::{
         conversation_tag_repository::ConversationTagRepository, tag_repository::TagRepository,
         team_repository::TeamRepository, user_repository::UserRepository,
     },
-    models::{ActionType, ConversationStatus, Priority, RuleAction},
-    services::action_executor::ActionExecutor,
+    domain::entities::{ActionType, ConversationStatus, Priority, RuleAction},
+    domain::services::action_executor::ActionExecutor,
 };
 use serde_json::json;
 use std::collections::HashMap;

@@ -1,12 +1,12 @@
 mod helpers;
 
 use helpers::*;
-use oxidesk::models::{
+use oxidesk::domain::entities::{
     ActionType, AutomationRule, ComparisonOperator, RuleAction, RuleCondition, RuleType,
 };
 use serde_json::json;
 use std::collections::HashMap;
-use oxidesk::automation_rules::AutomationRulesRepository;
+use oxidesk::infrastructure::persistence::automation_rules::AutomationRulesRepository;
 
 #[tokio::test]
 async fn test_create_automation_rule() {
