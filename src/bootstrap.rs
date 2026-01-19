@@ -21,13 +21,11 @@ use crate::domain::ports::user_repository::UserRepository;
 use crate::domain::ports::webhook_repository::WebhookRepository;
 use crate::infrastructure::http::middleware::{ApiError, AppState};
 use crate::infrastructure::persistence::Database;
-use crate::infrastructure::providers::{
-    connection_manager::{ConnectionManager, InMemoryConnectionManager},
-    email_receiver::spawn_email_polling_worker,
+use crate::infrastructure::providers::connection_manager::{
+    ConnectionManager, InMemoryConnectionManager,
 };
 use crate::infrastructure::workers::job_queue::TaskQueue;
 use crate::shared::utils::email_validator::validate_and_normalize_email;
-use crate::EventBus;
 use crate::LocalEventBus;
 use std::sync::Arc;
 
@@ -38,6 +36,10 @@ pub async fn build_app_state(
     let attachment_storage_path =
         std::env::var("ATTACHMENT_STORAGE_PATH").unwrap_or_else(|_| "./attachments".to_string());
     std::fs::create_dir_all(&attachment_storage_path)?;
+
+    // Initialize TaskSpawner
+    let task_spawner = Arc::new(crate::infrastructure::runtime::tokio::TokioTaskSpawner::new())
+        as Arc<dyn crate::domain::ports::task_spawner::TaskSpawner>;
 
     // Initialize event bus for automation rules
     let event_bus = std::sync::Arc::new(LocalEventBus::new(100));
@@ -132,7 +134,7 @@ pub async fn build_app_state(
 
     // Enqueue initial maintenance jobs
     let q_init = task_queue.clone();
-    tokio::spawn(async move {
+    task_spawner.spawn(Box::pin(async move {
         if let Err(e) = q_init
             .enqueue("cleanup_sessions", serde_json::Value::Null, 3)
             .await
@@ -163,30 +165,12 @@ pub async fn build_app_state(
         {
             tracing::error!("Failed to enqueue initial check_sla_breaches: {}", e);
         }
-    });
+    }));
 
     // Initialize Session Service
     let session_service =
         crate::application::services::SessionService::new(std::sync::Arc::new(db.clone()));
     tracing::info!("Session service initialized");
-
-    // Initialize repositories for JobProcessor
-    let oidc_repo_for_jobs = OidcRepository::new(db.clone());
-    let webhook_repo_for_jobs = WebhookRepository::new(db.clone());
-
-    // Start JobProcessor
-    let job_processor = crate::infrastructure::workers::JobProcessor::new(
-        task_queue.clone(),
-        oidc_repo_for_jobs,
-        webhook_repo_for_jobs,
-        rate_limiter.clone(),
-        availability_service.clone(),
-        sla_service.clone(),
-        session_service.clone(),
-    );
-    tokio::spawn(async move {
-        job_processor.start().await;
-    });
 
     // Initialize Agent Service
     let agent_service = crate::application::services::AgentService::new(
@@ -306,11 +290,22 @@ pub async fn build_app_state(
     tracing::info!("Auth logger service initialized");
 
     // Start automation listener background task
-    crate::infrastructure::listeners::automation::start_automation_listener(
-        event_bus.clone(),
-        sla_service.clone(),
-        db.clone(),
-    );
+    let automation_event_bus = event_bus.clone();
+    let automation_sla_svc = sla_service.clone();
+    let automation_svc = automation_service.clone();
+    let automation_conv_svc = conversation_service.clone();
+    let automation_team_svc = team_service.clone();
+
+    task_spawner.spawn(Box::pin(async move {
+        crate::application::listeners::automation::run_automation_listener(
+            automation_event_bus,
+            automation_sla_svc,
+            automation_svc,
+            automation_conv_svc,
+            automation_team_svc,
+        )
+        .await;
+    }));
 
     // Start webhook worker background task
     let webhook_repo_for_worker = WebhookRepository::new(db.clone());
@@ -321,13 +316,15 @@ pub async fn build_app_state(
         webhook_event_bus,
         task_queue.clone(),
     );
-    webhook_worker.start();
+    task_spawner.spawn(Box::pin(async move {
+        webhook_worker.run().await;
+    }));
     tracing::info!("Webhook worker started");
 
     // Start notification cleanup background task
     {
         let cleanup_db = db.clone();
-        tokio::spawn(async move {
+        task_spawner.spawn(Box::pin(async move {
             use tokio::time::{interval, Duration};
             let mut cleanup_interval = interval(Duration::from_secs(24 * 60 * 60)); // 24 hours
 
@@ -352,29 +349,50 @@ pub async fn build_app_state(
                     }
                 }
             }
-        });
+        }));
     }
 
+    // Initialize TimeService
+    let time_service =
+        std::sync::Arc::new(crate::infrastructure::runtime::tokio::TokioTimeService::new());
+
     // Spawn email polling worker (Feature 021)
-
-    // Create contact service factory
-    let db_for_factory = db.clone();
-    let contact_service_factory = move || {
-        crate::application::services::ContactService::new(
-            std::sync::Arc::new(db_for_factory.clone()),
-            std::sync::Arc::new(db_for_factory.clone()),
-        )
-    };
-
-    let _email_polling_handle = spawn_email_polling_worker(
-        email_repo,
-        conversation_repo,
-        message_repo,
-        attachment_repo,
-        contact_service_factory,
-        attachment_storage_path,
+    let db_clone_for_email = db.clone();
+    let email_worker = crate::infrastructure::providers::email_receiver::EmailPollingWorker::new(
+        email_repo.clone(),
+        conversation_repo.clone(),
+        message_repo.clone(),
+        attachment_repo.clone(),
+        move || {
+            crate::application::services::ContactService::new(
+                std::sync::Arc::new(db_clone_for_email.clone()),
+                std::sync::Arc::new(db_clone_for_email.clone()),
+            )
+        },
+        attachment_storage_path.clone(),
+        time_service.clone(),
     );
+    task_spawner.spawn(Box::pin(async move {
+        email_worker.run().await;
+    }));
     tracing::info!("Email polling worker started");
+
+    // Spawn JobProcessor for background tasks
+    let oidc_repo = OidcRepository::new(db.clone());
+    let webhook_repo = WebhookRepository::new(db.clone());
+    let job_processor = crate::infrastructure::workers::job_worker::JobProcessor::new(
+        task_queue.clone(),
+        oidc_repo.clone(),
+        webhook_repo.clone(),
+        rate_limiter.clone(),
+        availability_service.clone(),
+        sla_service.clone(),
+        session_service.clone(),
+        time_service.clone(),
+    );
+    task_spawner.spawn(Box::pin(async move {
+        job_processor.run().await;
+    }));
 
     // Create application state
     Ok(AppState {
