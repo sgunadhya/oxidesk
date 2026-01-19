@@ -1,16 +1,14 @@
 use crate::domain::ports::agent_repository::AgentRepository;
 use crate::{
-    infrastructure::http::middleware::error::ApiError,
+    application::services, domain::entities::*, infrastructure::http::middleware::error::ApiError,
     infrastructure::persistence::Database,
-    domain::entities::*,
-    application::services,
     infrastructure::providers::connection_manager::ConnectionManager,
     shared::rate_limiter::AuthRateLimiter,
 };
 use axum::{
     extract::{Request, State},
     middleware::Next,
-    response::Response,
+    response::{Redirect, Response},
 };
 use std::sync::Arc;
 
@@ -229,4 +227,87 @@ impl AuthenticatedUser {
     pub fn is_admin(&self) -> bool {
         self.roles.iter().any(|r| r.name == "Admin")
     }
+}
+
+/// Web authentication middleware that checks session cookie
+pub async fn web_auth_middleware(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Result<Response, Redirect> {
+    // Get session token from cookie
+    let cookies = request
+        .headers()
+        .get("Cookie")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+
+    let token = cookies.split(';').find_map(|cookie| {
+        let cookie = cookie.trim();
+        if cookie.starts_with("session_token=") {
+            Some(cookie.trim_start_matches("session_token="))
+        } else {
+            None
+        }
+    });
+
+    let token = match token {
+        Some(t) => t.to_string(), // Clone to owned string
+        None => return Err(Redirect::to("/login")),
+    };
+
+    // Validate session
+    let session = match state.session_service.get_session_by_token(&token).await {
+        Ok(Some(s)) => s,
+        _ => return Err(Redirect::to("/login")),
+    };
+
+    if session.is_expired() {
+        let _ = state.session_service.delete_session(&token).await;
+        return Err(Redirect::to("/login"));
+    }
+
+    // Get user
+    let user = match state.user_service.get_user_by_id(&session.user_id).await {
+        Ok(Some(u)) => u,
+        _ => return Err(Redirect::to("/login")),
+    };
+
+    // Only agents can authenticate
+    if !matches!(user.user_type, UserType::Agent) {
+        return Err(Redirect::to("/login"));
+    }
+
+    // Get agent
+    let agent = match state.agent_service.get_agent_by_user_id(&user.id).await {
+        Ok(Some(a)) => a,
+        _ => return Err(Redirect::to("/login")),
+    };
+
+    // Get roles
+    let roles = match state.role_service.get_user_roles(&user.id).await {
+        Ok(r) => r,
+        _ => return Err(Redirect::to("/login")),
+    };
+
+    // Compute permissions from all roles
+    let mut permissions = std::collections::HashSet::new();
+    for role in &roles {
+        for permission in &role.permissions {
+            permissions.insert(permission.clone());
+        }
+    }
+    let permissions: Vec<String> = permissions.into_iter().collect();
+
+    // Store authenticated user in request extensions
+    request.extensions_mut().insert(AuthenticatedUser {
+        user,
+        agent,
+        roles,
+        permissions,
+        session,
+        token,
+    });
+
+    Ok(next.run(request).await)
 }
