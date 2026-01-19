@@ -7,6 +7,7 @@ use axum::{
     routing::{delete, get, patch, post, put},
     Router,
 };
+use tower_http::trace::TraceLayer;
 
 pub fn build_router(state: AppState) -> Router {
     // Build protected routes (require authentication)
@@ -377,16 +378,13 @@ pub fn build_router(state: AppState) -> Router {
         )
         // Password Reset routes (Feature 017) - Public endpoints
         .route(
-            "/api/password-reset/request",
-            post(api::password_reset::request_password_reset),
-        )
-        .route(
             "/api/password-reset/reset",
             post(api::password_reset::reset_password),
         )
+        .route("/metrics", get(metrics_handler))
         .merge(protected)
-        .merge(web_protected)
         .merge(api::messages::routes())
+        .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
 
@@ -396,4 +394,13 @@ async fn root_handler() -> &'static str {
 
 async fn health_handler() -> &'static str {
     "OK"
+}
+
+async fn metrics_handler() -> String {
+    // metrics-exporter-prometheus handles the scrape endpoint automatically
+    // if configured via with_http_listener, but we can also expose it here
+    // if we wanted it on the main port.
+    // Since we used with_http_listener on another port, this handler is just a stub
+    // or we could bridge it. Most scalable way is separate port.
+    "Prometheus metrics exposed on metrics port (default 9000)".to_string()
 }

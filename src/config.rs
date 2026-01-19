@@ -8,6 +8,9 @@ pub struct Config {
     pub admin_email: String,
     pub admin_password: String,
     pub session_duration_hours: i64,
+    pub otel_exporter_endpoint: Option<String>,
+    pub service_name: String,
+    pub metrics_port: u16,
 }
 
 impl Config {
@@ -35,6 +38,15 @@ impl Config {
             .parse()
             .unwrap_or(9);
 
+        let otel_exporter_endpoint = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok();
+
+        let service_name = env::var("SERVICE_NAME").unwrap_or_else(|_| "oxidesk".to_string());
+
+        let metrics_port = env::var("METRICS_PORT")
+            .unwrap_or_else(|_| "9000".to_string())
+            .parse()
+            .unwrap_or(9000);
+
         Ok(Config {
             database_url,
             server_host,
@@ -42,6 +54,9 @@ impl Config {
             admin_email,
             admin_password,
             session_duration_hours,
+            otel_exporter_endpoint,
+            service_name,
+            metrics_port,
         })
     }
 

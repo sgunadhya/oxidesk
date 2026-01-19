@@ -107,7 +107,11 @@ impl TaskQueue for SqliteTaskQueue {
 
             // 3. Fetch full details
             let job_row = sqlx::query(
-                "SELECT id, job_type, payload, status, run_at, created_at, updated_at, attempts, max_attempts, last_error
+                "SELECT id, job_type, payload, status, 
+                        CAST(run_at AS TEXT) as run_at, 
+                        CAST(created_at AS TEXT) as created_at, 
+                        CAST(updated_at AS TEXT) as updated_at, 
+                        attempts, max_attempts, last_error
                  FROM jobs WHERE id = ?",
             )
             .bind(&id)

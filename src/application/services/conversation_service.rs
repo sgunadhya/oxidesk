@@ -36,6 +36,7 @@ impl ConversationService {
         }
     }
 
+    #[tracing::instrument(skip(self, auth_user, sla_service))]
     pub async fn create_conversation(
         &self,
         auth_user: &AuthenticatedUser,
@@ -122,6 +123,7 @@ impl ConversationService {
         Ok(conversation)
     }
 
+    #[tracing::instrument(skip(self, event_bus))]
     pub async fn update_conversation_status(
         &self,
         conversation_id: &str,
@@ -205,6 +207,7 @@ impl ConversationService {
         Ok(updated)
     }
 
+    #[tracing::instrument(skip(self, event_bus))]
     pub async fn assign_conversation(
         &self,
         conversation_id: &str,

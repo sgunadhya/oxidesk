@@ -217,6 +217,7 @@ impl EmailReceiverService {
     }
 
     /// Process inbox - fetch and process all new emails
+    #[tracing::instrument(skip(self))]
     pub async fn process_inbox(&self, inbox_id: &str) -> ApiResult<u32> {
         // Get inbox email configuration
         let config = self
@@ -305,6 +306,7 @@ impl EmailReceiverService {
     }
 
     /// Process email reply (with reference number matching)
+    #[tracing::instrument(skip(self, parsed_email))]
     async fn process_reply_email(
         &self,
         inbox_id: &str,

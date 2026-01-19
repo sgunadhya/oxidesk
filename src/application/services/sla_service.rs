@@ -42,6 +42,7 @@ impl SlaService {
     // ========================================
 
     /// Create a new SLA policy
+    #[tracing::instrument(skip(self))]
     pub async fn create_policy(
         &self,
         name: String,
@@ -200,6 +201,7 @@ impl SlaService {
 
     /// Apply SLA policy to a conversation
     /// Creates an applied SLA with calculated deadlines and creates initial SLA events
+    #[tracing::instrument(skip(self))]
     pub async fn apply_sla(
         &self,
         conversation_id: &str,
@@ -475,6 +477,7 @@ impl SlaService {
     }
 
     /// Check for breached SLA events and update their status
+    #[tracing::instrument(skip(self))]
     pub async fn check_breaches(&self) -> ApiResult<()> {
         // Get all pending events past their deadline
         let breached_events = self.sla_repo.get_pending_events_past_deadline().await?;

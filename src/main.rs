@@ -3,21 +3,16 @@ use oxidesk::config::Config;
 use oxidesk::infrastructure::http::router::build_router;
 use oxidesk::infrastructure::persistence::Database;
 use std::net::SocketAddr;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "oxidesk=debug,tower_http=debug,axum=debug".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
     // Load configuration
     let config = Config::from_env()?;
+
+    // Initialize observability
+    let _guard = oxidesk::infrastructure::observability::init(&config)?;
+    tracing::info!("Observability initialized");
+    log::info!("Testing log crate to tracing bridge");
     tracing::info!("Configuration loaded");
 
     // Initialize database connection

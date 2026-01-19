@@ -72,6 +72,7 @@ impl AssignmentService {
     }
 
     // User Story 1: Self-assignment
+    #[tracing::instrument(skip(self, permissions))]
     pub async fn self_assign_conversation(
         &self,
         conversation_id: &str,
@@ -200,6 +201,7 @@ impl AssignmentService {
     }
 
     // User Story 2: Agent-to-agent assignment
+    #[tracing::instrument(skip(self, permissions))]
     pub async fn assign_conversation_to_agent(
         &self,
         conversation_id: &str,
@@ -336,6 +338,7 @@ impl AssignmentService {
     }
 
     // User Story 3: Team assignment
+    #[tracing::instrument(skip(self, permissions))]
     pub async fn assign_conversation_to_team(
         &self,
         conversation_id: &str,
