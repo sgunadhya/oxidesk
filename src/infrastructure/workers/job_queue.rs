@@ -1,82 +1,14 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::Value; // serde::{Deserialize, Serialize} removed as Job/JobStatus are imported
 use sqlx::Row;
 use uuid::Uuid;
 
-use crate::{infrastructure::persistence::Database, infrastructure::http::middleware::error::ApiResult};
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum JobStatus {
-    Pending,
-    Processing,
-    Completed,
-    Failed,
-}
-
-impl ToString for JobStatus {
-    fn to_string(&self) -> String {
-        match self {
-            JobStatus::Pending => "pending".to_string(),
-            JobStatus::Processing => "processing".to_string(),
-            JobStatus::Completed => "completed".to_string(),
-            JobStatus::Failed => "failed".to_string(),
-        }
-    }
-}
-
-impl From<String> for JobStatus {
-    fn from(s: String) -> Self {
-        match s.as_str() {
-            "pending" => JobStatus::Pending,
-            "processing" => JobStatus::Processing,
-            "completed" => JobStatus::Completed,
-            "failed" => JobStatus::Failed,
-            _ => JobStatus::Pending, // Default fallback
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Job {
-    pub id: String,
-    pub job_type: String,
-    pub payload: Value,
-    pub status: JobStatus,
-    pub run_at: DateTime<Utc>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub attempts: i32,
-    pub max_attempts: i32,
-    pub last_error: Option<String>,
-}
-
-#[async_trait]
-pub trait TaskQueue: Send + Sync {
-    /// Enqueue a job for immediate execution
-    async fn enqueue(&self, job_type: &str, payload: Value, max_attempts: i32)
-        -> ApiResult<String>;
-
-    /// Enqueue a job to run at a specific future time
-    async fn enqueue_at(
-        &self,
-        job_type: &str,
-        payload: Value,
-        run_at: DateTime<Utc>,
-        max_attempts: i32,
-    ) -> ApiResult<String>;
-
-    /// Poll for the next available job and lock it
-    async fn fetch_next_job(&self) -> ApiResult<Option<Job>>;
-
-    /// Mark a job as completed
-    async fn complete_job(&self, job_id: &str) -> ApiResult<()>;
-
-    /// Mark a job as failed (scheduling a retry if appropriate)
-    async fn fail_job(&self, job_id: &str, error: &str) -> ApiResult<()>;
-}
+use crate::domain::entities::{Job, JobStatus};
+use crate::domain::ports::task_queue::TaskQueue;
+use crate::{
+    infrastructure::http::middleware::error::ApiResult, infrastructure::persistence::Database,
+};
 
 /// SQLite implementation of the TaskQueue
 #[derive(Clone)]
@@ -154,16 +86,24 @@ impl TaskQueue for SqliteTaskQueue {
             let id: String = row.try_get("id")?;
 
             // 2. Lock the job (set to processing)
-            sqlx::query(
+            // CRITICAL: We must ensure we are the one transitioning it from pending to processing.
+            // If another worker picked this same ID, the update will fail to match rows.
+            let result = sqlx::query(
                 "UPDATE jobs
                  SET status = 'processing', updated_at = ?, locked_until = ?
-                 WHERE id = ?",
+                 WHERE id = ? AND status = 'pending'",
             )
             .bind(now.to_rfc3339())
             .bind(lock_timeout.to_rfc3339())
             .bind(&id)
             .execute(&mut *tx)
             .await?;
+
+            if result.rows_affected() == 0 {
+                // We lost the race, another worker took this job.
+                tx.rollback().await?;
+                return Ok(None);
+            }
 
             // 3. Fetch full details
             let job_row = sqlx::query(

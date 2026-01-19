@@ -1,7 +1,7 @@
 use crate::application::services::{ConversationService, SlaService, TeamService};
+use crate::domain::ports::event_bus::EventBus;
 use crate::AutomationService;
 use crate::ConversationStatus;
-use crate::EventBus;
 use crate::SystemEvent;
 use std::sync::Arc;
 use tokio_stream::StreamExt;

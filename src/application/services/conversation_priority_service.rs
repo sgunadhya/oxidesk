@@ -1,8 +1,9 @@
 // Feature 020: Conversation Priority Management
-use crate::infrastructure::http::middleware::{ApiError, ApiResult};
-use crate::domain::ports::conversation_repository::ConversationRepository;
-use crate::shared::events::{EventBus, SystemEvent};
 use crate::domain::entities::Conversation;
+use crate::domain::events::SystemEvent;
+use crate::domain::ports::conversation_repository::ConversationRepository;
+use crate::domain::ports::event_bus::EventBus;
+use crate::infrastructure::http::middleware::{ApiError, ApiResult};
 use std::sync::Arc;
 
 /// Service for managing conversation priorities
@@ -13,8 +14,14 @@ pub struct ConversationPriorityService {
 }
 
 impl ConversationPriorityService {
-    pub fn new(conversation_repo: Arc<dyn ConversationRepository>, event_bus: Option<Arc<dyn EventBus>>) -> Self {
-        Self { conversation_repo, event_bus }
+    pub fn new(
+        conversation_repo: Arc<dyn ConversationRepository>,
+        event_bus: Option<Arc<dyn EventBus>>,
+    ) -> Self {
+        Self {
+            conversation_repo,
+            event_bus,
+        }
     }
 
     /// Update conversation priority
@@ -72,7 +79,9 @@ impl ConversationPriorityService {
                 .await?;
         } else {
             // Remove priority (set to null)
-            self.conversation_repo.clear_conversation_priority(conversation_id).await?;
+            self.conversation_repo
+                .clear_conversation_priority(conversation_id)
+                .await?;
         }
 
         // Get updated conversation

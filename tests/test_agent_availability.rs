@@ -4,10 +4,9 @@ mod helpers;
 use chrono::{Duration, Utc};
 use helpers::*;
 use oxidesk::{
-    infrastructure::persistence::Database,
-    shared::events::EventBus,
-    domain::entities::{AgentAvailability, User, UserType},
     application::services::AvailabilityService,
+    domain::entities::{AgentAvailability, User, UserType},
+    infrastructure::persistence::Database,
 };
 use sqlx::Row;
 
@@ -20,9 +19,16 @@ async fn setup() -> (
     let db = test_db.db();
     let event_bus = std::sync::Arc::new(oxidesk::LocalEventBus::new(100)); // Capacity of 100 events
     let availability_service = AvailabilityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::availability_repository::AvailabilityRepository>,
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::availability_repository::AvailabilityRepository,
+            >,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         event_bus.clone(),
     );
     (test_db, event_bus, availability_service)

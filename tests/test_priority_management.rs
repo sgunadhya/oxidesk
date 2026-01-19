@@ -3,9 +3,9 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    shared::events::EventBus,
-    domain::entities::{ConversationStatus, Priority},
     application::services::conversation_priority_service::ConversationPriorityService,
+    domain::entities::{ConversationStatus, Priority},
+    domain::ports::event_bus::EventBus,
 };
 use tokio_stream::StreamExt;
 
@@ -31,7 +31,10 @@ async fn test_update_priority_from_none_to_low() {
 
     // Update priority to Low
     let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         None,
     );
     let updated = priority_service
@@ -64,7 +67,10 @@ async fn test_update_priority_from_low_to_high() {
 
     // Update priority to High
     let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         None,
     );
     let updated = priority_service
@@ -97,7 +103,10 @@ async fn test_remove_priority() {
 
     // Remove priority
     let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         None,
     );
     let updated = priority_service
@@ -145,7 +154,10 @@ async fn test_same_priority_idempotence() {
 
     // Update to the same priority
     let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         None,
     );
     let updated = priority_service
@@ -176,7 +188,10 @@ async fn test_priority_update_triggers_automation_event() {
 
     // Update priority with event bus
     let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         Some(event_bus.clone()),
     );
     let _updated = priority_service
@@ -231,7 +246,10 @@ async fn test_same_priority_no_automation_trigger() {
 
     // Update to same priority (idempotent)
     let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         Some(event_bus.clone()),
     );
     let _updated = priority_service
@@ -270,7 +288,10 @@ async fn test_priority_removal_triggers_automation_event() {
 
     // Remove priority
     let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         Some(event_bus.clone()),
     );
     let _updated = priority_service
@@ -318,7 +339,10 @@ async fn test_priority_update_on_resolved_conversation() {
 
     // Should be able to update priority even on resolved conversation
     let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         None,
     );
     let updated = priority_service
@@ -336,7 +360,10 @@ async fn test_priority_update_nonexistent_conversation() {
     let db = &test_db.db;
 
     let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         None,
     );
     let result = priority_service
@@ -365,7 +392,10 @@ async fn test_all_valid_priority_values() {
 
     let valid_priorities = vec![Priority::Low, Priority::Medium, Priority::High];
     let priority_service = ConversationPriorityService::new(
-        std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
+        std::sync::Arc::new(db.clone())
+            as std::sync::Arc<
+                dyn oxidesk::domain::ports::conversation_repository::ConversationRepository,
+            >,
         None,
     );
 

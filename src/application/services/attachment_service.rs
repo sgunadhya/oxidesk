@@ -1,9 +1,7 @@
+use crate::domain::entities::MessageAttachment;
 use crate::domain::ports::attachment_repository::AttachmentRepository;
 use crate::infrastructure::http::middleware::error::{ApiError, ApiResult};
-use crate::domain::entities::MessageAttachment;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::fs;
 
 /// Maximum attachment size in bytes (25 MB)
 const MAX_ATTACHMENT_SIZE: usize = 25 * 1024 * 1024;
@@ -37,22 +35,24 @@ const ALLOWED_CONTENT_TYPES: &[&str] = &[
     "application/octet-stream",
 ];
 
+use crate::domain::ports::file_storage::FileStorage;
+
 /// Attachment service
 #[derive(Clone)]
 pub struct AttachmentService {
     attachment_repo: Arc<dyn AttachmentRepository>,
-    storage_path: PathBuf,
+    storage: Arc<dyn FileStorage>,
 }
 
 impl AttachmentService {
     /// Create a new attachment service
     pub fn new(
         attachment_repo: Arc<dyn AttachmentRepository>,
-        storage_path: impl Into<PathBuf>,
+        storage: Arc<dyn FileStorage>,
     ) -> Self {
         Self {
             attachment_repo,
-            storage_path: storage_path.into(),
+            storage,
         }
     }
 
@@ -80,20 +80,16 @@ impl AttachmentService {
             )));
         }
 
-        // Generate unique file path
-        let file_path = self.generate_file_path(&message_id, &filename)?;
+        // Generate unique file path (relative key)
+        let file_key = self.generate_file_key(&message_id, &filename);
 
-        // Ensure directory exists
-        if let Some(parent) = file_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to create directory: {}", e)))?;
-        }
+        // Ensure directory exists (if using local storage, this helps; for S3 it might be no-op)
+        // For local storage layout: messages/{message_id}/{filename}
+        let dir_key = format!("messages/{}", message_id);
+        self.storage.create_dir_all(&dir_key).await?;
 
-        // Write file to disk
-        fs::write(&file_path, &content).await.map_err(|e| {
-            ApiError::Internal(format!("Failed to write attachment to disk: {}", e))
-        })?;
+        // Write file to storage
+        self.storage.save(&file_key, &content).await?;
 
         // Create database record
         let attachment = MessageAttachment {
@@ -102,7 +98,7 @@ impl AttachmentService {
             filename,
             content_type: Some(content_type),
             file_size: content.len() as i64,
-            file_path: file_path.to_string_lossy().to_string(),
+            file_path: file_key,
             created_at: chrono::Utc::now().to_rfc3339(),
         };
 
@@ -121,11 +117,9 @@ impl AttachmentService {
             .await
     }
 
-    /// Read attachment content from disk
+    /// Read attachment content from storage
     pub async fn read_attachment(&self, attachment: &MessageAttachment) -> ApiResult<Vec<u8>> {
-        fs::read(&attachment.file_path)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to read attachment from disk: {}", e)))
+        self.storage.read(&attachment.file_path).await
     }
 
     /// Delete attachment from disk and database
@@ -159,32 +153,20 @@ impl AttachmentService {
             .first()
             .ok_or_else(|| ApiError::NotFound("Attachment not found".to_string()))?;
 
-        // Delete file from disk
-        if Path::new(&attachment.file_path).exists() {
-            fs::remove_file(&attachment.file_path).await.map_err(|e| {
-                ApiError::Internal(format!("Failed to delete attachment from disk: {}", e))
-            })?;
-        }
+        // Delete file from storage
+        self.storage.delete(&attachment.file_path).await?;
 
-        // Note: Database record will be deleted via CASCADE when message is deleted
         Ok(())
     }
 
-    /// Generate unique file path for attachment
-    fn generate_file_path(&self, message_id: &str, filename: &str) -> ApiResult<PathBuf> {
+    /// Generate unique file key for attachment
+    fn generate_file_key(&self, message_id: &str, filename: &str) -> String {
         // Sanitize filename to prevent path traversal
         let sanitized_filename = self.sanitize_filename(filename);
 
-        // Create directory structure: storage_path/messages/{message_id}/
-        let mut path = self.storage_path.clone();
-        path.push("messages");
-        path.push(message_id);
-
-        // Add unique prefix to filename to prevent collisions
+        // Key structure: messages/{message_id}/{uuid}_{filename}
         let unique_filename = format!("{}_{}", uuid::Uuid::new_v4(), sanitized_filename);
-        path.push(unique_filename);
-
-        Ok(path)
+        format!("messages/{}/{}", message_id, unique_filename)
     }
 
     /// Sanitize filename to prevent path traversal and other issues

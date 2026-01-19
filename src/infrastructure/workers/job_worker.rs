@@ -5,9 +5,10 @@ use std::time::Duration;
 use tracing::{error, info};
 
 use crate::application::services::{AvailabilityService, SlaService};
+use crate::domain::entities::Job;
 use crate::domain::ports::oidc_repository::OidcRepository;
+use crate::domain::ports::task_queue::TaskQueue;
 use crate::domain::ports::webhook_repository::WebhookRepository;
-use crate::infrastructure::workers::job_queue::{Job, TaskQueue};
 use crate::shared::rate_limiter::AuthRateLimiter;
 
 use crate::domain::ports::time_service::TimeService;

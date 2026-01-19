@@ -1,11 +1,12 @@
 use crate::{
-    infrastructure::http::middleware::error::{ApiError, ApiResult},
-    domain::ports::conversation_repository::ConversationRepository,
-    domain::ports::message_repository::MessageRepository,
-    shared::events::{EventBus, SystemEvent},
-    domain::entities::{IncomingMessageRequest, Message, SendMessageRequest, UserNotification},
-    infrastructure::providers::connection_manager::ConnectionManager,
     application::services::{DeliveryService, NotificationService},
+    domain::entities::{IncomingMessageRequest, Message, SendMessageRequest, UserNotification},
+    domain::events::SystemEvent,
+    domain::ports::conversation_repository::ConversationRepository,
+    domain::ports::event_bus::EventBus,
+    domain::ports::message_repository::MessageRepository,
+    infrastructure::http::middleware::error::{ApiError, ApiResult},
+    infrastructure::providers::connection_manager::ConnectionManager,
 };
 use std::sync::Arc;
 
@@ -112,7 +113,7 @@ impl MessageService {
 
         // Publish MessageReceived event
         if let Some(ref event_bus) = self.event_bus {
-            event_bus.publish(SystemEvent::MessageReceived {
+            let _ = event_bus.publish(SystemEvent::MessageReceived {
                 message_id: message.id.clone(),
                 conversation_id: message.conversation_id.clone(),
                 contact_id: message.author_id.clone(),

@@ -1,9 +1,7 @@
 use crate::{
-    domain::entities::Webhook,
-    domain::ports::webhook_repository::WebhookRepository,
+    domain::entities::Webhook, domain::events::SystemEvent, domain::ports::event_bus::EventBus,
+    domain::ports::task_queue::TaskQueue, domain::ports::webhook_repository::WebhookRepository,
     domain::services::webhook_signature::sign_payload,
-    infrastructure::workers::job_queue::TaskQueue,
-    shared::events::{EventBus, SystemEvent},
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -60,8 +58,8 @@ impl WebhookWorker {
                         error!("Error handling event in webhook worker: {}", e);
                     }
                 }
-                Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(n)) => {
-                    warn!("Webhook worker lagged behind by {} events", n);
+                Err(e) => {
+                    warn!("Webhook worker event stream error: {}", e);
                 }
             }
         }

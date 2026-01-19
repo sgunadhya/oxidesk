@@ -58,7 +58,7 @@ pub fn validate_transition(
 /// Execute a state transition with side effects (event publishing)
 pub fn execute_transition(
     context: TransitionContext,
-    event_bus: Option<&dyn crate::events::EventBus>,
+    event_bus: Option<&dyn crate::domain::ports::event_bus::EventBus>,
 ) -> Result<TransitionResult, TransitionError> {
     // Validate the transition
     validate_transition(context.from_status, context.to_status)?;
@@ -82,7 +82,7 @@ pub fn execute_transition(
                 .unwrap(),
         };
 
-        event_bus.publish(event);
+        let _ = event_bus.publish(event);
 
         tracing::debug!(
             "Published status change event for conversation {}",

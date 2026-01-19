@@ -6,9 +6,8 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    infrastructure::http::middleware::{ApiResult, AppState, AuthenticatedUser},
     domain::entities::*,
-    application::services::TeamService,
+    infrastructure::http::middleware::{ApiResult, AppState, AuthenticatedUser},
 };
 
 #[derive(Debug, Deserialize)]
@@ -69,7 +68,8 @@ pub async fn add_team_member(
     Json(req): Json<AddTeamMemberRequest>,
 ) -> ApiResult<StatusCode> {
     // Use state.team_service
-    state.team_service
+    state
+        .team_service
         .add_member(&team_id, &req.user_id, req.role)
         .await?;
 

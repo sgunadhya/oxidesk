@@ -9,17 +9,15 @@ mod helpers;
 
 use helpers::conversation_helpers::create_test_conversation;
 use helpers::*;
-use oxidesk::infrastructure::persistence::Database;
-use oxidesk::domain::ports::contact_repository::ContactRepository;
-use oxidesk::domain::ports::conversation_repository::ConversationRepository;
-use oxidesk::domain::ports::email_repository::EmailRepository;
-use oxidesk::domain::ports::inbox_repository::InboxRepository;
-use oxidesk::domain::ports::message_repository::MessageRepository;
-use oxidesk::domain::ports::user_repository::UserRepository;
+use oxidesk::application::services::AttachmentService;
 use oxidesk::domain::entities::{
     Contact, ConversationStatus, CreateConversation, InboxEmailConfig, Message, User, UserType,
 };
-use oxidesk::application::services::AttachmentService;
+use oxidesk::domain::ports::contact_repository::ContactRepository;
+use oxidesk::domain::ports::inbox_repository::InboxRepository;
+use oxidesk::domain::ports::message_repository::MessageRepository;
+use oxidesk::domain::ports::user_repository::UserRepository;
+use oxidesk::infrastructure::persistence::Database;
 use oxidesk::infrastructure::providers::email_parser::EmailParserService;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -486,8 +484,9 @@ async fn test_attachment_size_validation() {
 
     let attachment_repo = Arc::new(db.clone())
         as Arc<dyn oxidesk::domain::ports::attachment_repository::AttachmentRepository>;
-    let attachment_service =
-        AttachmentService::new(attachment_repo, temp_dir.to_str().unwrap().to_string());
+    let file_storage =
+        Arc::new(oxidesk::infrastructure::storage::local::LocalFileStorage::new(temp_dir.clone()));
+    let attachment_service = AttachmentService::new(attachment_repo, file_storage);
 
     let message_id = Uuid::new_v4().to_string();
 
@@ -522,8 +521,9 @@ async fn test_attachment_content_type_validation() {
 
     let attachment_repo = Arc::new(db.clone())
         as Arc<dyn oxidesk::domain::ports::attachment_repository::AttachmentRepository>;
-    let attachment_service =
-        AttachmentService::new(attachment_repo, temp_dir.to_str().unwrap().to_string());
+    let file_storage =
+        Arc::new(oxidesk::infrastructure::storage::local::LocalFileStorage::new(temp_dir.clone()));
+    let attachment_service = AttachmentService::new(attachment_repo, file_storage);
 
     let message_id = Uuid::new_v4().to_string();
     let content = b"Executable content";
@@ -557,8 +557,9 @@ async fn test_attachment_storage_and_retrieval() {
 
     let attachment_repo = Arc::new(db.clone())
         as Arc<dyn oxidesk::domain::ports::attachment_repository::AttachmentRepository>;
-    let attachment_service =
-        AttachmentService::new(attachment_repo, temp_dir.to_str().unwrap().to_string());
+    let file_storage =
+        Arc::new(oxidesk::infrastructure::storage::local::LocalFileStorage::new(temp_dir.clone()));
+    let attachment_service = AttachmentService::new(attachment_repo, file_storage);
 
     // Create a conversation and message first (needed for foreign key)
     let conversation = create_test_conversation(
@@ -592,7 +593,7 @@ async fn test_attachment_storage_and_retrieval() {
     assert_eq!(attachment.file_size, content.len() as i64);
 
     // Verify file exists on disk
-    let file_path = PathBuf::from(&attachment.file_path);
+    let file_path = temp_dir.join(&attachment.file_path);
     assert!(file_path.exists());
 
     let stored_content = std::fs::read(&file_path).unwrap();
@@ -648,8 +649,9 @@ async fn test_multiple_attachments() {
 
     let attachment_repo = Arc::new(db.clone())
         as Arc<dyn oxidesk::domain::ports::attachment_repository::AttachmentRepository>;
-    let attachment_service =
-        AttachmentService::new(attachment_repo, temp_dir.to_str().unwrap().to_string());
+    let file_storage =
+        Arc::new(oxidesk::infrastructure::storage::local::LocalFileStorage::new(temp_dir.clone()));
+    let attachment_service = AttachmentService::new(attachment_repo, file_storage);
 
     // Create a conversation and message first (needed for foreign key)
     let conversation = create_test_conversation(

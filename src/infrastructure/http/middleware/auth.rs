@@ -1,8 +1,9 @@
-use crate::domain::ports::agent_repository::AgentRepository;
 use crate::{
-    application::services, domain::entities::*, infrastructure::http::middleware::error::ApiError,
-    infrastructure::persistence::Database,
-    infrastructure::providers::connection_manager::ConnectionManager,
+    application::services,
+    domain::entities::*,
+    infrastructure::{
+        http::middleware::error::ApiError, providers::connection_manager::ConnectionManager,
+    },
     shared::rate_limiter::AuthRateLimiter,
 };
 use axum::{
@@ -15,7 +16,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct AppState {
     pub session_duration_hours: i64,
-    pub event_bus: Arc<dyn crate::shared::events::EventBus>,
+    pub event_bus: Arc<dyn crate::domain::ports::event_bus::EventBus>,
     pub delivery_service: services::DeliveryService,
     pub notification_service: services::NotificationService,
     pub availability_service: services::AvailabilityService,

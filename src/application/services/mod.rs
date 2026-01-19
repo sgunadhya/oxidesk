@@ -56,7 +56,7 @@ pub use permission_service::*;
 pub use role_service::*;
 pub use session_service::*;
 pub use sla_service::*;
-pub use snooze_service::*;
+
 pub use tag_service::*;
 pub use team_service::*;
 pub use user_service::*;

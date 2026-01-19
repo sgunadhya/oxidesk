@@ -1,115 +1,13 @@
-use crate::domain::entities::conversation::ConversationStatus;
-use tokio::sync::broadcast;
+pub use crate::domain::events::SystemEvent;
 
-/// System events that can trigger automation rules
-#[derive(Debug, Clone)]
-pub enum SystemEvent {
-    ConversationCreated {
-        conversation_id: String,
-        inbox_id: String,
-        contact_id: String,
-        status: ConversationStatus,
-        timestamp: String, // ISO 8601
-    },
-    ConversationStatusChanged {
-        conversation_id: String,
-        old_status: ConversationStatus,
-        new_status: ConversationStatus,
-        agent_id: Option<String>,
-        timestamp: String, // ISO 8601
-    },
-    MessageReceived {
-        message_id: String,
-        conversation_id: String,
-        contact_id: String,
-        timestamp: String, // ISO 8601
-    },
-    MessageSent {
-        message_id: String,
-        conversation_id: String,
-        agent_id: String,
-        timestamp: String, // ISO 8601
-    },
-    MessageFailed {
-        message_id: String,
-        conversation_id: String,
-        retry_count: i32,
-        timestamp: String, // ISO 8601
-    },
-    ConversationAssigned {
-        conversation_id: String,
-        assigned_user_id: Option<String>,
-        assigned_team_id: Option<String>,
-        assigned_by: String,
-        timestamp: String, // ISO 8601
-    },
-    ConversationUnassigned {
-        conversation_id: String,
-        previous_assigned_user_id: Option<String>,
-        previous_assigned_team_id: Option<String>,
-        unassigned_by: String,
-        timestamp: String, // ISO 8601
-    },
-    ConversationTagsChanged {
-        conversation_id: String,
-        previous_tags: Vec<String>,
-        new_tags: Vec<String>,
-        changed_by: String,
-        timestamp: String, // ISO 8601
-    },
-    ConversationPriorityChanged {
-        conversation_id: String,
-        previous_priority: Option<String>,
-        new_priority: Option<String>,
-        updated_by: String,
-        timestamp: String, // ISO 8601
-    },
-    AgentAvailabilityChanged {
-        agent_id: String,
-        old_status: String,
-        new_status: String,
-        timestamp: String, // ISO 8601
-        reason: String, // "manual", "inactivity_timeout", "max_idle_threshold", "login", "logout"
-    },
-    AgentLoggedIn {
-        agent_id: String,
-        user_id: String,
-        timestamp: String, // ISO 8601
-    },
-    AgentLoggedOut {
-        agent_id: String,
-        user_id: String,
-        timestamp: String, // ISO 8601
-    },
-    SlaBreached {
-        event_id: String,
-        applied_sla_id: String,
-        conversation_id: String,
-        event_type: String,  // "first_response", "resolution", "next_response"
-        deadline_at: String, // ISO 8601
-        breached_at: String, // ISO 8601
-        timestamp: String,   // ISO 8601
-    },
-}
-
+use crate::domain::ports::event_bus::EventBus;
 use crate::ApiResult;
 use async_trait::async_trait;
 use futures::Stream;
 use std::pin::Pin;
-use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
-
-/// Event bus trait for publishing and subscribing to system events
-#[async_trait]
-pub trait EventBus: Send + Sync {
-    /// Publish an event to all subscribers
-    fn publish(&self, event: SystemEvent) -> ApiResult<()>;
-
-    /// Subscribe to events
-    fn subscribe(
-        &self,
-    ) -> Pin<Box<dyn Stream<Item = Result<SystemEvent, BroadcastStreamRecvError>> + Send>>;
-}
+use tokio_stream::StreamExt;
 
 /// Local in-memory implementation of EventBus
 #[derive(Clone)]
@@ -129,24 +27,19 @@ impl LocalEventBus {
 impl EventBus for LocalEventBus {
     fn publish(&self, event: SystemEvent) -> ApiResult<()> {
         // Fire-and-forget - if no subscribers or channel full, just log and continue
-        // We consider this a "success" from the API perspective for now,
-        // as we don't want to block operation if just nobody is listening.
         if let Err(e) = self.tx.send(event) {
             tracing::debug!("No active subscribers for event (or channel full): {}", e);
         }
         Ok(())
     }
 
-    fn subscribe(
-        &self,
-    ) -> Pin<Box<dyn Stream<Item = Result<SystemEvent, BroadcastStreamRecvError>> + Send>> {
+    fn subscribe(&self) -> Pin<Box<dyn Stream<Item = Result<SystemEvent, String>> + Send>> {
         let rx = self.tx.subscribe();
-        Box::pin(BroadcastStream::new(rx))
+        // Map BroadcastStream errors to String errors
+        let stream = BroadcastStream::new(rx)
+            .map(|res| res.map_err(|e| format!("Broadcast channel error: {}", e)));
+        Box::pin(stream)
     }
-
-    // Helper for legacy code that expects a direct receiver (temporary)
-    // or maybe we force migration. Let's force migration to Stream to satisfy the plan.
-    // However, keeping subscriber_count is useful for tests.
 }
 
 impl LocalEventBus {
@@ -165,6 +58,7 @@ impl Default for LocalEventBus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::entities::ConversationStatus;
 
     #[test]
     fn test_event_bus_creation() {
@@ -186,7 +80,7 @@ mod tests {
             timestamp: "2026-01-12T10:00:00Z".to_string(),
         };
 
-        bus.publish(event);
+        let _ = bus.publish(event);
 
         // Receive the event
         let received = rx.next().await.unwrap().unwrap();
