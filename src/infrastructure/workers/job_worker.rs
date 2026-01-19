@@ -4,11 +4,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info};
 
+use crate::application::services::{AvailabilityService, SlaService};
 use crate::domain::ports::oidc_repository::OidcRepository;
 use crate::domain::ports::webhook_repository::WebhookRepository;
 use crate::infrastructure::workers::job_queue::{Job, TaskQueue};
 use crate::shared::rate_limiter::AuthRateLimiter;
-use crate::application::services::{AvailabilityService, SlaService};
+
+use crate::domain::ports::time_service::TimeService;
 
 pub struct JobProcessor {
     queue: Arc<dyn TaskQueue>,
@@ -19,6 +21,7 @@ pub struct JobProcessor {
     sla_service: SlaService,
     session_service: crate::application::services::SessionService,
     http_client: reqwest::Client,
+    time_service: Arc<dyn TimeService>,
 }
 
 impl JobProcessor {
@@ -30,6 +33,7 @@ impl JobProcessor {
         availability_service: AvailabilityService,
         sla_service: SlaService,
         session_service: crate::application::services::SessionService,
+        time_service: Arc<dyn TimeService>,
     ) -> Self {
         let http_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
@@ -45,10 +49,11 @@ impl JobProcessor {
             sla_service,
             session_service,
             http_client,
+            time_service,
         }
     }
 
-    pub async fn start(self) {
+    pub async fn run(&self) {
         info!("Starting JobProcessor...");
         loop {
             match self.process_next().await {
@@ -58,11 +63,11 @@ impl JobProcessor {
                 }
                 Ok(None) => {
                     // No jobs, sleep briefly
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    self.time_service.sleep(Duration::from_secs(1)).await;
                 }
                 Err(e) => {
                     error!("Error processing job: {}", e);
-                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    self.time_service.sleep(Duration::from_secs(5)).await;
                 }
             }
         }

@@ -1,3 +1,7 @@
+use crate::application::services::AttachmentService;
+use crate::domain::entities::{
+    ConversationStatus, CreateConversation, EmailProcessingLog, InboxEmailConfig, Message,
+};
 /// Email Receiver Service (Feature 021)
 ///
 /// Handles receiving and processing incoming emails via IMAP.
@@ -7,10 +11,6 @@ use crate::domain::ports::conversation_repository::ConversationRepository;
 use crate::domain::ports::email_repository::EmailRepository;
 use crate::domain::ports::message_repository::MessageRepository;
 use crate::infrastructure::http::middleware::error::{ApiError, ApiResult};
-use crate::domain::entities::{
-    ConversationStatus, CreateConversation, EmailProcessingLog, InboxEmailConfig, Message,
-};
-use crate::application::services::AttachmentService;
 use crate::infrastructure::providers::{EmailParserService, ParsedEmail};
 use async_imap::Session;
 use async_native_tls::{TlsConnector, TlsStream};
@@ -383,47 +383,77 @@ impl EmailReceiverService {
     }
 }
 
-/// Spawn background email polling worker
-/// Polls all enabled email inboxes every 60 seconds
-pub fn spawn_email_polling_worker(
+use crate::domain::ports::time_service::TimeService;
+
+/// Background email polling worker
+pub struct EmailPollingWorker<F>
+where
+    F: Fn() -> crate::application::services::ContactService + Send + Sync + 'static,
+{
     email_repo: Arc<dyn EmailRepository>,
     conversation_repo: Arc<dyn ConversationRepository>,
     message_repo: Arc<dyn MessageRepository>,
     attachment_repo: Arc<dyn AttachmentRepository>,
-    contact_service_factory: impl Fn() -> crate::application::services::ContactService + Send + 'static,
+    contact_service_factory: F,
     attachment_storage_path: String,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        tracing::info!("Email polling worker started");
+    time_service: Arc<dyn TimeService>,
+}
 
-        let attachment_storage_path = attachment_storage_path.clone();
+impl<F> EmailPollingWorker<F>
+where
+    F: Fn() -> crate::application::services::ContactService + Send + Sync + 'static,
+{
+    pub fn new(
+        email_repo: Arc<dyn EmailRepository>,
+        conversation_repo: Arc<dyn ConversationRepository>,
+        message_repo: Arc<dyn MessageRepository>,
+        attachment_repo: Arc<dyn AttachmentRepository>,
+        contact_service_factory: F,
+        attachment_storage_path: String,
+        time_service: Arc<dyn TimeService>,
+    ) -> Self {
+        Self {
+            email_repo,
+            conversation_repo,
+            message_repo,
+            attachment_repo,
+            contact_service_factory,
+            attachment_storage_path,
+            time_service,
+        }
+    }
+
+    pub async fn run(&self) {
+        tracing::info!("Email polling worker started");
 
         loop {
             // Get all enabled email configurations
-            match email_repo.get_enabled_email_configs().await {
+            match self.email_repo.get_enabled_email_configs().await {
                 Ok(configs) => {
                     tracing::info!(
                         "Found {} enabled email configurations to process",
                         configs.len()
                     );
 
-                    // Process each inbox concurrently
-                    let mut handles = Vec::new();
+                    // Process each inbox concurrently using select_all or join_all
+                    // Since we want to wait for all, join_all is appropriate
+                    let mut futures = Vec::new();
+
                     for config in configs {
-                        let contact_service = contact_service_factory();
+                        let contact_service = (self.contact_service_factory)();
                         let receiver = EmailReceiverService::new(
-                            email_repo.clone(),
-                            conversation_repo.clone(),
-                            message_repo.clone(),
+                            self.email_repo.clone(),
+                            self.conversation_repo.clone(),
+                            self.message_repo.clone(),
                             contact_service,
                             AttachmentService::new(
-                                attachment_repo.clone(),
-                                attachment_storage_path.clone(),
+                                self.attachment_repo.clone(),
+                                self.attachment_storage_path.clone(),
                             ),
                         );
                         let inbox_id = config.inbox_id.clone();
 
-                        let handle = tokio::spawn(async move {
+                        futures.push(async move {
                             match receiver.process_inbox(&inbox_id).await {
                                 Ok(count) => {
                                     if count > 0 {
@@ -443,14 +473,10 @@ pub fn spawn_email_polling_worker(
                                 }
                             }
                         });
-
-                        handles.push(handle);
                     }
 
                     // Wait for all inbox processing to complete
-                    for handle in handles {
-                        let _ = handle.await;
-                    }
+                    futures::future::join_all(futures).await;
                 }
                 Err(e) => {
                     tracing::error!("Failed to get enabled email configs: {:?}", e);
@@ -458,7 +484,9 @@ pub fn spawn_email_polling_worker(
             }
 
             // Wait 60 seconds before next poll
-            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            self.time_service
+                .sleep(std::time::Duration::from_secs(60))
+                .await;
         }
-    })
+    }
 }

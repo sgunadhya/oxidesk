@@ -18,6 +18,8 @@ pub mod role_repository;
 pub mod session_repository;
 pub mod sla_repository;
 pub mod tag_repository;
+pub mod task_spawner;
 pub mod team_repository;
+pub mod time_service;
 pub mod user_repository;
 pub mod webhook_repository;

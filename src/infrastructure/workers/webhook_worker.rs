@@ -1,9 +1,9 @@
 use crate::{
-    domain::ports::webhook_repository::WebhookRepository,
-    shared::events::{EventBus, SystemEvent},
     domain::entities::Webhook,
-    infrastructure::workers::job_queue::TaskQueue,
+    domain::ports::webhook_repository::WebhookRepository,
     domain::services::webhook_signature::sign_payload,
+    infrastructure::workers::job_queue::TaskQueue,
+    shared::events::{EventBus, SystemEvent},
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -20,7 +20,11 @@ pub struct WebhookWorker {
 
 impl WebhookWorker {
     /// Create a new webhook worker
-    pub fn new(webhook_repo: WebhookRepository, event_bus: Arc<dyn EventBus>, task_queue: Arc<dyn TaskQueue>) -> Self {
+    pub fn new(
+        webhook_repo: WebhookRepository,
+        event_bus: Arc<dyn EventBus>,
+        task_queue: Arc<dyn TaskQueue>,
+    ) -> Self {
         Self {
             webhook_repo,
             event_bus,
@@ -39,26 +43,29 @@ impl WebhookWorker {
     /// 5. Enqueues a delivery job in the TaskQueue
     ///
     /// The worker runs until the server shuts down.
-    pub fn start(&self) {
-        let consumer = self.clone();
-        tokio::spawn(async move {
-            info!("Webhook worker started listening for events");
-            let mut stream = consumer.event_bus.subscribe();
+    /// Run the webhook worker
+    ///
+    /// This method runs a loop that subscribes to the EventBus
+    /// and processes events as they arrive.
+    ///
+    /// The worker runs until the server shuts down.
+    pub async fn run(&self) {
+        info!("Webhook worker started listening for events");
+        let mut stream = self.event_bus.subscribe();
 
-            while let Some(result) = stream.next().await {
-                match result {
-                    Ok(event) => {
-                        if let Err(e) = consumer.handle_event(event).await {
-                            error!("Error handling event in webhook worker: {}", e);
-                        }
-                    }
-                    Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(n)) => {
-                        warn!("Webhook worker lagged behind by {} events", n);
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(event) => {
+                    if let Err(e) = self.handle_event(event).await {
+                        error!("Error handling event in webhook worker: {}", e);
                     }
                 }
+                Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(n)) => {
+                    warn!("Webhook worker lagged behind by {} events", n);
+                }
             }
-            error!("EventBus closed, stopping webhook worker");
-        });
+        }
+        error!("EventBus closed, stopping webhook worker");
     }
 
     /// Handle a single system event
@@ -353,9 +360,9 @@ impl WebhookWorker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::persistence::Database;
-    use crate::domain::ports::webhook_repository::WebhookRepository;
     use crate::domain::entities::conversation::ConversationStatus;
+    use crate::domain::ports::webhook_repository::WebhookRepository;
+    use crate::infrastructure::persistence::Database;
     use crate::infrastructure::workers::SqliteTaskQueue;
     use std::sync::Arc;
 
