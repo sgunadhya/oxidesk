@@ -5,14 +5,15 @@ use crate::domain::ports::{
     team_repository::TeamRepository, user_repository::UserRepository,
 };
 use crate::{
-    infrastructure::http::middleware::error::{ApiError, ApiResult},
-    shared::events::{EventBus, SystemEvent},
+    application::services::{NotificationService, SlaService},
     domain::entities::{
         AgentAvailability, AssignmentHistory, Conversation, ConversationStatus, Permission,
         UserNotification,
     },
+    domain::events::SystemEvent,
+    domain::ports::event_bus::EventBus,
+    infrastructure::http::middleware::error::{ApiError, ApiResult},
     infrastructure::providers::connection_manager::ConnectionManager,
-    application::services::{NotificationService, SlaService},
 };
 use std::sync::Arc;
 
@@ -150,7 +151,7 @@ impl AssignmentService {
         self.assignment_repo.record_assignment(&history).await?;
 
         // 6. Publish event
-        self.event_bus.publish(SystemEvent::ConversationAssigned {
+        let _ = self.event_bus.publish(SystemEvent::ConversationAssigned {
             conversation_id: conversation_id.to_string(),
             assigned_user_id: Some(agent_id.to_string()),
             assigned_team_id: None,
@@ -165,7 +166,11 @@ impl AssignmentService {
             agent_id.to_string(), // Self-assignment: assigner = assignee
         );
 
-        if let Err(e) = self.assignment_repo.create_notification(&notification).await {
+        if let Err(e) = self
+            .assignment_repo
+            .create_notification(&notification)
+            .await
+        {
             tracing::error!("Failed to create assignment notification: {}", e);
             // Continue execution - notification failure shouldn't fail assignment
         }
@@ -282,7 +287,7 @@ impl AssignmentService {
         self.assignment_repo.record_assignment(&history).await?;
 
         // 7. Publish event
-        self.event_bus.publish(SystemEvent::ConversationAssigned {
+        let _ = self.event_bus.publish(SystemEvent::ConversationAssigned {
             conversation_id: conversation_id.to_string(),
             assigned_user_id: Some(target_agent_id.to_string()),
             assigned_team_id: None,
@@ -297,7 +302,11 @@ impl AssignmentService {
             assigning_agent_id.to_string(),
         );
 
-        if let Err(e) = self.assignment_repo.create_notification(&notification).await {
+        if let Err(e) = self
+            .assignment_repo
+            .create_notification(&notification)
+            .await
+        {
             tracing::error!("Failed to create assignment notification: {}", e);
             // Continue execution - notification failure shouldn't fail assignment
         }
@@ -379,7 +388,7 @@ impl AssignmentService {
         self.assignment_repo.record_assignment(&history).await?;
 
         // 7. Publish event
-        self.event_bus.publish(SystemEvent::ConversationAssigned {
+        let _ = self.event_bus.publish(SystemEvent::ConversationAssigned {
             conversation_id: conversation_id.to_string(),
             assigned_user_id: None,
             assigned_team_id: Some(team_id.to_string()),
@@ -465,10 +474,12 @@ impl AssignmentService {
         }
 
         // 3. Unassign from database
-        self.conversation_repo.unassign_conversation_user(conversation_id).await?;
+        self.conversation_repo
+            .unassign_conversation_user(conversation_id)
+            .await?;
 
         // 4. Publish event
-        self.event_bus.publish(SystemEvent::ConversationUnassigned {
+        let _ = self.event_bus.publish(SystemEvent::ConversationUnassigned {
             conversation_id: conversation_id.to_string(),
             previous_assigned_user_id: Some(agent_id.to_string()),
             previous_assigned_team_id: conversation.assigned_team_id.clone(),
@@ -505,11 +516,14 @@ impl AssignmentService {
             .collect();
 
         // 2. Batch unassign
-        let count = self.conversation_repo.unassign_agent_open_conversations(agent_id).await?;
+        let count = self
+            .conversation_repo
+            .unassign_agent_open_conversations(agent_id)
+            .await?;
 
         // 3. Publish ConversationUnassigned event for each
         for conversation in &open_conversations {
-            self.event_bus.publish(SystemEvent::ConversationUnassigned {
+            let _ = self.event_bus.publish(SystemEvent::ConversationUnassigned {
                 conversation_id: conversation.id.clone(),
                 previous_assigned_user_id: Some(agent_id.to_string()),
                 previous_assigned_team_id: conversation.assigned_team_id.clone(),
@@ -544,7 +558,9 @@ impl AssignmentService {
         limit: i64,
         offset: i64,
     ) -> ApiResult<(Vec<Conversation>, i64)> {
-        self.conversation_repo.get_unassigned_conversations(limit, offset).await
+        self.conversation_repo
+            .get_unassigned_conversations(limit, offset)
+            .await
     }
 
     // Get conversations assigned to a user
@@ -566,7 +582,9 @@ impl AssignmentService {
         limit: i64,
         offset: i64,
     ) -> ApiResult<(Vec<Conversation>, i64)> {
-        self.conversation_repo.get_team_conversations(team_id, limit, offset).await
+        self.conversation_repo
+            .get_team_conversations(team_id, limit, offset)
+            .await
     }
 
     // Update agent availability
@@ -575,7 +593,9 @@ impl AssignmentService {
         user_id: &str,
         status: AgentAvailability,
     ) -> ApiResult<()> {
-        self.availability_repo.update_agent_availability_with_timestamp(user_id, status).await
+        self.availability_repo
+            .update_agent_availability_with_timestamp(user_id, status)
+            .await
     }
 
     // RBAC System: Check conversation access based on assignment

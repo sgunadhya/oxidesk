@@ -4,12 +4,10 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use std::sync::Arc;
 
 use crate::{
-    infrastructure::http::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
     domain::entities::*,
-    application::services::AssignmentService,
+    infrastructure::http::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
 };
 
 // POST /api/conversations/:id/assign - Assign conversation
@@ -20,7 +18,8 @@ pub async fn assign_conversation(
     Json(req): Json<AssignConversationRequest>,
 ) -> ApiResult<Json<ConversationResponse>> {
     // Get user's permissions via service
-    let permissions = state.assignment_service
+    let permissions = state
+        .assignment_service
         .get_user_permissions(&user.user.id)
         .await?;
 
@@ -28,12 +27,14 @@ pub async fn assign_conversation(
         // Check if self-assignment or agent-to-agent
         if user_id == user.user.id {
             // Self-assignment
-            state.assignment_service
+            state
+                .assignment_service
                 .self_assign_conversation(&conversation_id, &user.user.id, &permissions)
                 .await?
         } else {
             // Agent-to-agent assignment
-            state.assignment_service
+            state
+                .assignment_service
                 .assign_conversation_to_agent(
                     &conversation_id,
                     &user_id,
@@ -44,7 +45,8 @@ pub async fn assign_conversation(
         }
     } else if let Some(team_id) = req.assigned_team_id {
         // Team assignment
-        state.assignment_service
+        state
+            .assignment_service
             .assign_conversation_to_team(&conversation_id, &team_id, &user.user.id, &permissions)
             .await?
     } else {
@@ -62,7 +64,8 @@ pub async fn unassign_conversation(
     axum::Extension(user): axum::Extension<AuthenticatedUser>,
     Path(conversation_id): Path<String>,
 ) -> ApiResult<Json<ConversationResponse>> {
-    let conversation = state.assignment_service
+    let conversation = state
+        .assignment_service
         .unassign_conversation(&conversation_id, &user.user.id)
         .await?;
 
@@ -85,13 +88,17 @@ pub async fn update_agent_availability(
 
     // Use shared assignment service from state
     // Update availability via service
-    state.assignment_service
+    state
+        .assignment_service
         .update_agent_availability(&agent_id, req.availability_status)
         .await?;
 
     // If setting to away_and_reassigning, auto-unassign conversations
     if req.availability_status == AgentAvailability::AwayAndReassigning {
-        let unassigned_conversations = state.assignment_service.auto_unassign_on_away(&agent_id).await?;
+        let unassigned_conversations = state
+            .assignment_service
+            .auto_unassign_on_away(&agent_id)
+            .await?;
 
         tracing::info!(
             "Auto-unassigned {} conversations for agent {}",
@@ -128,7 +135,8 @@ pub async fn get_unassigned_conversations(
     // Use shared assignment service from state
 
     // Check permission via service
-    let permissions = state.assignment_service
+    let permissions = state
+        .assignment_service
         .get_user_permissions(&user.user.id)
         .await?;
     if !permissions
@@ -141,7 +149,8 @@ pub async fn get_unassigned_conversations(
     }
 
     let offset = (params.page - 1) * params.per_page;
-    let (conversations, total) = state.assignment_service
+    let (conversations, total) = state
+        .assignment_service
         .get_unassigned_conversations(params.per_page, offset)
         .await?;
 
@@ -167,7 +176,8 @@ pub async fn get_assigned_conversations(
     // Use shared assignment service from state
 
     let offset = (params.page - 1) * params.per_page;
-    let (conversations, total) = state.assignment_service
+    let (conversations, total) = state
+        .assignment_service
         .get_user_assigned_conversations(&user.user.id, params.per_page, offset)
         .await?;
 
@@ -194,7 +204,8 @@ pub async fn get_team_conversations(
     // Use shared assignment service from state
 
     // Verify user is a member of the team via service
-    let is_member = state.assignment_service
+    let is_member = state
+        .assignment_service
         .is_team_member(&team_id, &user.user.id)
         .await?;
     if !is_member {
@@ -204,7 +215,8 @@ pub async fn get_team_conversations(
     }
 
     let offset = (params.page - 1) * params.per_page;
-    let (conversations, total) = state.assignment_service
+    let (conversations, total) = state
+        .assignment_service
         .get_team_conversations(&team_id, params.per_page, offset)
         .await?;
 

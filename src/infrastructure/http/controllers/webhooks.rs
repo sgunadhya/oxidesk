@@ -6,8 +6,8 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
+    domain::entities::{CreateWebhookRequest, UpdateWebhookRequest},
     infrastructure::http::middleware::{ApiError, ApiResult, AppState, AuthenticatedUser},
-    domain::entities::{CreateWebhookRequest, DeliveryListResponse, UpdateWebhookRequest},
 };
 
 /// Create a new webhook (admin only)
@@ -23,7 +23,10 @@ pub async fn create_webhook(
         ));
     }
 
-    let webhook = state.webhook_service.create_webhook(request, &auth_user.user.id).await?;
+    let webhook = state
+        .webhook_service
+        .create_webhook(request, &auth_user.user.id)
+        .await?;
 
     Ok((axum::http::StatusCode::CREATED, Json(webhook)))
 }
@@ -41,7 +44,10 @@ pub async fn list_webhooks(
         ));
     }
 
-    let response = state.webhook_service.list_webhooks(params.limit, params.offset).await?;
+    let response = state
+        .webhook_service
+        .list_webhooks(params.limit, params.offset)
+        .await?;
 
     Ok(Json(response))
 }
@@ -149,7 +155,8 @@ pub async fn test_webhook(
         .map_err(|e| ApiError::Internal(format!("Failed to serialize payload: {}", e)))?;
 
     // Sign the payload
-    let signature = crate::domain::services::webhook_signature::sign_payload(&payload_str, &webhook.secret);
+    let signature =
+        crate::domain::services::webhook_signature::sign_payload(&payload_str, &webhook.secret);
 
     // Attempt delivery using reqwest directly
     let client = reqwest::Client::builder()

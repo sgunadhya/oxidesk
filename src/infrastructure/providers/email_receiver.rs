@@ -395,7 +395,8 @@ where
     message_repo: Arc<dyn MessageRepository>,
     attachment_repo: Arc<dyn AttachmentRepository>,
     contact_service_factory: F,
-    attachment_storage_path: String,
+    file_storage: Arc<dyn crate::domain::ports::file_storage::FileStorage>,
+    distributed_lock: Arc<dyn crate::domain::ports::distributed_lock::DistributedLock>,
     time_service: Arc<dyn TimeService>,
 }
 
@@ -409,7 +410,8 @@ where
         message_repo: Arc<dyn MessageRepository>,
         attachment_repo: Arc<dyn AttachmentRepository>,
         contact_service_factory: F,
-        attachment_storage_path: String,
+        file_storage: Arc<dyn crate::domain::ports::file_storage::FileStorage>,
+        distributed_lock: Arc<dyn crate::domain::ports::distributed_lock::DistributedLock>,
         time_service: Arc<dyn TimeService>,
     ) -> Self {
         Self {
@@ -418,7 +420,8 @@ where
             message_repo,
             attachment_repo,
             contact_service_factory,
-            attachment_storage_path,
+            file_storage,
+            distributed_lock,
             time_service,
         }
     }
@@ -448,25 +451,66 @@ where
                             contact_service,
                             AttachmentService::new(
                                 self.attachment_repo.clone(),
-                                self.attachment_storage_path.clone(),
+                                self.file_storage.clone(),
                             ),
                         );
                         let inbox_id = config.inbox_id.clone();
+                        let distributed_lock = self.distributed_lock.clone();
 
                         futures.push(async move {
-                            match receiver.process_inbox(&inbox_id).await {
-                                Ok(count) => {
-                                    if count > 0 {
-                                        tracing::info!(
-                                            "Processed {} emails for inbox {}",
-                                            count,
-                                            inbox_id
+                            // Try to acquire distributed lock for this inbox
+                            let lock_key = format!("email_poll:{}", inbox_id);
+                            // We use a random UUID as owner to identify this worker instance
+                            // Ideally this should be a unique worker ID (e.g. hostname + pid or uuid generated on startup)
+                            // For now let's just use a fresh UUID inside the closure, but that means if we crash we can't release?
+                            // No, if we crash the TTL cleans it up.
+                            // But cleaner is to have a consistent worker ID on the struct.
+                            // I will use a transient UUID for now as I can't change struct easily without more edits. A new UUID per attempt is technically fine but "owner" matching for release relies on it.
+                            let owner = uuid::Uuid::new_v4().to_string();
+
+                            match distributed_lock.acquire(&lock_key, &owner, 50).await {
+                                // 50s TTL (slightly less than 60s poll interval)
+                                Ok(true) => {
+                                    // Got lock, process
+                                    match receiver.process_inbox(&inbox_id).await {
+                                        Ok(count) => {
+                                            if count > 0 {
+                                                tracing::info!(
+                                                    "Processed {} emails for inbox {}",
+                                                    count,
+                                                    inbox_id
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            tracing::error!(
+                                                "Failed to process inbox {}: {:?}",
+                                                inbox_id,
+                                                e
+                                            );
+                                        }
+                                    }
+
+                                    // Release lock
+                                    if let Err(e) =
+                                        distributed_lock.release(&lock_key, &owner).await
+                                    {
+                                        tracing::warn!(
+                                            "Failed to release lock for inbox {}: {}",
+                                            inbox_id,
+                                            e
                                         );
                                     }
                                 }
+                                Ok(false) => {
+                                    tracing::debug!(
+                                        "Could not acquire lock for inbox {}, skipping",
+                                        inbox_id
+                                    );
+                                }
                                 Err(e) => {
                                     tracing::error!(
-                                        "Failed to process inbox {}: {:?}",
+                                        "Failed to check lock for inbox {}: {}",
                                         inbox_id,
                                         e
                                     );

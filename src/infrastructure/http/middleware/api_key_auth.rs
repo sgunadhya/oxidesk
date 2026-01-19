@@ -7,11 +7,10 @@ use axum::{
 };
 use base64::{engine::general_purpose, Engine as _};
 
+use crate::application::services::api_key_service::verify_api_secret;
+use crate::domain::entities::Agent;
 use crate::infrastructure::http::middleware::auth::AppState;
 use crate::infrastructure::http::middleware::error::ApiError;
-use crate::infrastructure::persistence::Database;
-use crate::domain::entities::Agent;
-use crate::application::services::api_key_service::verify_api_secret;
 
 /// Extract API key credentials from request headers
 /// Supports two methods:
@@ -95,7 +94,10 @@ pub async fn authenticate_with_api_key(
             let agent_service_clone = agent_service.clone();
             let api_key_clone = api_key.to_string();
             tokio::spawn(async move {
-                if let Err(e) = agent_service_clone.update_api_key_last_used(&api_key_clone).await {
+                if let Err(e) = agent_service_clone
+                    .update_api_key_last_used(&api_key_clone)
+                    .await
+                {
                     tracing::error!("Failed to update API key last_used_at: {}", e);
                 }
             });

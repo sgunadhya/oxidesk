@@ -1,11 +1,12 @@
 use crate::{
-    infrastructure::http::middleware::error::{ApiError, ApiResult},
+    domain::entities::*,
+    domain::events::SystemEvent,
+    domain::ports::event_bus::EventBus,
     domain::ports::{
         conversation_repository::ConversationRepository, sla_repository::SlaRepository,
         team_repository::TeamRepository,
     },
-    events::{EventBus, SystemEvent},
-    domain::entities::*,
+    infrastructure::http::middleware::error::{ApiError, ApiResult},
 };
 use chrono::Timelike;
 use std::sync::Arc;
@@ -177,7 +178,9 @@ impl SlaService {
         &self,
         applied_sla_id: &str,
     ) -> ApiResult<Vec<SlaEvent>> {
-        self.sla_repo.get_sla_events_by_applied_sla(applied_sla_id).await
+        self.sla_repo
+            .get_sla_events_by_applied_sla(applied_sla_id)
+            .await
     }
 
     /// Get pending SLA event by type for an applied SLA
@@ -299,7 +302,9 @@ impl SlaService {
             resolution_deadline.clone(),
         );
 
-        self.sla_repo.create_sla_event(&first_response_event).await?;
+        self.sla_repo
+            .create_sla_event(&first_response_event)
+            .await?;
         self.sla_repo.create_sla_event(&resolution_event).await?;
 
         if business_hours.is_some() {
@@ -699,4 +704,3 @@ impl SlaService {
         }
     }
 }
-

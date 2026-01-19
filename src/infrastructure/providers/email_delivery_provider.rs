@@ -1,8 +1,13 @@
+use crate::domain::entities::Message;
 use crate::domain::ports::agent_repository::AgentRepository;
 use crate::domain::ports::contact_repository::ContactRepository;
 use crate::domain::ports::conversation_repository::ConversationRepository;
 use crate::domain::ports::email_repository::EmailRepository;
-use crate::domain::entities::Message;
+/// Email Delivery Provider (Feature 021)
+///
+/// Implements MessageDeliveryProvider trait for sending agent replies via SMTP.
+/// Formats emails with reference numbers and sends using lettre.
+use crate::domain::ports::template_repository::TemplateRepository;
 use crate::infrastructure::providers::EmailParserService;
 use crate::MessageDeliveryProvider;
 use lettre::{
@@ -10,10 +15,6 @@ use lettre::{
     Message as LettreMessage, SmtpTransport, Transport,
 };
 use std::sync::Arc;
-/// Email Delivery Provider (Feature 021)
-///
-/// Implements MessageDeliveryProvider trait for sending agent replies via SMTP.
-/// Formats emails with reference numbers and sends using lettre.
 
 /// Email delivery provider for sending agent replies via SMTP
 pub struct EmailDeliveryProvider {
@@ -21,6 +22,7 @@ pub struct EmailDeliveryProvider {
     contact_repo: Arc<dyn ContactRepository>,
     email_repo: Arc<dyn EmailRepository>,
     agent_repo: Arc<dyn AgentRepository>,
+    template_repo: Arc<dyn TemplateRepository>,
     parser: EmailParserService,
 }
 
@@ -31,46 +33,47 @@ impl EmailDeliveryProvider {
         contact_repo: Arc<dyn ContactRepository>,
         email_repo: Arc<dyn EmailRepository>,
         agent_repo: Arc<dyn AgentRepository>,
+        template_repo: Arc<dyn TemplateRepository>,
     ) -> Self {
         Self {
             conversation_repo,
             contact_repo,
             email_repo,
             agent_repo,
+            template_repo,
             parser: EmailParserService::new(),
         }
     }
 
     /// Render email body from message content with HTML template
-    fn render_email_body(&self, content: &str, agent_name: Option<&str>) -> (String, bool) {
-        // Try to load HTML template
-        let template_path = "templates/agent_reply_email.html";
-        match std::fs::read_to_string(template_path) {
-            Ok(template) => {
-                // Render HTML email
-                let signature = if let Some(name) = agent_name {
-                    format!("{}<br>Support Team", name)
-                } else {
-                    "Support Team".to_string()
-                };
+    async fn render_email_body(&self, content: &str, agent_name: Option<&str>) -> (String, bool) {
+        let signature = if let Some(name) = agent_name {
+            format!("{}<br>Support Team", name)
+        } else {
+            "Support Team".to_string()
+        };
+        let plain_signature = if let Some(name) = agent_name {
+            format!("\n\n---\n{}\nSupport Team", name)
+        } else {
+            "\n\n---\nSupport Team".to_string()
+        };
 
+        // Try to fetch template from repository
+        let template_name = "agent_reply_email.html";
+        match self.template_repo.get_template(template_name).await {
+            Ok(Some(template)) => {
                 let html_content = content.replace("\n", "<br>");
                 let rendered = template
+                    .body_html
                     .replace("{{message_content}}", &html_content)
                     .replace("{{agent_signature}}", &signature);
 
                 (rendered, true) // true = is HTML
             }
-            Err(_) => {
-                // Fallback to plain text if template not found
+            Ok(None) | Err(_) => {
+                // Fallback to plain text if template not found or error
                 tracing::debug!("HTML email template not found, using plain text fallback");
-                let signature = if let Some(name) = agent_name {
-                    format!("\n\n---\n{}\nSupport Team", name)
-                } else {
-                    "\n\n---\nSupport Team".to_string()
-                };
-
-                (format!("{}{}", content, signature), false) // false = is plain text
+                (format!("{}{}", content, plain_signature), false) // false = is plain text
             }
         }
     }
@@ -146,7 +149,9 @@ impl MessageDeliveryProvider for EmailDeliveryProvider {
         );
 
         // Render email body
-        let (body, is_html) = self.render_email_body(&message.content, agent_name.as_deref());
+        let (body, is_html) = self
+            .render_email_body(&message.content, agent_name.as_deref())
+            .await;
 
         // Build email message
         let from_address = format!(
@@ -220,6 +225,37 @@ mod tests {
     use super::*;
     use crate::infrastructure::persistence::Database;
 
+    use crate::domain::ports::template_repository::Template;
+    use crate::infrastructure::http::middleware::error::ApiResult;
+    use async_trait::async_trait;
+
+    struct MockTemplateRepository {
+        template: Option<Template>,
+    }
+
+    impl MockTemplateRepository {
+        fn new() -> Self {
+            Self { template: None }
+        }
+
+        fn with_template(template: Template) -> Self {
+            Self {
+                template: Some(template),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl TemplateRepository for MockTemplateRepository {
+        async fn get_template(&self, _name: &str) -> ApiResult<Option<Template>> {
+            Ok(self.template.clone())
+        }
+
+        async fn save_template(&self, _template: &Template) -> ApiResult<()> {
+            Ok(())
+        }
+    }
+
     #[tokio::test]
     async fn test_format_subject_with_reference() {
         let db = Database::new_mock();
@@ -227,9 +263,15 @@ mod tests {
         let contact_repo = Arc::new(db.clone()) as Arc<dyn ContactRepository>;
         let email_repo = Arc::new(db.clone()) as Arc<dyn EmailRepository>;
         let agent_repo = Arc::new(db.clone()) as Arc<dyn AgentRepository>;
+        let template_repo = Arc::new(MockTemplateRepository::new()) as Arc<dyn TemplateRepository>;
 
-        let provider =
-            EmailDeliveryProvider::new(conversation_repo, contact_repo, email_repo, agent_repo);
+        let provider = EmailDeliveryProvider::new(
+            conversation_repo,
+            contact_repo,
+            email_repo,
+            agent_repo,
+            template_repo,
+        );
 
         let subject = provider.format_subject_with_reference(Some("Support Request"), 123);
         assert!(subject.contains("[#123]"));
@@ -244,11 +286,28 @@ mod tests {
         let email_repo = Arc::new(db.clone()) as Arc<dyn EmailRepository>;
         let agent_repo = Arc::new(db.clone()) as Arc<dyn AgentRepository>;
 
-        let provider =
-            EmailDeliveryProvider::new(conversation_repo, contact_repo, email_repo, agent_repo);
+        let template = Template {
+            name: "test".to_string(),
+            subject: "".to_string(),
+            body_html: "<html>{{message_content}}<br>{{agent_signature}}</html>".to_string(),
+            body_text: "".to_string(),
+        };
+        let template_repo = Arc::new(MockTemplateRepository::with_template(template))
+            as Arc<dyn TemplateRepository>;
 
-        let (body, _is_html) =
-            provider.render_email_body("Thanks for your inquiry!", Some("John Doe"));
+        let provider = EmailDeliveryProvider::new(
+            conversation_repo,
+            contact_repo,
+            email_repo,
+            agent_repo,
+            template_repo,
+        );
+
+        let (body, is_html) = provider
+            .render_email_body("Thanks for your inquiry!", Some("John Doe"))
+            .await;
+
+        assert!(is_html);
         assert!(body.contains("Thanks for your inquiry!"));
         assert!(body.contains("John Doe"));
         assert!(body.contains("Support Team"));
@@ -262,10 +321,26 @@ mod tests {
         let email_repo = Arc::new(db.clone()) as Arc<dyn EmailRepository>;
         let agent_repo = Arc::new(db.clone()) as Arc<dyn AgentRepository>;
 
-        let provider =
-            EmailDeliveryProvider::new(conversation_repo, contact_repo, email_repo, agent_repo);
+        let template = Template {
+            name: "test".to_string(),
+            subject: "".to_string(),
+            body_html: "<html>{{message_content}}<br>{{agent_signature}}</html>".to_string(),
+            body_text: "".to_string(),
+        };
+        let template_repo = Arc::new(MockTemplateRepository::with_template(template))
+            as Arc<dyn TemplateRepository>;
 
-        let (body, _is_html) = provider.render_email_body("Thanks for your inquiry!", None);
+        let provider = EmailDeliveryProvider::new(
+            conversation_repo,
+            contact_repo,
+            email_repo,
+            agent_repo,
+            template_repo,
+        );
+
+        let (body, _is_html) = provider
+            .render_email_body("Thanks for your inquiry!", None)
+            .await;
         assert!(body.contains("Thanks for your inquiry!"));
         assert!(body.contains("Support Team"));
         assert!(!body.contains("undefined"));

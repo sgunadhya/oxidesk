@@ -16,6 +16,7 @@ use crate::domain::ports::notification_repository::NotificationRepository;
 use crate::domain::ports::oidc_repository::OidcRepository;
 use crate::domain::ports::role_repository::RoleRepository;
 use crate::domain::ports::tag_repository::TagRepository;
+use crate::domain::ports::task_queue::TaskQueue;
 use crate::domain::ports::team_repository::TeamRepository;
 use crate::domain::ports::user_repository::UserRepository;
 use crate::domain::ports::webhook_repository::WebhookRepository;
@@ -24,7 +25,6 @@ use crate::infrastructure::persistence::Database;
 use crate::infrastructure::providers::connection_manager::{
     ConnectionManager, InMemoryConnectionManager,
 };
-use crate::infrastructure::workers::job_queue::TaskQueue;
 use crate::shared::utils::email_validator::validate_and_normalize_email;
 use crate::LocalEventBus;
 use std::sync::Arc;
@@ -45,9 +45,25 @@ pub async fn build_app_state(
     let event_bus = std::sync::Arc::new(LocalEventBus::new(100));
     tracing::info!("Event bus initialized with capacity 100");
 
+    // Initialize Template Repository
+    let template_repo: Arc<dyn crate::domain::ports::template_repository::TemplateRepository> =
+        Arc::new(
+            crate::infrastructure::persistence::templates::LocalTemplateRepository::new(
+                std::path::PathBuf::from("templates"),
+            ),
+        );
+
     // Initialize delivery service with mock provider
     let delivery_provider = std::sync::Arc::new(
-        crate::application::services::delivery_service::MockDeliveryProvider::new(),
+        crate::infrastructure::providers::email_delivery_provider::EmailDeliveryProvider::new(
+            Arc::new(db.clone()) as Arc<dyn ConversationRepository>,
+            Arc::new(db.clone())
+                as Arc<dyn crate::domain::ports::contact_repository::ContactRepository>,
+            Arc::new(db.clone())
+                as Arc<dyn crate::domain::ports::email_repository::EmailRepository>,
+            Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+            template_repo.clone(),
+        ),
     );
     let delivery_service = crate::application::services::DeliveryService::new(
         Arc::new(db.clone()) as Arc<dyn MessageRepository>,
@@ -243,9 +259,16 @@ pub async fn build_app_state(
 
     // Initialize Services (wrapping repositories)
     let email_service = crate::application::services::EmailService::new(email_repo.clone());
+    // Initialize LocalFileStorage
+    let file_storage = std::sync::Arc::new(
+        crate::infrastructure::storage::local::LocalFileStorage::new(std::path::PathBuf::from(
+            &attachment_storage_path,
+        )),
+    );
+
     let attachment_service = crate::application::services::AttachmentService::new(
         attachment_repo.clone(),
-        std::path::PathBuf::from(&attachment_storage_path),
+        file_storage.clone(),
     );
 
     let conversation_service = crate::application::services::ConversationService::new(
@@ -358,6 +381,13 @@ pub async fn build_app_state(
 
     // Spawn email polling worker (Feature 021)
     let db_clone_for_email = db.clone();
+    // Initialize Distributed Lock
+    let distributed_lock = std::sync::Arc::new(
+        crate::infrastructure::persistence::distributed_lock::DatabaseDistributedLock::new(
+            db.clone(),
+        ),
+    );
+
     let email_worker = crate::infrastructure::providers::email_receiver::EmailPollingWorker::new(
         email_repo.clone(),
         conversation_repo.clone(),
@@ -369,7 +399,8 @@ pub async fn build_app_state(
                 std::sync::Arc::new(db_clone_for_email.clone()),
             )
         },
-        attachment_storage_path.clone(),
+        file_storage.clone(),
+        distributed_lock.clone(),
         time_service.clone(),
     );
     task_spawner.spawn(Box::pin(async move {

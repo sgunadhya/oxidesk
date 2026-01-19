@@ -2,9 +2,10 @@ use crate::domain::ports::agent_repository::AgentRepository;
 use crate::domain::ports::availability_repository::AvailabilityRepository;
 use crate::domain::ports::conversation_repository::ConversationRepository;
 use crate::{
-    infrastructure::http::middleware::error::{ApiError, ApiResult},
-    events::{EventBus, SystemEvent},
     domain::entities::{ActivityEventType, AgentActivityLog, AgentAvailability},
+    domain::events::SystemEvent,
+    domain::ports::event_bus::EventBus,
+    infrastructure::http::middleware::error::{ApiError, ApiResult},
 };
 use std::sync::Arc;
 
@@ -60,7 +61,9 @@ impl AvailabilityService {
 
         // Update activity timestamp when going online
         if status == AgentAvailability::Online {
-            self.availability_repo.update_agent_activity(&agent.id).await?;
+            self.availability_repo
+                .update_agent_activity(&agent.id)
+                .await?;
         }
 
         // Log activity
@@ -115,8 +118,12 @@ impl AvailabilityService {
             .await?;
 
         // Update login and activity timestamps
-        self.availability_repo.update_agent_last_login(&agent.id).await?;
-        self.availability_repo.update_agent_activity(&agent.id).await?;
+        self.availability_repo
+            .update_agent_last_login(&agent.id)
+            .await?;
+        self.availability_repo
+            .update_agent_activity(&agent.id)
+            .await?;
 
         // Log activity
         self.log_activity(&agent.id, ActivityEventType::AgentLogin, None, None)
@@ -194,7 +201,10 @@ impl AvailabilityService {
     /// Check for online agents who exceeded inactivity timeout
     pub async fn check_inactivity_timeouts(&self) -> ApiResult<Vec<String>> {
         let threshold = self.load_inactivity_timeout().await?;
-        let agents = self.availability_repo.get_inactive_online_agents(threshold).await?;
+        let agents = self
+            .availability_repo
+            .get_inactive_online_agents(threshold)
+            .await?;
 
         let mut affected = Vec::new();
 
@@ -235,7 +245,10 @@ impl AvailabilityService {
     /// Check for away agents who exceeded max idle threshold
     pub async fn check_max_idle_thresholds(&self) -> ApiResult<Vec<String>> {
         let threshold = self.load_max_idle_threshold().await?;
-        let agents = self.availability_repo.get_idle_away_agents(threshold).await?;
+        let agents = self
+            .availability_repo
+            .get_idle_away_agents(threshold)
+            .await?;
 
         let mut affected = Vec::new();
 

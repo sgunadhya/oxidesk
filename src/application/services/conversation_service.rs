@@ -1,15 +1,16 @@
-use crate::infrastructure::http::middleware::auth::AuthenticatedUser;
-use crate::infrastructure::http::middleware::error::{ApiError, ApiResult};
-use crate::domain::ports::contact_repository::ContactRepository;
-use crate::domain::ports::conversation_repository::ConversationRepository;
-use crate::domain::ports::team_repository::TeamRepository;
-use crate::domain::ports::user_repository::UserRepository;
-use crate::shared::events::{EventBus, SystemEvent};
 use crate::domain::entities::{
     AssignmentHistory, Conversation, ConversationListResponse, ConversationStatus,
     CreateConversation, UpdateStatusRequest,
 };
+use crate::domain::events::SystemEvent;
+use crate::domain::ports::contact_repository::ContactRepository;
+use crate::domain::ports::conversation_repository::ConversationRepository;
+use crate::domain::ports::event_bus::EventBus;
+use crate::domain::ports::team_repository::TeamRepository;
+use crate::domain::ports::user_repository::UserRepository;
 use crate::domain::services::state_machine::{execute_transition, TransitionContext};
+use crate::infrastructure::http::middleware::auth::AuthenticatedUser;
+use crate::infrastructure::http::middleware::error::{ApiError, ApiResult};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -61,7 +62,10 @@ impl ConversationService {
             .await?
             .ok_or_else(|| ApiError::NotFound("Contact user not found".to_string()))?;
 
-        if !matches!(user.user_type, crate::domain::entities::user::UserType::Contact) {
+        if !matches!(
+            user.user_type,
+            crate::domain::entities::user::UserType::Contact
+        ) {
             return Err(ApiError::BadRequest("User is not a contact".to_string()));
         }
 

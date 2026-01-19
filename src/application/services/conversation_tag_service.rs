@@ -1,10 +1,11 @@
 use crate::{
-    infrastructure::http::middleware::error::{ApiError, ApiResult},
+    domain::entities::*,
+    domain::events::SystemEvent,
     domain::ports::conversation_repository::ConversationRepository,
     domain::ports::conversation_tag_repository::ConversationTagRepository,
+    domain::ports::event_bus::EventBus,
     domain::ports::tag_repository::TagRepository,
-    events::{EventBus, SystemEvent},
-    domain::entities::*,
+    infrastructure::http::middleware::error::{ApiError, ApiResult},
 };
 use std::sync::Arc;
 
@@ -69,7 +70,10 @@ impl ConversationTagService {
         }
 
         // 4. Get previous tags for event
-        let previous_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
+        let previous_tags = self
+            .conversation_tag_repo
+            .get_conversation_tags(conversation_id)
+            .await?;
         let previous_tag_ids: Vec<String> = previous_tags.iter().map(|t| t.id.clone()).collect();
 
         // 5. Verify all tags exist and add them
@@ -88,11 +92,15 @@ impl ConversationTagService {
         }
 
         // 6. Get new tags
-        let new_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
+        let new_tags = self
+            .conversation_tag_repo
+            .get_conversation_tags(conversation_id)
+            .await?;
         let new_tag_ids: Vec<String> = new_tags.iter().map(|t| t.id.clone()).collect();
 
         // 7. Emit ConversationTagsChanged event
-        self.event_bus
+        let _ = self
+            .event_bus
             .publish(SystemEvent::ConversationTagsChanged {
                 conversation_id: conversation_id.to_string(),
                 previous_tags: previous_tag_ids,
@@ -130,7 +138,10 @@ impl ConversationTagService {
             })?;
 
         // 3. Get previous tags for event
-        let previous_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
+        let previous_tags = self
+            .conversation_tag_repo
+            .get_conversation_tags(conversation_id)
+            .await?;
         let previous_tag_ids: Vec<String> = previous_tags.iter().map(|t| t.id.clone()).collect();
 
         // 4. Remove tag (idempotent)
@@ -139,11 +150,15 @@ impl ConversationTagService {
             .await?;
 
         // 5. Get new tags
-        let new_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
+        let new_tags = self
+            .conversation_tag_repo
+            .get_conversation_tags(conversation_id)
+            .await?;
         let new_tag_ids: Vec<String> = new_tags.iter().map(|t| t.id.clone()).collect();
 
         // 6. Emit ConversationTagsChanged event
-        self.event_bus
+        let _ = self
+            .event_bus
             .publish(SystemEvent::ConversationTagsChanged {
                 conversation_id: conversation_id.to_string(),
                 previous_tags: previous_tag_ids,
@@ -181,7 +196,10 @@ impl ConversationTagService {
             })?;
 
         // 3. Get previous tags for event
-        let previous_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
+        let previous_tags = self
+            .conversation_tag_repo
+            .get_conversation_tags(conversation_id)
+            .await?;
         let previous_tag_ids: Vec<String> = previous_tags.iter().map(|t| t.id.clone()).collect();
 
         // 4. Verify all new tags exist
@@ -199,11 +217,15 @@ impl ConversationTagService {
             .await?;
 
         // 6. Get new tags
-        let new_tags = self.conversation_tag_repo.get_conversation_tags(conversation_id).await?;
+        let new_tags = self
+            .conversation_tag_repo
+            .get_conversation_tags(conversation_id)
+            .await?;
         let new_tag_ids: Vec<String> = new_tags.iter().map(|t| t.id.clone()).collect();
 
         // 7. Emit ConversationTagsChanged event
-        self.event_bus
+        let _ = self
+            .event_bus
             .publish(SystemEvent::ConversationTagsChanged {
                 conversation_id: conversation_id.to_string(),
                 previous_tags: previous_tag_ids,
@@ -228,7 +250,9 @@ impl ConversationTagService {
             })?;
 
         // 2. Get tags
-        self.conversation_tag_repo.get_conversation_tags(conversation_id).await
+        self.conversation_tag_repo
+            .get_conversation_tags(conversation_id)
+            .await
     }
 
     /// Get conversations with a specific tag
