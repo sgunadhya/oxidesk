@@ -16,3 +16,4 @@ pub use infrastructure::persistence::Database;
 pub use infrastructure::http::middleware::error::*;
 pub use shared::events::{EventBus, LocalEventBus, SystemEvent};
 pub use shared::*;
+pub mod bootstrap;
