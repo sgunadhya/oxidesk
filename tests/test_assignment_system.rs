@@ -1,5 +1,5 @@
 // Integration tests for conversation assignment system (Feature 004)
-use oxidesk::models::{
+use oxidesk::domain::entities::{
     conversation::ConversationStatus, team::TeamMemberRole, user::AgentAvailability, Team,
 };
 
@@ -265,7 +265,7 @@ async fn test_assignment_history_audit_trail() {
     .await
     .expect("Failed to assign conversation");
 
-    let history1 = oxidesk::models::AssignmentHistory::new(
+    let history1 = oxidesk::domain::entities::AssignmentHistory::new(
         conversation.id.clone(),
         Some(agent1.user_id.clone()),
         None,
@@ -284,7 +284,7 @@ async fn test_assignment_history_audit_trail() {
     .await
     .expect("Failed to assign conversation");
 
-    let history2 = oxidesk::models::AssignmentHistory::new(
+    let history2 = oxidesk::domain::entities::AssignmentHistory::new(
         conversation.id.clone(),
         Some(agent2.user_id.clone()),
         None,

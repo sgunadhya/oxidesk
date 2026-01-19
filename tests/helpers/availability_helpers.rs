@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 use chrono::{DateTime, Utc};
 use oxidesk::{
-    database::Database,
-    models::{Agent, AgentAvailability},
+    infrastructure::persistence::Database,
+    domain::entities::{Agent, AgentAvailability},
 };
 use sqlx::Row;
 

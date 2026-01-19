@@ -1,5 +1,5 @@
 use crate::common::{TestApp, TestUser};
-use oxidesk::models::{Conversation, ConversationStatus, CreateConversation, UserType, UpdateStatusRequest};
+use oxidesk::domain::entities::{Conversation, ConversationStatus, CreateConversation, UserType, UpdateStatusRequest};
 use axum::http::StatusCode;
 
 #[tokio::test]

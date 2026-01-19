@@ -4,19 +4,22 @@ use oxidesk::domain::ports::agent_repository::AgentRepository;
 use oxidesk::domain::ports::api_key_repository::ApiKeyRepository;
 use oxidesk::domain::ports::notification_repository::NotificationRepository;
 use oxidesk::domain::ports::user_repository::UserRepository;
+use oxidesk::infrastructure::workers::TaskQueue;
 use oxidesk::{
-    api::{
-        self,
+    infrastructure::http::{
+        self as api,
         middleware::{ApiError, AppState},
-    }, // Explicitly fixing imports mapping
-    config::Config,
-    database::Database,
-    models::*,
-    services::{
-        connection_manager::{ConnectionManager, InMemoryConnectionManager},
-        *,
     },
-    web,
+    config::Config,
+    infrastructure::persistence::Database,
+    domain::entities::*,
+    application::services::*,
+    infrastructure::providers::{
+        connection_manager::{ConnectionManager, InMemoryConnectionManager},
+        email_receiver::spawn_email_polling_worker,
+    },
+    infrastructure::web::{self as web},
+    shared::utils::email_validator::validate_and_normalize_email,
     EventBus,
 };
 // Re-import initialize_admin for main.rs usage if it was public in lib?
@@ -89,8 +92,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize delivery service with mock provider
     use oxidesk::domain::ports::message_repository::MessageRepository;
-    let delivery_provider = std::sync::Arc::new(oxidesk::services::MockDeliveryProvider::new());
-    let delivery_service = oxidesk::services::DeliveryService::new(
+    let delivery_provider = std::sync::Arc::new(oxidesk::application::services::delivery_service::MockDeliveryProvider::new());
+    let delivery_service = oxidesk::application::services::DeliveryService::new(
         Arc::new(db.clone()) as Arc<dyn MessageRepository>,
         delivery_provider,
     );
@@ -125,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize automation service
     use oxidesk::domain::ports::automation_repository::AutomationRepository;
     use oxidesk::domain::ports::conversation_tag_repository::ConversationTagRepository;
-    let action_executor = oxidesk::services::action_executor::ActionExecutor::new(
+    let action_executor = oxidesk::domain::services::action_executor::ActionExecutor::new(
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
         std::sync::Arc::new(db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
@@ -172,11 +175,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Connection manager initialized");
 
     // Initialize rate limiter
-    let rate_limiter = oxidesk::services::AuthRateLimiter::new();
+    let rate_limiter = oxidesk::shared::rate_limiter::AuthRateLimiter::new();
     tracing::info!("Rate limiter initialized (5 attempts per 15 minutes)");
 
     // Initialize TaskQueue
-    let task_queue = std::sync::Arc::new(oxidesk::services::SqliteTaskQueue::new(db.clone()));
+    let task_queue = std::sync::Arc::new(oxidesk::infrastructure::workers::SqliteTaskQueue::new(db.clone()));
 
     // Enqueue initial maintenance jobs
     let q_init = task_queue.clone();
@@ -214,7 +217,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Initialize Session Service
-    let session_service = oxidesk::services::SessionService::new(std::sync::Arc::new(db.clone()));
+    let session_service = oxidesk::application::services::SessionService::new(std::sync::Arc::new(db.clone()));
     tracing::info!("Session service initialized");
 
     // Initialize repositories for JobProcessor
@@ -222,7 +225,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let webhook_repo_for_jobs = oxidesk::domain::ports::webhook_repository::WebhookRepository::new(db.clone());
 
     // Start JobProcessor
-    let job_processor = oxidesk::services::JobProcessor::new(
+    let job_processor = oxidesk::infrastructure::workers::JobProcessor::new(
         task_queue.clone(),
         oidc_repo_for_jobs,
         webhook_repo_for_jobs,
@@ -236,7 +239,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Initialize Agent Service
-    let agent_service = oxidesk::services::AgentService::new(
+    let agent_service = oxidesk::application::services::AgentService::new(
         std::sync::Arc::new(db.clone()) as Arc<dyn AgentRepository>,
         std::sync::Arc::new(db.clone()) as Arc<dyn ApiKeyRepository>,
         std::sync::Arc::new(db.clone()) as Arc<dyn UserRepository>,
@@ -246,11 +249,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Agent service initialized");
 
     // Initialize User Service
-    let user_service = oxidesk::services::UserService::new(std::sync::Arc::new(db.clone()));
+    let user_service = oxidesk::application::services::UserService::new(std::sync::Arc::new(db.clone()));
     tracing::info!("User service initialized");
 
     // Initialize Contact Service
-    let contact_service = oxidesk::services::ContactService::new(
+    let contact_service = oxidesk::application::services::ContactService::new(
         std::sync::Arc::new(db.clone()),
         std::sync::Arc::new(db.clone()),
     );
@@ -275,7 +278,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     > = std::sync::Arc::new(db.clone());
     let team_repo: std::sync::Arc<dyn oxidesk::domain::ports::team_repository::TeamRepository> =
         std::sync::Arc::new(db.clone());
-    let team_service = oxidesk::services::TeamService::new(team_repo.clone());
+    let team_service = oxidesk::application::services::TeamService::new(team_repo.clone());
 
     // Initialize Assignment Service
     use oxidesk::domain::ports::assignment_repository::AssignmentRepository;
@@ -283,7 +286,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let assignment_repo: Arc<dyn AssignmentRepository> = Arc::new(db.clone());
     let availability_repo_for_assignment: Arc<dyn AvailabilityRepository> = Arc::new(db.clone());
     let assignment_service = {
-        let mut service = oxidesk::services::AssignmentService::new(
+        let mut service = oxidesk::application::services::AssignmentService::new(
             assignment_repo,
             conversation_repo.clone(),
             Arc::new(db.clone()) as Arc<dyn AgentRepository>,
@@ -302,7 +305,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize OIDC service
     let oidc_repository = oxidesk::domain::ports::oidc_repository::OidcRepository::new(db.clone());
-    let oidc_service = oxidesk::services::OidcService::new(
+    let oidc_service = oxidesk::application::services::OidcService::new(
         oidc_repository,
         user_repo.clone(),
         Arc::new(db.clone()) as Arc<dyn AgentRepository>,
@@ -311,20 +314,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("OIDC service initialized");
 
     // Initialize Services (wrapping repositories)
-    let email_service = oxidesk::services::EmailService::new(email_repo.clone());
-    let attachment_service = oxidesk::services::AttachmentService::new(
+    let email_service = oxidesk::application::services::EmailService::new(email_repo.clone());
+    let attachment_service = oxidesk::application::services::AttachmentService::new(
         attachment_repo.clone(),
         std::path::PathBuf::from(&attachment_storage_path),
     );
 
-    let conversation_service = oxidesk::services::ConversationService::new(
+    let conversation_service = oxidesk::application::services::ConversationService::new(
         conversation_repo.clone(),
         user_repo.clone(),
         contact_repo.clone(),
         team_repo.clone(),
     );
 
-    let message_service = oxidesk::services::MessageService::with_all_services(
+    let message_service = oxidesk::application::services::MessageService::with_all_services(
         message_repo.clone(),
         conversation_repo.clone(),
         delivery_service.clone(),
@@ -334,10 +337,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize MacroService
     let macro_repo = oxidesk::domain::ports::macro_repository::MacroRepository::new(db.clone());
-    let macro_service = oxidesk::services::MacroService::new(macro_repo);
+    let macro_service = oxidesk::application::services::MacroService::new(macro_repo);
 
     // Initialize AuthService
-    let auth_service = oxidesk::services::AuthService::new(
+    let auth_service = oxidesk::application::services::AuthService::new(
         Arc::new(db.clone()) as Arc<dyn UserRepository>,
         Arc::new(db.clone()) as Arc<dyn AgentRepository>,
         Arc::new(db.clone()) as Arc<dyn RoleRepository>,
@@ -346,14 +349,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize PasswordResetService
     let password_reset_repo = oxidesk::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone());
-    let password_reset_service = oxidesk::services::PasswordResetService::new(
+    let password_reset_service = oxidesk::application::services::PasswordResetService::new(
         password_reset_repo,
         Arc::new(db.clone()) as Arc<dyn UserRepository>,
     );
     tracing::info!("Password reset service initialized");
 
     // Initialize AuthLoggerService
-    let auth_logger_service = oxidesk::services::AuthLoggerService::new(Arc::new(db.clone()));
+    let auth_logger_service = oxidesk::application::services::AuthLoggerService::new(Arc::new(db.clone()));
     tracing::info!("Auth logger service initialized");
 
     // Create application state
@@ -399,7 +402,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         use oxidesk::domain::ports::automation_repository::AutomationRepository;
         use oxidesk::domain::ports::conversation_tag_repository::ConversationTagRepository;
         let tag_repo_bg = oxidesk::domain::ports::tag_repository::TagRepository::new(automation_db.clone());
-        let action_executor_bg = oxidesk::services::action_executor::ActionExecutor::new(
+        let action_executor_bg = oxidesk::domain::services::action_executor::ActionExecutor::new(
             std::sync::Arc::new(automation_db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::conversation_repository::ConversationRepository>,
             std::sync::Arc::new(automation_db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::user_repository::UserRepository>,
             std::sync::Arc::new(automation_db.clone()) as std::sync::Arc<dyn oxidesk::domain::ports::agent_repository::AgentRepository>,
@@ -410,7 +413,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let automation_rule_service = std::sync::Arc::new(oxidesk::AutomationService::new(
             std::sync::Arc::new(automation_db.clone()) as std::sync::Arc<dyn AutomationRepository>,
             action_executor_bg,
-            oxidesk::services::automation_service::AutomationConfig::default(),
+            oxidesk::application::services::automation_service::AutomationConfig::default(),
         ));
         tracing::info!("Automation service initialized in background task");
 
@@ -912,18 +915,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let webhook_event_bus = event_bus.clone();
     // Pass task_queue to WebhookWorker
     let webhook_worker =
-        oxidesk::WebhookWorker::new(webhook_repo_for_worker, webhook_event_bus, task_queue.clone());
+        oxidesk::infrastructure::workers::WebhookWorker::new(webhook_repo_for_worker, webhook_event_bus, task_queue.clone());
     webhook_worker.start();
     tracing::info!("Webhook worker started");
 
     // Build protected routes (require authentication)
     let protected = Router::new()
-        .route("/api/auth/logout", post(api::auth::logout))
-        .route("/api/auth/session", get(api::auth::get_session))
-        .route("/api/auth/events", get(api::auth::get_my_auth_events))
+        .route("/api/auth/logout", post(api::controllers::auth::logout))
+        .route("/api/auth/session", get(api::controllers::auth::get_session))
+        .route("/api/auth/events", get(api::controllers::auth::get_my_auth_events))
         .route(
             "/api/auth/events/recent",
-            get(api::auth::get_recent_auth_events),
+            get(api::controllers::auth::get_recent_auth_events),
         )
         .route(
             "/api/oidc-providers",
@@ -1205,15 +1208,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Add activity tracking middleware (before auth middleware)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
-            api::middleware::track_activity_middleware,
+            oxidesk::infrastructure::http::middleware::track_activity_middleware,
         ))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
-            api::middleware::require_auth,
+            oxidesk::infrastructure::http::middleware::require_auth,
         ))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
-            api::middleware::api_key_auth_middleware,
+            oxidesk::infrastructure::http::middleware::api_key_auth_middleware,
         ));
 
     // Build web routes (require auth via cookie)
@@ -1263,16 +1266,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health_handler))
         .route("/login", get(web::show_login_page))
         .route("/login", post(web::handle_login))
-        .route("/api/auth/login", post(api::auth::login))
+        .route("/api/auth/login", post(api::controllers::auth::login))
         .route(
             "/api/auth/oidc/providers",
             get(api::oidc_providers::list_enabled_oidc_providers),
         )
         .route(
             "/api/auth/oidc/:provider_name/login",
-            get(api::auth::oidc_login),
+            get(api::controllers::auth::oidc_login),
         )
-        .route("/api/auth/oidc/callback", get(api::auth::oidc_callback))
+        .route("/api/auth/oidc/callback", get(api::controllers::auth::oidc_callback))
         // Password Reset routes (Feature 017) - Public endpoints
         .route(
             "/api/password-reset/request",
@@ -1323,13 +1326,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create contact service factory
     let db_for_factory = db.clone();
     let contact_service_factory = move || {
-        oxidesk::services::ContactService::new(
+        oxidesk::application::services::ContactService::new(
             std::sync::Arc::new(db_for_factory.clone()),
             std::sync::Arc::new(db_for_factory.clone()),
         )
     };
 
-    let _email_polling_handle = oxidesk::spawn_email_polling_worker(
+    let _email_polling_handle = spawn_email_polling_worker(
         email_repo,
         conversation_repo,
         message_repo,

@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::{AssignmentHistory, UserNotification};
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::{AssignmentHistory, UserNotification};
 
 /// Repository for assignment operations
 #[async_trait::async_trait]

@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::{User, UserType};
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::{User, UserType};
 use async_trait::async_trait;
 
 #[async_trait]

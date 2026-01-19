@@ -3,9 +3,9 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    events::EventBus,
-    models::{ConversationStatus, Priority},
-    services::conversation_priority_service::ConversationPriorityService,
+    shared::events::EventBus,
+    domain::entities::{ConversationStatus, Priority},
+    application::services::conversation_priority_service::ConversationPriorityService,
 };
 use tokio_stream::StreamExt;
 

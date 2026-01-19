@@ -1,4 +1,4 @@
-use oxidesk::models::{User, UserType};
+use oxidesk::domain::entities::{User, UserType};
 
 #[test]
 fn test_user_has_unique_id() {

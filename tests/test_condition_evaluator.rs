@@ -1,8 +1,8 @@
 mod helpers;
 
 use oxidesk::{
-    models::{ComparisonOperator, Conversation, ConversationStatus, Priority, RuleCondition},
-    services::condition_evaluator::ConditionEvaluator,
+    domain::entities::{ComparisonOperator, Conversation, ConversationStatus, Priority, RuleCondition},
+    domain::services::condition_evaluator::ConditionEvaluator,
 };
 use serde_json::json;
 

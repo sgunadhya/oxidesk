@@ -1,4 +1,4 @@
-use oxidesk::services::{hash_password, verify_password};
+use oxidesk::application::services::auth::{hash_password, verify_password};
 
 #[test]
 fn test_hash_password_produces_argon2id_format() {

@@ -4,8 +4,9 @@ mod helpers;
 
 use helpers::*;
 use oxidesk::{
-    models::{Agent, User, UserRole, UserType},
-    services::{hash_password, validate_and_normalize_email, validate_password_complexity},
+    domain::entities::{Agent, User, UserRole, UserType},
+    application::services::auth::{hash_password, validate_password_complexity},
+    shared::utils::email_validator::validate_and_normalize_email,
 };
 
 #[tokio::test]

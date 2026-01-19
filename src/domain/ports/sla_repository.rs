@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::{AppliedSla, AppliedSlaStatus, SlaEvent, SlaEventStatus, SlaEventType, SlaPolicy};
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::{AppliedSla, AppliedSlaStatus, SlaEvent, SlaEventStatus, SlaEventType, SlaPolicy};
 
 /// Repository for SLA operations
 #[async_trait::async_trait]

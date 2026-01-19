@@ -1,7 +1,7 @@
 use crate::{
-    api::middleware::error::ApiResult,
-    database::Database,
-    models::{Permission, Tag},
+    infrastructure::http::middleware::error::ApiResult,
+    infrastructure::persistence::Database,
+    domain::entities::{Permission, Tag},
 };
 
 #[derive(Clone)]

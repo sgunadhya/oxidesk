@@ -1,5 +1,5 @@
 // Integration tests for conversation tagging system (Feature 005)
-use oxidesk::models::conversation::ConversationStatus;
+use oxidesk::domain::entities::conversation::ConversationStatus;
 
 mod helpers;
 use helpers::*;

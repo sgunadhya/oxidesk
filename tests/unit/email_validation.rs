@@ -1,4 +1,4 @@
-use oxidesk::services::validate_and_normalize_email;
+use oxidesk::shared::utils::email_validator::validate_and_normalize_email;
 
 #[test]
 fn test_valid_email_formats() {

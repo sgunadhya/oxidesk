@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::{
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::{
     AssignmentHistory, Conversation, ConversationStatus, CreateConversation, Priority,
 };
 
@@ -109,5 +109,5 @@ pub trait ConversationRepository: Send + Sync {
     async fn find_contact_by_user_id(
         &self,
         user_id: &str,
-    ) -> ApiResult<Option<crate::models::Contact>>;
+    ) -> ApiResult<Option<crate::domain::entities::Contact>>;
 }

@@ -1,9 +1,9 @@
 #![allow(dead_code)]
-use oxidesk::api::middleware::AuthenticatedUser;
-use oxidesk::database::Database;
+use oxidesk::infrastructure::http::middleware::AuthenticatedUser;
+use oxidesk::infrastructure::persistence::Database;
 use oxidesk::domain::ports::agent_repository::AgentRepository;
 use oxidesk::domain::ports::user_repository::UserRepository;
-use oxidesk::models::{Agent, Role, User, UserType};
+use oxidesk::domain::entities::{Agent, Role, User, UserType};
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -54,7 +54,7 @@ pub async fn create_test_agent(db: &Database, email: &str, first_name: &str) -> 
         first_name: first_name.to_string(),
         last_name: None,
         password_hash: "$argon2id$v=19$m=19456,t=2,p=1$test$test".to_string(), // test hash
-        availability_status: oxidesk::models::AgentAvailability::Online,
+        availability_status: oxidesk::domain::entities::AgentAvailability::Online,
         last_login_at: None,
         last_activity_at: None,
         away_since: None,
@@ -99,7 +99,7 @@ pub async fn create_auth_user_with_roles(
     }
 
     // Create test session
-    let session = oxidesk::models::Session {
+    let session = oxidesk::domain::entities::Session {
         id: Uuid::new_v4().to_string(),
         user_id: user.id.clone(),
         token: format!("test-token-{}", Uuid::new_v4()),
@@ -110,7 +110,7 @@ pub async fn create_auth_user_with_roles(
             .to_rfc3339(),
         created_at: chrono::Utc::now().to_rfc3339(),
         last_accessed_at: chrono::Utc::now().to_rfc3339(),
-        auth_method: oxidesk::models::AuthMethod::Password,
+        auth_method: oxidesk::domain::entities::AuthMethod::Password,
         provider_name: None,
     };
 

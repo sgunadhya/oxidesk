@@ -3,7 +3,7 @@
 mod helpers;
 use helpers::rbac_helpers::{create_auth_user_with_roles, create_test_role};
 use helpers::*;
-use oxidesk::services::PermissionService;
+use oxidesk::application::services::PermissionService;
 
 #[tokio::test]
 async fn test_multiple_roles_permission_union() {

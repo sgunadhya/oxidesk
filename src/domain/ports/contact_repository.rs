@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::{Contact, ContactChannel, User};
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::{Contact, ContactChannel, User};
 use async_trait::async_trait;
 
 #[async_trait]

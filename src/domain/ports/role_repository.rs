@@ -1,5 +1,5 @@
 use crate::domain::errors::DomainResult;
-use crate::domain::models::role::Role;
+use crate::domain::entities::role::Role;
 use async_trait::async_trait;
 
 #[async_trait]
@@ -19,13 +19,13 @@ pub trait RoleRepository: Send + Sync {
 
     // Additional domain-specific queries
     async fn count_users_with_role(&self, role_id: &str) -> DomainResult<i64>;
-    async fn list_permissions(&self) -> DomainResult<Vec<crate::models::Permission>>;
+    async fn list_permissions(&self) -> DomainResult<Vec<crate::domain::entities::Permission>>;
     async fn get_user_roles(&self, user_id: &str) -> DomainResult<Vec<Role>>;
 
     // User-role assignment operations
     async fn remove_user_roles(&self, user_id: &str) -> DomainResult<()>;
-    async fn assign_role_to_user(&self, user_role: &crate::models::UserRole) -> DomainResult<()>;
+    async fn assign_role_to_user(&self, user_role: &crate::domain::entities::UserRole) -> DomainResult<()>;
 
     // Permission queries
-    async fn get_user_permissions(&self, user_id: &str) -> crate::api::middleware::error::ApiResult<Vec<crate::models::Permission>>;
+    async fn get_user_permissions(&self, user_id: &str) -> crate::infrastructure::http::middleware::error::ApiResult<Vec<crate::domain::entities::Permission>>;
 }

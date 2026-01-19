@@ -1,4 +1,4 @@
-use oxidesk::models::conversation::{ConversationStatus, UpdateStatusRequest};
+use oxidesk::domain::entities::conversation::{ConversationStatus, UpdateStatusRequest};
 
 use oxidesk::EventBus;
 
@@ -35,7 +35,7 @@ async fn test_agent_can_update_open_to_resolved() {
     // Use service
     // Use service
     let repo = std::sync::Arc::new(db.clone());
-    let conversation_service = oxidesk::services::ConversationService::new(
+    let conversation_service = oxidesk::application::services::ConversationService::new(
         repo.clone(),
         repo.clone(),
         repo.clone(),
@@ -92,7 +92,7 @@ async fn test_resolved_at_timestamp_set_on_status_change() {
     };
 
     let repo = std::sync::Arc::new(db.clone());
-    let conversation_service = oxidesk::services::ConversationService::new(
+    let conversation_service = oxidesk::application::services::ConversationService::new(
         repo.clone(),
         repo.clone(),
         repo.clone(),
@@ -142,7 +142,7 @@ async fn test_invalid_status_transition_rejected() {
     };
 
     let repo = std::sync::Arc::new(db.clone());
-    let conversation_service = oxidesk::services::ConversationService::new(
+    let conversation_service = oxidesk::application::services::ConversationService::new(
         repo.clone(),
         repo.clone(),
         repo.clone(),
@@ -214,7 +214,7 @@ async fn test_automation_rules_evaluated_on_status_change() {
     };
 
     let repo = std::sync::Arc::new(db.clone());
-    let conversation_service = oxidesk::services::ConversationService::new(
+    let conversation_service = oxidesk::application::services::ConversationService::new(
         repo.clone(),
         repo.clone(),
         repo.clone(),
@@ -280,7 +280,7 @@ async fn test_resolved_to_closed_transition() {
     };
 
     let repo = std::sync::Arc::new(db.clone());
-    let conversation_service = oxidesk::services::ConversationService::new(
+    let conversation_service = oxidesk::application::services::ConversationService::new(
         repo.clone(),
         repo.clone(),
         repo.clone(),
@@ -351,7 +351,7 @@ async fn test_closed_at_timestamp_set() {
     };
 
     let repo = std::sync::Arc::new(db.clone());
-    let conversation_service = oxidesk::services::ConversationService::new(
+    let conversation_service = oxidesk::application::services::ConversationService::new(
         repo.clone(),
         repo.clone(),
         repo.clone(),
@@ -427,7 +427,7 @@ async fn test_reopening_clears_resolved_at() {
     };
 
     let repo = std::sync::Arc::new(db.clone());
-    let conversation_service = oxidesk::services::ConversationService::new(
+    let conversation_service = oxidesk::application::services::ConversationService::new(
         repo.clone(),
         repo.clone(),
         repo.clone(),

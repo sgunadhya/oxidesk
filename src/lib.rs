@@ -1,18 +1,18 @@
 #![allow(ambiguous_glob_reexports)]
-pub mod api;
-pub mod config;
-pub mod database;
-pub mod events;
-pub mod models;
-pub mod services;
-pub mod utils;
-pub mod web;
 
-pub use api::*;
-pub use config::*;
-pub use database::*;
-// Re-export specific types from events to avoid conflicts
-pub use events::{EventBus, LocalEventBus, SystemEvent};
-pub use models::*;
-pub use services::*;
+// Core hexagonal architecture layers
 pub mod domain;
+pub mod application;
+pub mod infrastructure;
+pub mod shared;
+pub mod config;
+
+// Re-exports for backward compatibility and convenience
+pub use config::*;
+pub use domain::entities::*;
+pub use domain::ports::*;
+pub use application::services::*;
+pub use infrastructure::persistence::Database;
+pub use infrastructure::http::middleware::error::*;
+pub use shared::events::{EventBus, LocalEventBus, SystemEvent};
+pub use shared::*;

@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::{ActivityEventType, Agent, AgentActivityLog, AgentAvailability};
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::{ActivityEventType, Agent, AgentActivityLog, AgentAvailability};
 
 /// Repository for agent availability operations
 #[async_trait::async_trait]

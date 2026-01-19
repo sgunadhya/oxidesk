@@ -1,5 +1,5 @@
-use crate::api::middleware::error::ApiResult;
-use crate::models::Agent;
+use crate::infrastructure::http::middleware::error::ApiResult;
+use crate::domain::entities::Agent;
 
 /// Repository for API key operations
 #[async_trait::async_trait]

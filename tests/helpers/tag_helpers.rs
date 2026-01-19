@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-use oxidesk::database::Database;
-use oxidesk::models::Tag;
+use oxidesk::infrastructure::persistence::Database;
+use oxidesk::domain::entities::Tag;
 
 /// Create a test tag
 pub async fn create_test_tag(

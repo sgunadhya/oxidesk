@@ -1,7 +1,7 @@
 /// Unit tests for PermissionService
 /// Tests permission checking logic and aggregation across multiple roles
-use oxidesk::models::Role;
-use oxidesk::services::PermissionService;
+use oxidesk::domain::entities::Role;
+use oxidesk::application::services::PermissionService;
 
 #[test]
 fn test_has_permission_single_role() {

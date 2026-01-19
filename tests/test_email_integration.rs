@@ -9,17 +9,18 @@ mod helpers;
 
 use helpers::conversation_helpers::create_test_conversation;
 use helpers::*;
-use oxidesk::database::Database;
+use oxidesk::infrastructure::persistence::Database;
 use oxidesk::domain::ports::contact_repository::ContactRepository;
 use oxidesk::domain::ports::conversation_repository::ConversationRepository;
 use oxidesk::domain::ports::email_repository::EmailRepository;
 use oxidesk::domain::ports::inbox_repository::InboxRepository;
 use oxidesk::domain::ports::message_repository::MessageRepository;
 use oxidesk::domain::ports::user_repository::UserRepository;
-use oxidesk::models::{
+use oxidesk::domain::entities::{
     Contact, ConversationStatus, CreateConversation, InboxEmailConfig, Message, User, UserType,
 };
-use oxidesk::services::{AttachmentService, EmailParserService};
+use oxidesk::application::services::AttachmentService;
+use oxidesk::infrastructure::providers::email_parser::EmailParserService;
 use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -456,7 +457,7 @@ async fn test_duplicate_email_prevention() {
     db.create_message(&message).await.unwrap();
 
     // Log email processing with valid FKs
-    let log = oxidesk::models::EmailProcessingLog::new(
+    let log = oxidesk::domain::entities::EmailProcessingLog::new(
         inbox_id.clone(),
         email_message_id.to_string(),
         "customer@example.com".to_string(),
@@ -713,7 +714,7 @@ async fn test_email_config_crud() {
     assert_eq!(retrieved.id, config.id);
 
     // Update config
-    let update = oxidesk::models::email::UpdateInboxEmailConfigRequest {
+    let update = oxidesk::domain::entities::email::UpdateInboxEmailConfigRequest {
         imap_host: Some("new-imap.example.com".to_string()),
         imap_port: None,
         imap_username: None,
