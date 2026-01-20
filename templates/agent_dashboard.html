@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block title %} - Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="agentCockpit()">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-4xl font-bold text-white oxi-heading">Welcome back, {{ agent_name }}!</h1>
+            <p class="text-gray-400 mt-1">Here's what's happening with your tickets</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <!-- Refresh Button -->
+            <button @click="refreshData()"
+                class="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl transition-all duration-200 border border-white/10">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- My Open Tickets -->
+        <div class="oxi-glass-card rounded-2xl p-6 border border-oxi-accent/20 hover:border-oxi-accent/40 transition-all duration-200">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-oxi-accent/20 rounded-xl flex items-center justify-center">
+                    <svg class="h-6 w-6 text-oxi-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </div>
+                <a href="/inbox?view=mine" class="text-xs text-oxi-accent hover:text-oxi-accent/80 transition-colors">View all →</a>
+            </div>
+            <div class="text-3xl font-bold text-white oxi-heading mb-1">{{ my_open_count }}</div>
+            <div class="text-sm text-gray-400">My Open Tickets</div>
+        </div>
+
+        <!-- Unassigned -->
+        <div class="oxi-glass-card rounded-2xl p-6 border border-oxi-warning/20 hover:border-oxi-warning/40 transition-all duration-200">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-oxi-warning/20 rounded-xl flex items-center justify-center">
+                    <svg class="h-6 w-6 text-oxi-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <a href="/inbox?view=unassigned" class="text-xs text-oxi-warning hover:text-oxi-warning/80 transition-colors">View all →</a>
+            </div>
+            <div class="text-3xl font-bold text-white oxi-heading mb-1">{{ unassigned_count }}</div>
+            <div class="text-sm text-gray-400">Unassigned Tickets</div>
+        </div>
+
+        <!-- SLA at Risk -->
+        <div class="oxi-glass-card rounded-2xl p-6 border border-oxi-danger/20 hover:border-oxi-danger/40 transition-all duration-200">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-oxi-danger/20 rounded-xl flex items-center justify-center">
+                    <svg class="h-6 w-6 text-oxi-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <span class="text-xs text-gray-500">Last hour</span>
+            </div>
+            <div class="text-3xl font-bold text-white oxi-heading mb-1">{{ sla_at_risk_count }}</div>
+            <div class="text-sm text-gray-400">SLA at Risk</div>
+        </div>
+
+        <!-- Resolved Today -->
+        <div class="oxi-glass-card rounded-2xl p-6 border border-oxi-success/20 hover:border-oxi-success/40 transition-all duration-200">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-oxi-success/20 rounded-xl flex items-center justify-center">
+                    <svg class="h-6 w-6 text-oxi-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <span class="text-xs text-gray-500">Today</span>
+            </div>
+            <div class="text-3xl font-bold text-white oxi-heading mb-1">{{ resolved_today_count }}</div>
+            <div class="text-sm text-gray-400">Resolved Today</div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- My Active Conversations (2/3 width) -->
+        <div class="lg:col-span-2 oxi-glass-card rounded-2xl overflow-hidden">
+            <div class="p-6 bg-white/5 border-b border-white/10 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-white oxi-heading">My Active Conversations</h2>
+                <div class="flex gap-2">
+                    <button @click="conversationView = 'active'"
+                        :class="conversationView === 'active' ? 'bg-oxi-accent text-white' : 'bg-white/5 text-gray-400 hover:text-white'"
+                        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200">
+                        Active
+                    </button>
+                    <button @click="conversationView = 'waiting'"
+                        :class="conversationView === 'waiting' ? 'bg-oxi-accent text-white' : 'bg-white/5 text-gray-400 hover:text-white'"
+                        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200">
+                        Waiting
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-6 max-h-[600px] overflow-y-auto custom-scrollbar">
+                {% if my_conversations.len() == 0 %}
+                <div class="text-center py-12">
+                    <div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                    </div>
+                    <p class="text-gray-400">No active conversations</p>
+                    <p class="text-sm text-gray-500 mt-1">Great job staying on top of things!</p>
+                </div>
+                {% else %}
+                <div class="space-y-3">
+                    {% for conv in my_conversations %}
+                    <a href="/inbox/conversations/{{ conv.id }}"
+                        class="block p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-oxi-accent/30 transition-all duration-200">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <h3 class="text-sm font-semibold text-white truncate">{{ conv.subject }}</h3>
+                                    {% if conv.has_sla %}
+                                    <span class="flex-shrink-0 px-2 py-0.5 text-xs font-bold rounded-full
+                                        {% if conv.sla_status == "ok" %}bg-oxi-success/20 text-oxi-success{% else if conv.sla_status == "warning" %}bg-oxi-warning/20 text-oxi-warning{% else %}bg-oxi-danger/20 text-oxi-danger{% endif %}">
+                                        {{ conv.sla_time_remaining }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <div class="flex items-center gap-3 text-xs text-gray-400">
+                                    <span class="flex items-center gap-1">
+                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                        </svg>
+                                        {{ conv.contact_name }}
+                                    </span>
+                                    <span>•</span>
+                                    <span>{{ conv.updated_at }}</span>
+                                    {% if conv.unread_count > 0 %}
+                                    <span class="ml-auto px-2 py-0.5 bg-oxi-accent text-white text-xs font-bold rounded-full">
+                                        {{ conv.unread_count }} new
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% if !conv.tags.is_empty() %}
+                                <div class="flex gap-2 mt-2">
+                                    {% for tag in conv.tags %}
+                                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full"
+                                        style="background-color: {{ tag.color }}20; color: {{ tag.color }}; border: 1px solid {{ tag.color }}40;">
+                                        {{ tag.name }}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="flex-shrink-0">
+                                <span class="px-2 py-1 text-xs font-semibold rounded-lg
+                                    {% if conv.status == "open" %}bg-oxi-accent/20 text-oxi-accent
+                                    {% else if conv.status == "pending" %}bg-oxi-warning/20 text-oxi-warning
+                                    {% else if conv.status == "resolved" %}bg-oxi-success/20 text-oxi-success
+                                    {% else %}bg-white/5 text-gray-400{% endif %}">
+                                    {{ conv.status|upper }}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="space-y-6">
+            <!-- Unassigned Tickets -->
+            <div class="oxi-glass-card rounded-2xl overflow-hidden">
+                <div class="p-4 bg-white/5 border-b border-white/10">
+                    <h3 class="text-lg font-bold text-white oxi-heading">Unassigned</h3>
+                </div>
+                <div class="p-4 max-h-80 overflow-y-auto custom-scrollbar">
+                    {% if unassigned_conversations.len() == 0 %}
+                    <div class="text-center py-8">
+                        <p class="text-sm text-gray-400">All caught up!</p>
+                    </div>
+                    {% else %}
+                    <div class="space-y-2">
+                        {% for conv in unassigned_conversations %}
+                        <a href="/inbox/conversations/{{ conv.id }}"
+                            class="block p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 hover:border-oxi-warning/30 transition-all duration-200">
+                            <h4 class="text-sm font-medium text-white truncate mb-1">{{ conv.subject }}</h4>
+                            <p class="text-xs text-gray-400">{{ conv.contact_name }}</p>
+                            <p class="text-xs text-gray-500 mt-1">{{ conv.created_at }}</p>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="oxi-glass-card rounded-2xl overflow-hidden">
+                <div class="p-4 bg-white/5 border-b border-white/10">
+                    <h3 class="text-lg font-bold text-white oxi-heading">Recent Activity</h3>
+                </div>
+                <div class="p-4 max-h-80 overflow-y-auto custom-scrollbar">
+                    {% if recent_activity.len() == 0 %}
+                    <div class="text-center py-8">
+                        <p class="text-sm text-gray-400">No recent activity</p>
+                    </div>
+                    {% else %}
+                    <div class="space-y-3">
+                        {% for activity in recent_activity %}
+                        <div class="flex gap-3">
+                            <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
+                                {% if activity.type == "message" %}bg-oxi-accent/20
+                                {% else if activity.type == "assignment" %}bg-oxi-warning/20
+                                {% else if activity.type == "status_change" %}bg-oxi-success/20
+                                {% else %}bg-white/5{% endif %}">
+                                <svg class="w-4 h-4
+                                    {% if activity.type == "message" %}text-oxi-accent
+                                    {% else if activity.type == "assignment" %}text-oxi-warning
+                                    {% else if activity.type == "status_change" %}text-oxi-success
+                                    {% else %}text-gray-400{% endif %}"
+                                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    {% if activity.type == "message" %}
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                    {% else if activity.type == "assignment" %}
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    {% else %}
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    {% endif %}
+                                </svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm text-white">{{ activity.description }}</p>
+                                <p class="text-xs text-gray-500 mt-0.5">{{ activity.time_ago }}</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function agentCockpit() {
+        return {
+            conversationView: 'active',
+
+            async refreshData() {
+                window.location.reload();
+            }
+        };
+    }
+</script>
+{% endblock %}

@@ -53,3 +53,5 @@ target/doc/
 # Cargo.lock
 *.db-journal
 .aider*
+/oxidesk.db-shm
+/oxidesk.db-wal

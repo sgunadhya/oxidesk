@@ -3,71 +3,103 @@
 {% block title %}Dashboard - Oxidesk{% endblock %}
 
 {% block content %}
-<div class="py-6">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-        <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
+<div class="space-y-8">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-white tracking-tight">Dashboard</h1>
+            <p class="mt-1 text-gray-400">Welcome back, <span class="text-oxi-accent font-medium">{{ user_name }}</span>
+            </p>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs font-medium text-gray-400">
+                Logged in as {{ user_email }}
+            </span>
+        </div>
     </div>
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 mt-6">
-        <div class="bg-white overflow-hidden shadow rounded-lg mb-6">
-            <div class="px-4 py-5 sm:p-6">
-                <h2 class="text-lg leading-6 font-medium text-gray-900">Welcome, {{ user_name }}!</h2>
-                <div class="mt-2 text-sm text-gray-500">
-                    <p>Logged in as {{ user_email }}</p>
+
+    <!-- Quick Stats Grid -->
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <div class="oxi-glass oxi-glass-card p-6 group">
+            <div class="flex items-center justify-between mb-4">
+                <div
+                    class="p-3 bg-oxi-accent/10 rounded-xl text-oxi-accent group-hover:scale-110 transition-transform duration-300">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
                 </div>
+                <span class="text-xs font-medium text-gray-500">Live</span>
+            </div>
+            <dt class="text-sm font-medium text-gray-400">Total Agents</dt>
+            <dd class="mt-2 text-4xl font-bold text-white tracking-tight">{{ stats.total_agents }}</dd>
+            <div class="mt-4">
+                <a href="/agents" class="text-sm text-oxi-accent hover:underline inline-flex items-center">
+                    Manage Agents
+                    <svg class="ml-1 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M9 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </a>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <dt class="text-sm font-medium text-gray-500 truncate">Total Agents</dt>
-                    <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ stats.total_agents }}</dd>
+        <div class="oxi-glass oxi-glass-card p-6 group">
+            <div class="flex items-center justify-between mb-4">
+                <div
+                    class="p-3 bg-emerald-500/10 rounded-xl text-emerald-500 group-hover:scale-110 transition-transform duration-300">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
                 </div>
-                <div class="bg-gray-50 px-4 py-4 sm:px-6">
-                    <div class="text-sm">
-                        <a href="/agents" class="font-medium text-indigo-600 hover:text-indigo-500">Manage Agents</a>
-                    </div>
-                </div>
+                <span class="text-xs font-medium text-gray-500">Active</span>
             </div>
-
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <dt class="text-sm font-medium text-gray-500 truncate">Total Contacts</dt>
-                    <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ stats.total_contacts }}</dd>
-                </div>
-                <div class="bg-gray-50 px-4 py-4 sm:px-6">
-                    <div class="text-sm">
-                        <a href="/contacts" class="font-medium text-indigo-600 hover:text-indigo-500">Manage
-                            Contacts</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <dt class="text-sm font-medium text-gray-500 truncate">Total Roles</dt>
-                    <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ stats.total_roles }}</dd>
-                </div>
-                <div class="bg-gray-50 px-4 py-4 sm:px-6">
-                    <div class="text-sm">
-                        <a href="/roles" class="font-medium text-indigo-600 hover:text-indigo-500">Manage Roles</a>
-                    </div>
-                </div>
+            <dt class="text-sm font-medium text-gray-400">Total Contacts</dt>
+            <dd class="mt-2 text-4xl font-bold text-white tracking-tight">{{ stats.total_contacts }}</dd>
+            <div class="mt-4">
+                <a href="/contacts" class="text-sm text-oxi-accent hover:underline inline-flex items-center">
+                    View Contacts
+                    <svg class="ml-1 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M9 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </a>
             </div>
         </div>
 
-        <div class="mt-8 bg-white overflow-hidden shadow rounded-lg">
-            <div class="px-4 py-5 sm:p-6">
-                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Your Roles</h3>
-                <div class="flex flex-wrap gap-2">
-                    {% for role in user_roles %}
-                    <span
-                        class="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                        {{ role }}
-                    </span>
-                    {% endfor %}
+        <div class="oxi-glass oxi-glass-card p-6 group">
+            <div class="flex items-center justify-between mb-4">
+                <div
+                    class="p-3 bg-amber-500/10 rounded-xl text-amber-500 group-hover:scale-110 transition-transform duration-300">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
                 </div>
+                <span class="text-xs font-medium text-gray-500">Secure</span>
             </div>
+            <dt class="text-sm font-medium text-gray-400">Security Roles</dt>
+            <dd class="mt-2 text-4xl font-bold text-white tracking-tight">{{ stats.total_roles }}</dd>
+            <div class="mt-4">
+                <a href="/roles" class="text-sm text-oxi-accent hover:underline inline-flex items-center">
+                    Audit Permissions
+                    <svg class="ml-1 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M9 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Roles Section -->
+    <div class="oxi-glass p-8 bg-gradient-to-br from-white/[0.02] to-transparent">
+        <h3 class="text-lg font-bold text-white mb-6">Access Entitlements</h3>
+        <div class="flex flex-wrap gap-3">
+            {% for role in user_roles %}
+            <span
+                class="inline-flex items-center px-4 py-1.5 rounded-lg text-sm font-semibold bg-oxi-accent/10 text-oxi-accent border border-oxi-accent/20">
+                <span class="w-1.5 h-1.5 rounded-full bg-oxi-accent mr-2 animate-pulse"></span>
+                {{ role }}
+            </span>
+            {% endfor %}
         </div>
     </div>
 </div>

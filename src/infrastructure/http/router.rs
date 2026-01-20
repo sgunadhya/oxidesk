@@ -7,9 +7,13 @@ use axum::{
     routing::{delete, get, patch, post, put},
     Router,
 };
-use tower_http::trace::TraceLayer;
+use tower_http::{services::ServeDir, trace::TraceLayer};
 
 pub fn build_router(state: AppState) -> Router {
+    // Build static file router
+    let static_router =
+        Router::new().nest_service("/static", ServeDir::new("src/infrastructure/web/static"));
+
     // Build protected routes (require authentication)
     let protected = Router::new()
         .route("/api/auth/logout", post(api::controllers::auth::logout))
@@ -337,6 +341,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/contacts/:id/edit", get(web::show_contact_edit))
         .route("/roles", get(web::show_roles))
         .route("/roles/:id", delete(web::delete_role))
+        // Temporarily commented out while debugging template issues
+        // .route("/teams", get(web::show_teams))
         // Inbox
         .route("/inbox", get(web::show_inbox))
         .route("/inbox/c/:id", get(web::show_conversation))
@@ -363,6 +369,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health", get(health_handler))
         .route("/login", get(web::show_login_page))
         .route("/login", post(web::handle_login))
+        .route(
+            "/public/conversations/:id",
+            get(web::show_public_conversation),
+        )
         .route("/api/auth/login", post(api::controllers::auth::login))
         .route(
             "/api/auth/oidc/providers",
@@ -382,7 +392,9 @@ pub fn build_router(state: AppState) -> Router {
             post(api::password_reset::reset_password),
         )
         .route("/metrics", get(metrics_handler))
+        .merge(static_router)
         .merge(protected)
+        .merge(web_protected)
         .merge(api::messages::routes())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
