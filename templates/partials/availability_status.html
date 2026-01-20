@@ -1,0 +1,131 @@
+<div class="relative" x-data="availabilityStatus()">
+    <!-- Status Button -->
+    <button @click="dropdownOpen = !dropdownOpen"
+        class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all duration-200">
+        <span class="w-2 h-2 rounded-full"
+            :class="{
+                'bg-oxi-success shadow-[0_0_6px_var(--oxi-success)]': currentStatus === 'online',
+                'bg-oxi-warning shadow-[0_0_6px_var(--oxi-warning)]': currentStatus === 'away',
+                'bg-oxi-danger shadow-[0_0_6px_var(--oxi-danger)]': currentStatus === 'busy',
+                'bg-gray-500': currentStatus === 'offline'
+            }"></span>
+        <span class="text-sm font-medium text-white capitalize" x-text="currentStatus"></span>
+        <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+    </button>
+
+    <!-- Dropdown Menu -->
+    <div x-show="dropdownOpen" @click.away="dropdownOpen = false" x-cloak
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 transform scale-95"
+        x-transition:enter-end="opacity-100 transform scale-100"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 transform scale-100"
+        x-transition:leave-end="opacity-0 transform scale-95"
+        class="absolute right-0 mt-2 w-48 oxi-glass rounded-xl shadow-2xl z-50 overflow-hidden border border-white/10">
+
+        <div class="py-2">
+            <button @click="setStatus('online')"
+                class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors duration-200"
+                :class="{ 'bg-white/5': currentStatus === 'online' }">
+                <span class="w-2 h-2 rounded-full bg-oxi-success shadow-[0_0_6px_var(--oxi-success)]"></span>
+                <span class="text-sm text-white">Online</span>
+            </button>
+
+            <button @click="setStatus('away')"
+                class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors duration-200"
+                :class="{ 'bg-white/5': currentStatus === 'away' }">
+                <span class="w-2 h-2 rounded-full bg-oxi-warning shadow-[0_0_6px_var(--oxi-warning)]"></span>
+                <span class="text-sm text-white">Away</span>
+            </button>
+
+            <button @click="setStatus('busy')"
+                class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors duration-200"
+                :class="{ 'bg-white/5': currentStatus === 'busy' }">
+                <span class="w-2 h-2 rounded-full bg-oxi-danger shadow-[0_0_6px_var(--oxi-danger)]"></span>
+                <span class="text-sm text-white">Busy</span>
+            </button>
+
+            <button @click="setStatus('offline')"
+                class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors duration-200"
+                :class="{ 'bg-white/5': currentStatus === 'offline' }">
+                <span class="w-2 h-2 rounded-full bg-gray-500"></span>
+                <span class="text-sm text-white">Offline</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function availabilityStatus() {
+        return {
+            currentStatus: 'online',
+            dropdownOpen: false,
+            agentId: null,
+
+            async init() {
+                await this.fetchAgentId();
+                if (this.agentId) {
+                    await this.fetchStatus();
+                }
+            },
+
+            async fetchAgentId() {
+                try {
+                    const response = await fetch('/api/auth/session');
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.agentId = data.agent_id || data.user_id;
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch agent ID:', error);
+                }
+            },
+
+            async fetchStatus() {
+                try {
+                    const response = await fetch(`/api/agents/${this.agentId}/availability`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.currentStatus = data.status || 'online';
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch availability status:', error);
+                }
+            },
+
+            async setStatus(status) {
+                try {
+                    const response = await fetch(`/api/agents/${this.agentId}/availability`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status })
+                    });
+
+                    if (response.ok) {
+                        this.currentStatus = status;
+                        this.dropdownOpen = false;
+
+                        window.dispatchEvent(new CustomEvent('toast', {
+                            detail: {
+                                message: `Status set to ${status}`,
+                                type: 'success'
+                            }
+                        }));
+                    } else {
+                        throw new Error('Failed to update status');
+                    }
+                } catch (error) {
+                    console.error('Error setting status:', error);
+                    window.dispatchEvent(new CustomEvent('toast', {
+                        detail: {
+                            message: 'Failed to update status',
+                            type: 'error'
+                        }
+                    }));
+                }
+            }
+        };
+    }
+</script>

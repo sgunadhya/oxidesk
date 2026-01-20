@@ -1,11 +1,10 @@
 use crate::{
-    infrastructure::http::middleware::{AppState, AuthenticatedUser},
     domain::entities::CreateAgentRequest,
-
+    infrastructure::http::middleware::{AppState, AuthenticatedUser},
 };
 use askama::Template;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
     Form,
@@ -25,6 +24,7 @@ struct DashboardTemplate {
     user_roles: Vec<String>,
     stats: DashboardStats,
     request_path: String,
+    is_admin: bool,
 }
 
 struct DashboardStats {
@@ -34,11 +34,47 @@ struct DashboardStats {
 }
 
 #[derive(Template)]
+#[template(path = "agent_dashboard.html")]
+struct AgentDashboardTemplate {
+    agent_name: String,
+    my_open_count: i64,
+    unassigned_count: i64,
+    sla_at_risk_count: i64,
+    resolved_today_count: i64,
+    my_conversations: Vec<DashboardConversationData>,
+    unassigned_conversations: Vec<DashboardConversationData>,
+    recent_activity: Vec<ActivityData>,
+    request_path: String,
+    is_admin: bool,
+}
+
+struct DashboardConversationData {
+    id: String,
+    subject: String,
+    contact_name: String,
+    status: String,
+    updated_at: String,
+    created_at: String,
+    tags: Vec<TagData>,
+    has_sla: bool,
+    sla_status: String,
+    sla_time_remaining: String,
+    unread_count: i64,
+}
+
+struct ActivityData {
+    r#type: String,
+    description: String,
+    time_ago: String,
+}
+
+#[derive(Template)]
 #[template(path = "agents.html")]
 struct AgentsTemplate {
     agents: Vec<AgentData>,
     roles: Vec<RoleData>,
     request_path: String,
+    is_admin: bool,
 }
 
 #[derive(Template)]
@@ -46,6 +82,7 @@ struct AgentsTemplate {
 struct AgentsNewTemplate {
     roles: Vec<RoleData>,
     request_path: String,
+    is_admin: bool,
 }
 
 struct AgentData {
@@ -61,12 +98,14 @@ struct AgentData {
 struct ContactsTemplate {
     contacts: Vec<ContactData>,
     request_path: String,
+    is_admin: bool,
 }
 
 #[derive(Template)]
 #[template(path = "contacts_new.html")]
 struct ContactsNewTemplate {
     request_path: String,
+    is_admin: bool,
 }
 
 struct ContactData {
@@ -82,6 +121,7 @@ struct ContactData {
 struct ContactEditTemplate {
     contact: ContactData,
     request_path: String,
+    is_admin: bool,
 }
 
 #[derive(Template)]
@@ -89,6 +129,7 @@ struct ContactEditTemplate {
 struct ConversationsNewTemplate {
     contacts: Vec<ContactData>,
     request_path: String,
+    is_admin: bool,
 }
 
 #[derive(Template)]
@@ -96,6 +137,7 @@ struct ConversationsNewTemplate {
 struct RolesTemplate {
     roles: Vec<RoleData>,
     request_path: String,
+    is_admin: bool,
 }
 
 struct RoleData {
@@ -121,7 +163,10 @@ struct InboxTemplate {
     conversation: ConversationDetailData,
     messages: Vec<MessageData>,
     agents: Vec<AgentData>,
+    all_tags: Vec<TagData>,
+    all_tags_json: String,
     request_path: String,
+    is_admin: bool,
 }
 
 #[derive(Template)]
@@ -133,11 +178,19 @@ struct ConversationListPartial {
 
 #[derive(Template)]
 #[template(path = "partials/conversation_detail.html")]
-
 struct ConversationDetailPartial {
     conversation: ConversationDetailData,
     messages: Vec<MessageData>,
     agents: Vec<AgentData>,
+    all_tags: Vec<TagData>,
+    all_tags_json: String,
+}
+
+#[derive(Template)]
+#[template(path = "public_conversation.html")]
+struct PublicConversationTemplate {
+    conversation: ConversationDetailData,
+    messages: Vec<MessageData>,
 }
 
 struct ConversationData {
@@ -154,6 +207,27 @@ struct ConversationDetailData {
     contact_name: String,
     status: String,
     assigned_user_id: Option<String>,
+    tags: Vec<TagData>,
+    tags_json: String,
+    applied_sla: Option<AppliedSlaData>,
+    applied_sla_json: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+struct TagData {
+    id: String,
+    name: String,
+    color: String,
+}
+
+#[derive(serde::Serialize)]
+struct AppliedSlaData {
+    policy_name: String,
+    first_response_deadline: String,
+    response_deadline_timestamp: i64,
+    resolution_deadline: String,
+    resolution_deadline_timestamp: i64,
+    status: String,
 }
 
 struct MessageData {
@@ -171,6 +245,7 @@ struct ContactProfileTemplate {
     channels: Vec<ChannelData>,
     conversations: Vec<ConversationData>,
     request_path: String,
+    is_admin: bool,
 }
 
 struct ChannelData {
@@ -182,6 +257,42 @@ struct ChannelData {
 #[template(path = "partials/error.html")]
 struct ErrorPartial {
     message: String,
+}
+
+#[derive(Template)]
+#[template(path = "agent_created.html")]
+struct AgentCreatedTemplate {
+    agent_name: String,
+    agent_email: String,
+    agent_password: String,
+    agent_role: String,
+    request_path: String,
+    is_admin: bool,
+}
+
+// Temporarily commented out while debugging template issues
+// #[derive(Template)]
+// #[template(path = "teams.html")]
+struct TeamsTemplate {
+    teams: Vec<TeamData>,
+    has_teams: bool,
+    request_path: String,
+    is_admin: bool,
+}
+
+struct TeamData {
+    id: String,
+    name: String,
+    description: String,
+    members: Vec<TeamMemberData>,
+}
+
+struct TeamMemberData {
+    first_name: String,
+    first_name_initial: String,
+    last_name: Option<String>,
+    email: String,
+    availability: String,
 }
 
 // Form data
@@ -221,6 +332,11 @@ pub struct CreateTicketForm {
 #[derive(Deserialize)]
 pub struct SendMessageForm {
     content: String,
+}
+
+#[derive(Deserialize)]
+pub struct InboxFilterParams {
+    view: Option<String>,
 }
 
 // Handlers
@@ -267,11 +383,27 @@ pub async fn handle_login(State(state): State<AppState>, Form(form): Form<LoginF
 pub async fn show_dashboard(
     State(state): State<AppState>,
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
+) -> Response {
+    // Route to appropriate dashboard based on role
+    if auth_user.is_admin() {
+        show_admin_dashboard(State(state), axum::Extension(auth_user)).await.into_response()
+    } else {
+        show_agent_dashboard(State(state), axum::Extension(auth_user)).await.into_response()
+    }
+}
+
+pub async fn show_admin_dashboard(
+    State(state): State<AppState>,
+    axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
 ) -> impl IntoResponse {
     // Get stats
     let total_agents = state.agent_service.count_agents().await.unwrap_or(0);
     let total_contacts = state.contact_service.count_contacts().await.unwrap_or(0);
-    let roles = state.role_service.list_roles_raw().await.unwrap_or_default();
+    let roles = state
+        .role_service
+        .list_roles_raw()
+        .await
+        .unwrap_or_default();
 
     let user_role_names: Vec<String> = auth_user.roles.iter().map(|r| r.name.clone()).collect();
 
@@ -285,9 +417,86 @@ pub async fn show_dashboard(
             total_roles: roles.len(),
         },
         request_path: "/dashboard".to_string(),
+        is_admin: auth_user.is_admin(),
     };
 
-    HtmlTemplate(template)
+    HtmlTemplate(template).into_response()
+}
+
+pub async fn show_agent_dashboard(
+    State(state): State<AppState>,
+    axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
+) -> impl IntoResponse {
+    let agent_name = format!(
+        "{} {}",
+        auth_user.agent.first_name,
+        auth_user.agent.last_name.as_deref().unwrap_or("")
+    );
+
+    // Fetch my assigned conversations
+    let (my_conversations_raw, _my_open_count) = state
+        .assignment_service
+        .get_user_assigned_conversations(&auth_user.user.id, 100, 0)
+        .await
+        .unwrap_or((vec![], 0));
+
+    // Filter for only open conversations
+    use crate::domain::entities::ConversationStatus;
+    let my_open_conversations: Vec<_> = my_conversations_raw
+        .iter()
+        .filter(|c| c.status != ConversationStatus::Resolved && c.status != ConversationStatus::Closed)
+        .cloned()
+        .collect();
+
+    let actual_my_open_count = my_open_conversations.len() as i64;
+
+    // Fetch unassigned conversations
+    let (unassigned_conversations_raw, unassigned_count) = state
+        .assignment_service
+        .get_unassigned_conversations(20, 0)
+        .await
+        .unwrap_or((vec![], 0));
+
+    // TODO: Calculate SLA at risk count by fetching applied SLAs
+    let sla_at_risk_count = 0;
+
+    // TODO: Calculate resolved today count by filtering conversations
+    let resolved_today_count = 0;
+
+    // Convert conversations to dashboard data
+    let my_conversations = futures::future::join_all(
+        my_open_conversations
+            .iter()
+            .take(10)
+            .map(|c| conversation_to_dashboard_data(c.clone(), &state)),
+    )
+    .await;
+
+    let unassigned_conversations = futures::future::join_all(
+        unassigned_conversations_raw
+            .iter()
+            .take(10)
+            .map(|c| conversation_to_dashboard_data(c.clone(), &state)),
+    )
+    .await;
+
+    // TODO: Fetch recent activity (recent messages, assignments, status changes)
+    let recent_activity = vec![];
+
+    let template = AgentDashboardTemplate {
+        agent_name,
+        my_open_count: actual_my_open_count,
+        unassigned_count,
+        sla_at_risk_count,
+        resolved_today_count,
+        my_conversations,
+        unassigned_conversations,
+        recent_activity,
+        request_path: "/dashboard".to_string(),
+        is_admin: auth_user.is_admin(),
+    };
+
+    HtmlTemplate(template).into_response()
 }
 
 pub async fn handle_logout(
@@ -368,6 +577,7 @@ pub async fn show_agents(
         agents: agent_data,
         roles: role_options,
         request_path: "/agents".to_string(),
+        is_admin: _auth_user.is_admin(),
     };
 
     HtmlTemplate(template).into_response()
@@ -393,26 +603,37 @@ pub async fn create_agent(
     Form(form): Form<CreateAgentForm>,
 ) -> Response {
     let request = CreateAgentRequest {
-        email: form.email,
-        first_name: form.first_name,
-        last_name: form.last_name,
-        role_id: Some(form.role_id),
+        email: form.email.clone(),
+        first_name: form.first_name.clone(),
+        last_name: form.last_name.clone(),
+        role_id: Some(form.role_id.clone()),
     };
 
     match state.agent_service.create_agent(&auth_user, request).await {
-        Ok(_) => {
-            // Redirect to agents list with success toast
-            (
-                StatusCode::SEE_OTHER, // Use 303 for redirect after POST
-                [
-                    ("Location", "/agents"),
-                    (
-                        "HX-Trigger",
-                        r#"{"toast": {"value": "Agent created successfully", "type": "success"}}"#,
-                    ),
-                ],
-            )
-                .into_response()
+        Ok(response) => {
+            // Get role name for display
+            let role_name = match state.role_service.get_role(&form.role_id).await {
+                Ok(role) => role.name,
+                _ => "Agent".to_string(),
+            };
+
+            // Display the success page with the password (shown only once)
+            let full_name = if let Some(last) = &form.last_name {
+                format!("{} {}", form.first_name, last)
+            } else {
+                form.first_name.clone()
+            };
+
+            let template = AgentCreatedTemplate {
+                agent_name: full_name,
+                agent_email: form.email,
+                agent_password: response.password,
+                agent_role: role_name,
+                request_path: "/agents".to_string(),
+                is_admin: auth_user.is_admin(),
+            };
+
+            HtmlTemplate(template).into_response()
         }
         Err(e) => {
             // For now, simple error response. In a real form, we'd render the form again with errors.
@@ -463,6 +684,7 @@ pub async fn show_contacts(
     let template = ContactsTemplate {
         contacts: contact_data,
         request_path: "/contacts".to_string(),
+        is_admin: _auth_user.is_admin(),
     };
 
     HtmlTemplate(template).into_response()
@@ -528,6 +750,7 @@ pub async fn show_roles(
     let template = RolesTemplate {
         roles: role_data,
         request_path: "/roles".to_string(),
+        is_admin: _auth_user.is_admin(),
     };
 
     HtmlTemplate(template).into_response()
@@ -591,6 +814,7 @@ pub async fn show_create_agent_page(
     let template = AgentsNewTemplate {
         roles: role_options,
         request_path: "/agents".to_string(), // Keep 'Agents' active in sidebar
+        is_admin: _auth_user.is_admin(),
     };
 
     HtmlTemplate(template).into_response()
@@ -598,10 +822,11 @@ pub async fn show_create_agent_page(
 
 pub async fn show_create_contact_page(
     State(_state): State<AppState>,
-    axum::Extension(_auth_user): axum::Extension<AuthenticatedUser>,
+    axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
 ) -> impl IntoResponse {
     let template = ContactsNewTemplate {
         request_path: "/contacts".to_string(), // Keep 'Contacts' active in sidebar
+        is_admin: auth_user.is_admin(),
     };
 
     HtmlTemplate(template).into_response()
@@ -655,14 +880,70 @@ pub async fn create_contact(
 pub async fn show_inbox(
     State(state): State<AppState>,
     axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
+    Query(params): Query<InboxFilterParams>,
+    headers: axum::http::HeaderMap,
 ) -> impl IntoResponse {
-    let conversations = match state
+    let is_htmx = headers.get("HX-Request").is_some();
+    let view = params.view.as_deref().unwrap_or("all");
+
+    // Fetch all conversations first
+    let all_conversations = match state
         .conversation_service
-        .list_conversations(&auth_user, 1, 50, None, None, None)
+        .list_conversations(&auth_user, 1, 100, None, None, None)
         .await
     {
         Ok(list) => list.conversations,
         Err(_) => vec![],
+    };
+
+    // Filter based on view
+    let conversations: Vec<_> = match view {
+        "unassigned" => {
+            // Filter for unassigned conversations
+            all_conversations
+                .into_iter()
+                .filter(|conv| conv.assigned_user_id.is_none() && conv.assigned_team_id.is_none())
+                .collect()
+        },
+        "mine" => {
+            // Filter for conversations assigned to current user
+            let user_id = auth_user.user.id.clone();
+            all_conversations
+                .into_iter()
+                .filter(move |conv| {
+                    if let Some(assigned_id) = &conv.assigned_user_id {
+                        assigned_id == &user_id
+                    } else {
+                        false
+                    }
+                })
+                .collect()
+        },
+        "team" => {
+            // Filter for conversations assigned to user's teams
+            // Get user's teams first
+            let user_teams = match state.team_service.get_user_teams(&auth_user.user.id).await {
+                Ok(teams) => teams,
+                Err(_) => vec![],
+            };
+
+            let team_ids: Vec<String> = user_teams.into_iter().map(|t| t.id).collect();
+
+            all_conversations
+                .into_iter()
+                .filter(move |conv| {
+                    if let Some(assigned_team) = &conv.assigned_team_id {
+                        team_ids.contains(assigned_team)
+                    } else {
+                        false
+                    }
+                })
+                .collect()
+        },
+        _ => {
+            // Default: all conversations
+            all_conversations
+        }
     };
 
     let mut conversation_data = Vec::new();
@@ -684,12 +965,26 @@ pub async fn show_inbox(
         });
     }
 
+    // If HTMX request, return just the conversation list partial
+    if is_htmx {
+        let template = ConversationListPartial {
+            conversations: conversation_data,
+            selected_id: None,
+        };
+        return HtmlTemplate(template).into_response();
+    }
+
+    // Otherwise, return full page
     let dummy_conversation = ConversationDetailData {
         id: String::new(),
         subject: String::new(),
         contact_name: String::new(),
         status: String::new(),
         assigned_user_id: None,
+        tags: vec![],
+        tags_json: "[]".to_string(),
+        applied_sla: None,
+        applied_sla_json: "null".to_string(),
     };
 
     let template = InboxTemplate {
@@ -698,7 +993,10 @@ pub async fn show_inbox(
         conversation: dummy_conversation,
         messages: vec![],
         agents: vec![],
+        all_tags: vec![],
+        all_tags_json: "[]".to_string(),
         request_path: "/inbox".to_string(),
+        is_admin: auth_user.is_admin(),
     };
 
     HtmlTemplate(template).into_response()
@@ -731,6 +1029,41 @@ pub async fn show_conversation(
         _ => "Unknown".to_string(),
     };
 
+    // Fetch conversation tags
+    let conversation_tags = match state.conversation_tag_service.get_conversation_tags(&id).await {
+        Ok(tags) => tags
+            .into_iter()
+            .map(|t| TagData {
+                id: t.id,
+                name: t.name,
+                color: t.color.unwrap_or_else(|| "#06b6d4".to_string()),
+            })
+            .collect(),
+        Err(_) => vec![],
+    };
+
+    let tags_json = serde_json::to_string(&conversation_tags).unwrap_or_else(|_| "[]".to_string());
+
+    // Fetch applied SLA
+    let (applied_sla, applied_sla_json) = match state.sla_service.get_applied_sla_by_conversation(&id).await {
+        Ok(Some(sla)) => {
+            // Parse timestamps from datetime strings
+            // For simplicity, we'll use a mock timestamp calculation
+            // In production, use chrono to properly parse and convert
+            let sla_data = AppliedSlaData {
+                policy_name: "SLA Policy".to_string(), // TODO: Fetch policy name from sla_policy_id
+                first_response_deadline: format_datetime(&sla.first_response_deadline_at),
+                response_deadline_timestamp: 0, // TODO: Parse from datetime string
+                resolution_deadline: format_datetime(&sla.resolution_deadline_at),
+                resolution_deadline_timestamp: 0, // TODO: Parse from datetime string
+                status: sla.status.to_string(),
+            };
+            let json = serde_json::to_string(&sla_data).unwrap_or_else(|_| "null".to_string());
+            (Some(sla_data), json)
+        }
+        _ => (None, "null".to_string()),
+    };
+
     // Prepare Detail Data
     let detail_data = ConversationDetailData {
         id: conversation.id.clone(),
@@ -738,6 +1071,10 @@ pub async fn show_conversation(
         contact_name: contact_name.clone(),
         status: conversation.status.to_string(),
         assigned_user_id: conversation.assigned_user_id.clone(),
+        tags: conversation_tags,
+        tags_json,
+        applied_sla,
+        applied_sla_json,
     };
 
     // Fetch Agents for Dropdown
@@ -756,6 +1093,29 @@ pub async fn show_conversation(
             created_at: u.created_at,
         })
         .collect();
+
+    // Fetch all tags for tag picker
+    // Get actual Permission objects from roles
+    let mut permissions = Vec::new();
+    for role in &auth_user.roles {
+        if let Ok(role_perms) = state.role_service.get_role_permissions(&role.id).await {
+            permissions.extend(role_perms);
+        }
+    }
+
+    let all_tags = match state.tag_service.list_tags(100, 0, &permissions).await {
+        Ok((tags, _total)) => tags
+            .into_iter()
+            .map(|t| TagData {
+                id: t.id,
+                name: t.name,
+                color: t.color.unwrap_or_else(|| "#06b6d4".to_string()),
+            })
+            .collect(),
+        Err(_) => vec![],
+    };
+
+    let all_tags_json = serde_json::to_string(&all_tags).unwrap_or_else(|_| "[]".to_string());
 
     // Message Logic
     let (messages, _total) = match state.message_service.list_messages(&id, 1, 50).await {
@@ -785,6 +1145,8 @@ pub async fn show_conversation(
             conversation: detail_data,
             messages: message_data,
             agents: agent_data,
+            all_tags: all_tags.clone(),
+            all_tags_json: all_tags_json.clone(),
         };
         HtmlTemplate(template).into_response()
     } else {
@@ -823,9 +1185,161 @@ pub async fn show_conversation(
             conversation: detail_data,
             messages: message_data,
             agents: agent_data,
+            all_tags,
+            all_tags_json,
             request_path: "/inbox".to_string(),
+            is_admin: auth_user.is_admin(),
         };
         HtmlTemplate(template).into_response()
+    }
+}
+
+/*  // Temporarily commented out while debugging template issues
+pub async fn show_teams(
+    State(state): State<AppState>,
+    axum::Extension(auth_user): axum::Extension<AuthenticatedUser>,
+) -> impl IntoResponse {
+    // Fetch user's teams
+    let user_teams = match state.team_service.get_user_teams(&auth_user.user.id).await {
+        Ok(teams) => teams,
+        Err(_) => vec![],
+    };
+
+    let mut team_data = Vec::new();
+
+    for team in user_teams {
+        // Fetch team members
+        let members = match state.team_service.get_members(&team.id).await {
+            Ok(members) => members,
+            Err(_) => vec![],
+        };
+
+        let mut member_data = Vec::new();
+        for user in members {
+            // Fetch agent data for this user
+            let agent = match state.agent_service.get_agent_by_user_id(&user.id).await {
+                Ok(Some(a)) => a,
+                _ => continue, // Skip if not an agent
+            };
+
+            // Fetch availability status for each member
+            let availability = match state
+                .availability_service
+                .get_availability(&user.id)
+                .await
+            {
+                Ok(status) => status.availability_status.to_string(),
+                Err(_) => "offline".to_string(),
+            };
+
+            let first_name_initial = agent.first_name.chars().next()
+                .map(|c| c.to_uppercase().to_string())
+                .unwrap_or_else(|| "?".to_string());
+
+            member_data.push(TeamMemberData {
+                first_name: agent.first_name,
+                first_name_initial,
+                last_name: agent.last_name,
+                email: user.email,
+                availability,
+            });
+        }
+
+        team_data.push(TeamData {
+            id: team.id,
+            name: team.name,
+            description: team.description.unwrap_or_default(),
+            members: member_data,
+        });
+    }
+
+    let has_teams = !team_data.is_empty();
+
+    let template = TeamsTemplate {
+        teams: team_data,
+        has_teams,
+        request_path: "/teams".to_string(),
+        is_admin: auth_user.is_admin(),
+    };
+
+    HtmlTemplate(template).into_response()
+}
+*/  // End of temporarily commented out show_teams
+
+// Helper function to format datetime for display
+fn format_datetime(datetime_str: &str) -> String {
+    // For now, just return a truncated version
+    // In production, use chrono to parse and format properly
+    datetime_str.chars().take(16).collect()
+}
+
+// Helper function to calculate time ago from timestamp
+fn time_ago(_datetime_str: &str) -> String {
+    // Simplified implementation - in production use chrono
+    // For now, just return "recently"
+    "recently".to_string()
+}
+
+// Helper function to convert Conversation to DashboardConversationData
+async fn conversation_to_dashboard_data(
+    conversation: crate::domain::entities::Conversation,
+    state: &AppState,
+) -> DashboardConversationData {
+    use crate::domain::entities::AppliedSlaStatus;
+
+    // Fetch contact name
+    let contact_name = if let Ok(contact) = state.contact_service.get_contact(&conversation.contact_id).await {
+        contact.first_name.unwrap_or_else(|| "Unknown".to_string())
+    } else {
+        "Unknown".to_string()
+    };
+
+    // Fetch conversation tags
+    let tags = match state.conversation_tag_service.get_conversation_tags(&conversation.id).await {
+        Ok(tags) => tags
+            .into_iter()
+            .map(|t| TagData {
+                id: t.id.clone(),
+                name: t.name.clone(),
+                color: t.color.unwrap_or_else(|| "#6B7280".to_string()),
+            })
+            .collect(),
+        Err(_) => vec![],
+    };
+
+    // Fetch applied SLA
+    let (has_sla, sla_status, sla_time_remaining) =
+        match state.sla_service.get_applied_sla_by_conversation(&conversation.id).await {
+            Ok(Some(sla)) => {
+                let status = if sla.status == AppliedSlaStatus::Breached {
+                    "breached"
+                } else if sla.status == AppliedSlaStatus::Pending {
+                    "warning"
+                } else {
+                    "ok"
+                };
+                // Simple time remaining calculation
+                let time_remaining = "2h 30m".to_string(); // TODO: Calculate from deadline
+                (true, status.to_string(), time_remaining)
+            }
+            _ => (false, "".to_string(), "".to_string()),
+        };
+
+    // TODO: Calculate unread count from messages
+    let unread_count = 0;
+
+    DashboardConversationData {
+        id: conversation.id.clone(),
+        subject: conversation.subject.unwrap_or_else(|| "No subject".to_string()),
+        contact_name,
+        status: conversation.status.to_string(),
+        updated_at: format_datetime(&conversation.updated_at),
+        created_at: format_datetime(&conversation.created_at),
+        tags,
+        has_sla,
+        sla_status,
+        sla_time_remaining,
+        unread_count,
     }
 }
 
@@ -1066,6 +1580,7 @@ pub async fn show_contact_profile(
         channels: channel_data,
         conversations: conversation_data,
         request_path: "/contacts".to_string(),
+        is_admin: auth_user.is_admin(),
     };
 
     HtmlTemplate(template).into_response()
@@ -1099,6 +1614,7 @@ pub async fn show_contact_edit(
     let template = ContactEditTemplate {
         contact: contact_data,
         request_path: "/contacts".to_string(),
+        is_admin: _auth_user.is_admin(),
     };
 
     HtmlTemplate(template).into_response()
@@ -1151,6 +1667,7 @@ pub async fn show_create_ticket_page(
     let template = ConversationsNewTemplate {
         contacts: contact_data,
         request_path: "/inbox".to_string(), // Keep them in "Inbox" context
+        is_admin: _auth_user.is_admin(),
     };
 
     HtmlTemplate(template).into_response()
@@ -1193,4 +1710,70 @@ pub async fn create_ticket(
         Ok(conv) => Redirect::to(&format!("/inbox/c/{}", conv.id)).into_response(),
         Err(e) => Html(format!("Error creating ticket: {}", e)).into_response(),
     }
+}
+
+pub async fn show_public_conversation(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    // 1. Fetch conversation (Publicly accessible)
+    let conversation = match state.conversation_service.get_conversation(&id).await {
+        Ok(c) => c,
+        Err(_) => return Html("Conversation not found").into_response(),
+    };
+
+    // 2. Fetch contact name
+    let contact_name = match state
+        .user_service
+        .get_user_by_id(&conversation.contact_id)
+        .await
+    {
+        Ok(Some(u)) => match state.contact_service.find_contact_by_user_id(&u.id).await {
+            Ok(Some(c)) => c.first_name.unwrap_or_else(|| u.email.clone()),
+            _ => u.email,
+        },
+        _ => "Customer".to_string(),
+    };
+
+    let detail_data = ConversationDetailData {
+        id: conversation.id.clone(),
+        subject: conversation.subject.clone().unwrap_or_default(),
+        contact_name,
+        status: conversation.status.to_string(),
+        assigned_user_id: None, // Not needed for public view
+        tags: vec![],
+        tags_json: "[]".to_string(),
+        applied_sla: None,
+        applied_sla_json: "null".to_string(),
+    };
+
+    // 3. Fetch messages (Publicly accessible)
+    let (messages, _total) = match state.message_service.list_messages(&id, 1, 100).await {
+        Ok(res) => res,
+        Err(_) => (vec![], 0),
+    };
+
+    let mut message_data = Vec::new();
+    for msg in messages {
+        let (sender_name, is_agent) = if msg.author_id == conversation.contact_id {
+            ("You".to_string(), false)
+        } else {
+            ("Oxidesk Support".to_string(), true)
+        };
+
+        message_data.push(MessageData {
+            id: msg.id,
+            sender_name,
+            content: msg.content,
+            is_agent,
+            created_at: msg.created_at,
+        });
+    }
+
+    let template = PublicConversationTemplate {
+        conversation: detail_data,
+        messages: message_data,
+    };
+
+    HtmlTemplate(template).into_response()
 }

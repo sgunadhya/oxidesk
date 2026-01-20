@@ -1,0 +1,94 @@
+{% extends "base_clean.html" %}
+
+{% block title %}Conversation - Oxidesk Support{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-12">
+    <!-- Header Area -->
+    <div class="text-center mb-12 animate-oxi-float">
+        <h1 class="text-4xl font-bold text-white oxi-heading mb-4">Support Request</h1>
+        <p class="text-gray-400">Track your conversation with our support team in real-time.</p>
+    </div>
+
+    <!-- Main Portal Card -->
+    <div class="oxi-glass rounded-3xl overflow-hidden shadow-2xl border border-white/5">
+        <!-- Thread Header -->
+        <div class="px-8 py-8 bg-white/5 border-b border-white/5">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-white oxi-heading mb-2">{{ conversation.subject }}</h2>
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-bold text-oxi-accent uppercase tracking-widest">{{
+                            conversation.contact_name }}</span>
+                        <span class="w-1 h-1 rounded-full bg-white/20"></span>
+                        <span class="text-sm text-gray-500">Thread #{{ conversation.id|truncate(8) }}</span>
+                    </div>
+                </div>
+                <div>
+                    {% if conversation.status == "open" %}
+                    <span
+                        class="px-4 py-2 bg-oxi-success/20 text-oxi-success rounded-full text-xs font-bold uppercase tracking-widest border border-oxi-success/30 shadow-[0_0_15px_var(--oxi-success-glow)]">
+                        Live Support
+                    </span>
+                    {% else %}
+                    <span
+                        class="px-4 py-2 bg-white/5 text-gray-400 rounded-full text-xs font-bold uppercase tracking-widest border border-white/10">
+                        {{ conversation.status }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Thread Body -->
+        <div class="p-8 space-y-10 min-h-[400px]">
+            {% for msg in messages %}
+            <div class="flex flex-col {% if !msg.is_agent %}items-end{% endif %}">
+                <div class="flex items-center gap-3 mb-3 {% if !msg.is_agent %}flex-row-reverse{% endif %}">
+                    <div
+                        class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs 
+                        {% if msg.is_agent %}bg-oxi-accent text-white shadow-[0_0_10px_var(--oxi-accent-glow)]{% else %}bg-white/10 text-gray-400{% endif %}">
+                        {{ msg.sender_name|truncate(1) }}
+                    </div>
+                    <div class="flex flex-col {% if !msg.is_agent %}items-end{% endif %}">
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{{ msg.sender_name
+                            }}</span>
+                        <span class="text-[10px] text-gray-600">{{ msg.created_at|truncate(16) }}</span>
+                    </div>
+                </div>
+                <div class="max-w-2xl p-6 rounded-2xl shadow-sm border transition-all duration-300
+                    {% if msg.is_agent %}
+                        bg-oxi-accent/10 border-oxi-accent/20 text-white rounded-tl-none
+                        hover:shadow-[0_0_20px_rgba(6,182,212,0.1)]
+                    {% else %}
+                        bg-white/5 border-white/10 text-gray-300 rounded-tr-none
+                        hover:bg-white/10
+                    {% endif %}">
+                    <p class="text-sm leading-relaxed whitespace-pre-wrap">{{ msg.content }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Public Reply (Optional/Future) -->
+        <div class="p-8 bg-white/5 border-t border-white/5">
+            <div class="flex items-center justify-between text-gray-500">
+                <p class="text-sm italic">Replies are currently managed via email.</p>
+                <div class="flex gap-4">
+                    <a href="mailto:support@example.com?subject=Re: {{ conversation.subject }}&body=Please reply below this line..."
+                        class="px-6 py-2 bg-oxi-accent/20 text-oxi-accent border border-oxi-accent/30 rounded-xl font-bold text-sm hover:bg-oxi-accent hover:text-white transition-all duration-300">
+                        Email Reply
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KB Prompt -->
+    <div class="mt-12 text-center">
+        <p class="text-gray-500 text-sm">Need faster help? Check our
+            <a href="#" class="text-oxi-accent hover:underline">Knowledge Base</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

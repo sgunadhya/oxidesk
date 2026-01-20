@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OxiDesk{% block title %}{% endblock %}</title>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"
+        integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC"
+        crossorigin="anonymous"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/modern.css">
+    <style>
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+
+<body class="bg-oxi-bg text-gray-100 font-sans antialiased min-h-screen overflow-x-hidden flex flex-col"
+    hx-boost="true">
+    {% include "partials/toast.html" %}
+
+    <div class="flex-1 overflow-auto p-4 md:p-12 oxi-fade-in" id="main-content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Simple Public Footer -->
+    <footer class="p-8 text-center text-gray-600 text-xs">
+        &copy; 2024 Oxidesk Intelligence. Secured by Oxi-Glass.
+    </footer>
+</body>
+
+</html>
