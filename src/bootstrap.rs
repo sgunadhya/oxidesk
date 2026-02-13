@@ -302,10 +302,40 @@ pub async fn build_app_state(
     let password_reset_repo =
         crate::domain::ports::password_reset_repository::PasswordResetRepository::new(db.clone());
     let password_reset_service = crate::application::services::PasswordResetService::new(
-        password_reset_repo,
+        password_reset_repo.clone(),
         Arc::new(db.clone()) as Arc<dyn UserRepository>,
     );
     tracing::info!("Password reset service initialized");
+
+    // Initialize AuthProvider based on config
+    let auth_provider: Arc<dyn crate::domain::ports::auth_provider::AuthProvider> =
+        match &config.auth_mode {
+            crate::config::AuthMode::Database => {
+                tracing::info!("Initializing Database auth provider (stateful sessions)");
+                Arc::new(crate::infrastructure::auth::DatabaseAuthProvider::new(
+                    Arc::new(db.clone()) as Arc<dyn UserRepository>,
+                    Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+                    Arc::new(db.clone()) as Arc<dyn RoleRepository>,
+                    Arc::new(db.clone()),
+                    password_reset_repo,
+                ))
+            }
+            crate::config::AuthMode::Jwt => {
+                tracing::info!("Initializing JWT auth provider (stateless tokens)");
+                let jwt_secret = config
+                    .jwt_secret
+                    .clone()
+                    .expect("JWT_SECRET required for JWT auth mode");
+
+                Arc::new(crate::infrastructure::auth::JwtAuthProvider::new(
+                    Arc::new(db.clone()) as Arc<dyn UserRepository>,
+                    Arc::new(db.clone()) as Arc<dyn AgentRepository>,
+                    Arc::new(db.clone()) as Arc<dyn RoleRepository>,
+                    jwt_secret,
+                ))
+            }
+        };
+    tracing::info!("Auth provider initialized: {:?}", config.auth_mode);
 
     // Initialize AuthLoggerService
     let auth_logger_service =
@@ -428,6 +458,7 @@ pub async fn build_app_state(
     // Create application state
     Ok(AppState {
         session_duration_hours: config.session_duration_hours,
+        auth_provider,
         event_bus: event_bus.clone(),
         delivery_service: delivery_service.clone(),
         notification_service: notification_service.clone(),

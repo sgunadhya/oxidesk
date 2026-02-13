@@ -443,9 +443,9 @@ input[type="url"],
 input[type="number"],
 textarea,
 select {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #f1f5f9; /* Bright text for high contrast */
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e2e8f0; /* Darker text for better contrast */
     border-radius: 0.75rem;
     padding: 0.75rem 1rem;
     font-size: 0.9375rem;

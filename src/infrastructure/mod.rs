@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod http;
 pub mod observability;
 pub mod persistence;

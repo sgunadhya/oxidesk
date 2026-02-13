@@ -16,6 +16,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct AppState {
     pub session_duration_hours: i64,
+    pub auth_provider: Arc<dyn crate::domain::ports::auth_provider::AuthProvider>,
     pub event_bus: Arc<dyn crate::domain::ports::event_bus::EventBus>,
     pub delivery_service: services::DeliveryService,
     pub notification_service: services::NotificationService,
@@ -54,44 +55,7 @@ pub async fn require_auth(
     mut request: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
-    // Check if agent was already authenticated via API key
-    if let Some(agent) = request.extensions().get::<Agent>().cloned() {
-        // Agent authenticated via API key
-        // Get user and roles to build AuthenticatedUser
-        let user = state
-            .user_service
-            .get_user_by_id(&agent.user_id)
-            .await?
-            .ok_or(ApiError::Unauthorized)?;
-
-        let roles = state.role_service.get_user_roles(&user.id).await?;
-
-        // Compute permissions from all roles
-        let permissions = compute_permissions(&roles);
-
-        // Create a dummy session for API key auth (no actual session exists)
-        // Use a long duration since API keys don't expire like sessions
-        let session = Session::new_with_method(
-            user.id.clone(),
-            "api-key-auth".to_string(),
-            24 * 365, // 1 year (API keys don't expire)
-            AuthMethod::ApiKey,
-            None,
-        );
-
-        request.extensions_mut().insert(AuthenticatedUser {
-            user,
-            agent,
-            roles,
-            permissions,
-            session,
-            token: "api-key-auth".to_string(),
-        });
-
-        return Ok(next.run(request).await);
-    }
-
-    // Fall back to session-based auth
+    // Extract token from Authorization header
     let auth_header = request
         .headers()
         .get("Authorization")
@@ -107,78 +71,23 @@ pub async fn require_auth(
         return Err(ApiError::Unauthorized);
     };
 
-    // Validate session
-    let session = state
-        .session_service
-        .get_session_by_token(token)
-        .await?
-        .ok_or(ApiError::Unauthorized)?;
-
-    if session.is_expired() {
-        // Delete expired session
-        state.session_service.delete_session(token).await.ok();
-        return Err(ApiError::Unauthorized);
-    }
-
-    // Update last accessed timestamp for sliding window expiration
-    let _ = state
-        .session_service
-        .update_session_last_accessed(token)
-        .await;
-
-    // Get user
-    let user = state
-        .user_service
-        .get_user_by_id(&session.user_id)
-        .await?
-        .ok_or(ApiError::Unauthorized)?;
-
-    // Only agents can authenticate
-    if !matches!(user.user_type, UserType::Agent) {
-        return Err(ApiError::Unauthorized);
-    }
-
-    // Get agent
-    let agent = state
-        .agent_service
-        .get_agent_by_user_id(&user.id)
-        .await?
-        .ok_or(ApiError::Unauthorized)?;
-
-    // Get roles
-    let roles = state.role_service.get_user_roles(&user.id).await?;
-
-    // Compute permissions from all roles
-    let permissions = compute_permissions(&roles);
-
-    // Clone token before using it (to avoid borrow checker issues)
-    let token_owned = token.to_string();
+    // Use AuthProvider to verify token and get full context
+    // This replaces ~80 lines of manual user/agent/role fetching
+    let auth_context = state.auth_provider.verify_token(token).await?;
 
     // Store authenticated user in request extensions
     request.extensions_mut().insert(AuthenticatedUser {
-        user,
-        agent,
-        roles,
-        permissions,
-        session: session.clone(),
-        token: token_owned,
+        user: auth_context.user,
+        agent: auth_context.agent,
+        roles: auth_context.roles,
+        permissions: auth_context.permissions,
+        session: auth_context.session,
+        token: auth_context.token,
     });
 
     Ok(next.run(request).await)
 }
 
-/// Compute unique permissions from all roles
-fn compute_permissions(roles: &[Role]) -> Vec<String> {
-    let mut permissions = std::collections::HashSet::new();
-
-    for role in roles {
-        for permission in &role.permissions {
-            permissions.insert(permission.clone());
-        }
-    }
-
-    permissions.into_iter().collect()
-}
 
 /// Check if user has required permission
 pub async fn require_permission(
@@ -253,61 +162,24 @@ pub async fn web_auth_middleware(
     });
 
     let token = match token {
-        Some(t) => t.to_string(), // Clone to owned string
+        Some(t) => t.to_string(),
         None => return Err(Redirect::to("/login")),
     };
 
-    // Validate session
-    let session = match state.session_service.get_session_by_token(&token).await {
-        Ok(Some(s)) => s,
-        _ => return Err(Redirect::to("/login")),
+    // Use AuthProvider to verify token and get full context
+    let auth_context = match state.auth_provider.verify_token(&token).await {
+        Ok(ctx) => ctx,
+        Err(_) => return Err(Redirect::to("/login")),
     };
-
-    if session.is_expired() {
-        let _ = state.session_service.delete_session(&token).await;
-        return Err(Redirect::to("/login"));
-    }
-
-    // Get user
-    let user = match state.user_service.get_user_by_id(&session.user_id).await {
-        Ok(Some(u)) => u,
-        _ => return Err(Redirect::to("/login")),
-    };
-
-    // Only agents can authenticate
-    if !matches!(user.user_type, UserType::Agent) {
-        return Err(Redirect::to("/login"));
-    }
-
-    // Get agent
-    let agent = match state.agent_service.get_agent_by_user_id(&user.id).await {
-        Ok(Some(a)) => a,
-        _ => return Err(Redirect::to("/login")),
-    };
-
-    // Get roles
-    let roles = match state.role_service.get_user_roles(&user.id).await {
-        Ok(r) => r,
-        _ => return Err(Redirect::to("/login")),
-    };
-
-    // Compute permissions from all roles
-    let mut permissions = std::collections::HashSet::new();
-    for role in &roles {
-        for permission in &role.permissions {
-            permissions.insert(permission.clone());
-        }
-    }
-    let permissions: Vec<String> = permissions.into_iter().collect();
 
     // Store authenticated user in request extensions
     request.extensions_mut().insert(AuthenticatedUser {
-        user,
-        agent,
-        roles,
-        permissions,
-        session,
-        token,
+        user: auth_context.user,
+        agent: auth_context.agent,
+        roles: auth_context.roles,
+        permissions: auth_context.permissions,
+        session: auth_context.session,
+        token: auth_context.token,
     });
 
     Ok(next.run(request).await)

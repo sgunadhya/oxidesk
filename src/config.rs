@@ -1,5 +1,25 @@
 use std::env;
 
+/// Authentication mode configuration
+#[derive(Clone, Debug, PartialEq)]
+pub enum AuthMode {
+    /// Database-backed sessions (stateful)
+    Database,
+    /// JWT tokens (stateless, Workers-compatible)
+    Jwt,
+}
+
+impl AuthMode {
+    /// Parse from string (case-insensitive)
+    pub fn from_str(s: &str) -> Result<Self, ConfigError> {
+        match s.to_lowercase().as_str() {
+            "database" => Ok(AuthMode::Database),
+            "jwt" => Ok(AuthMode::Jwt),
+            _ => Err(ConfigError::InvalidAuthMode(s.to_string())),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub database_url: String,
@@ -11,6 +31,8 @@ pub struct Config {
     pub otel_exporter_endpoint: Option<String>,
     pub service_name: String,
     pub metrics_port: u16,
+    pub auth_mode: AuthMode,
+    pub jwt_secret: Option<String>,
 }
 
 impl Config {
@@ -47,6 +69,26 @@ impl Config {
             .parse()
             .unwrap_or(9000);
 
+        // Parse auth mode (default to Database for backward compatibility)
+        let auth_mode = env::var("AUTH_MODE")
+            .ok()
+            .map(|s| AuthMode::from_str(&s))
+            .transpose()?
+            .unwrap_or(AuthMode::Database);
+
+        // Load JWT secret (required if auth_mode is JWT)
+        let jwt_secret = env::var("JWT_SECRET").ok();
+        if auth_mode == AuthMode::Jwt && jwt_secret.is_none() {
+            return Err(ConfigError::MissingJwtSecret);
+        }
+
+        // Validate JWT secret length if provided
+        if let Some(ref secret) = jwt_secret {
+            if secret.len() < 32 {
+                return Err(ConfigError::JwtSecretTooShort);
+            }
+        }
+
         Ok(Config {
             database_url,
             server_host,
@@ -57,6 +99,8 @@ impl Config {
             otel_exporter_endpoint,
             service_name,
             metrics_port,
+            auth_mode,
+            jwt_secret,
         })
     }
 
@@ -75,4 +119,13 @@ pub enum ConfigError {
 
     #[error("Invalid port number")]
     InvalidPort,
+
+    #[error("Invalid AUTH_MODE value: {0} (must be 'database' or 'jwt')")]
+    InvalidAuthMode(String),
+
+    #[error("JWT_SECRET environment variable required when AUTH_MODE=jwt")]
+    MissingJwtSecret,
+
+    #[error("JWT_SECRET must be at least 32 characters for security")]
+    JwtSecretTooShort,
 }
