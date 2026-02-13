@@ -67,6 +67,9 @@ rand = "0.8"
 hex = "0.4"
 base64 = "0.22"
 
+# JWT (JSON Web Tokens)
+jsonwebtoken = "9.2"
+
 # Regular expressions (for duration parsing)
 regex = "1.10"
 
@@ -80,6 +83,7 @@ aes-gcm = "0.10"
 
 # HTTP types
 http = "1.0"
+url = "2.5"
 
 # OIDC/OAuth2 support
 openidconnect = "3.5"
